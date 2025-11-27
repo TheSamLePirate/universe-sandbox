@@ -503,7 +503,7 @@ const App: React.FC = () => {
               simulationTimeRef.current = 0; // Reset clock for imported state
               
               setTimeout(() => setIsRunning(true), 100);
-              alert("Simulation loaded successfully!");
+              //alert("Simulation loaded successfully!");
           } catch (err) {
               console.error("Import error", err);
               alert("Failed to load file.");
