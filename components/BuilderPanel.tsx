@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, ArrowRightLeft } from 'lucide-react';
 
 interface BuilderPanelProps {
   onClose: () => void;
@@ -37,9 +37,11 @@ const BuilderPanel: React.FC<BuilderPanelProps> = ({ onClose, onAddBody }) => {
       onClose();
   };
 
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
     <div 
-        className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        className={`fixed top-16 bottom-16 left-0 bg-slate-900/95 backdrop-blur-md border-r border-slate-700 shadow-2xl z-50 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-96'}`}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
@@ -49,78 +51,96 @@ const BuilderPanel: React.FC<BuilderPanelProps> = ({ onClose, onAddBody }) => {
         onPointerUp={(e) => e.stopPropagation()}
         onPointerMove={(e) => e.stopPropagation()}
     >
-      <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-96 shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">
-            <X size={20} />
-        </button>
+      <div className={`p-2 border-b border-slate-700 flex ${isCollapsed ? 'flex-col justify-start gap-4' : 'justify-between'} items-center bg-slate-800/50 transition-all`}>
+        {!isCollapsed && (
+          <h2 className="text-lg font-bold text-white">Create Body</h2>
+        )}
         
-        <h2 className="text-xl font-bold text-white mb-6">Create Celestial Body</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label className="block text-xs text-slate-400 uppercase mb-1">Name</label>
-                <input 
-                    type="text" 
-                    value={name} 
-                    onChange={e => setName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none"
-                    maxLength={15}
-                />
-            </div>
-
-            <div>
-                <label className="block text-xs text-slate-400 uppercase mb-1">Mass (Gravity strength)</label>
-                <input 
-                    type="range" min="1" max="1000" step="10" 
-                    value={mass} onChange={e => setMass(Number(e.target.value))}
-                    className="w-full"
-                />
-                <div className="text-right text-xs text-blue-300 font-mono">{mass} units</div>
-            </div>
-
-            <div>
-                <label className="block text-xs text-slate-400 uppercase mb-1">Distance from Center</label>
-                <input 
-                    type="range" min="50" max="1000" step="10" 
-                    value={dist} onChange={e => setDist(Number(e.target.value))}
-                    className="w-full"
-                />
-                <div className="text-right text-xs text-blue-300 font-mono">{dist} units</div>
-            </div>
-
-            <div>
-                <label className="block text-xs text-slate-400 uppercase mb-1">Initial Tangential Velocity</label>
-                <input 
-                    type="range" min="0" max="10" step="0.1" 
-                    value={vel} onChange={e => setVel(Number(e.target.value))}
-                    className="w-full"
-                />
-                <div className="text-right text-xs text-blue-300 font-mono">{vel.toFixed(1)} units/frame</div>
-            </div>
-
-            <div>
-                <label className="block text-xs text-slate-400 uppercase mb-2">Color</label>
-                <div className="flex flex-wrap gap-2">
-                    {COLORS.map(c => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => setColor(c)}
-                            style={{ backgroundColor: c }}
-                            className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-110 ring-2 ring-white' : 'opacity-70 hover:opacity-100'}`}
-                        />
-                    ))}
-                </div>
-            </div>
-
-            <button 
-                type="submit" 
-                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-                <Check size={18} /> Spawn Body
+        <div className={`flex ${isCollapsed ? 'flex-col' : ''} items-center gap-2`}>
+          {!isCollapsed && (
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded">
+              <X size={16} />
             </button>
-        </form>
+          )}
+          
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+            title={isCollapsed ? "Expand" : "Collapse"}
+          >
+            {isCollapsed ? <ArrowRightLeft size={18} /> : <ArrowRightLeft size={18} className="rotate-180" />}
+          </button>
+        </div>
       </div>
+      
+      {!isCollapsed && (
+        <div className="p-6 h-full overflow-y-auto custom-scrollbar relative">
+          <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                  <label className="block text-xs text-slate-400 uppercase mb-1">Name</label>
+                  <input 
+                      type="text" 
+                      value={name} 
+                      onChange={e => setName(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none"
+                      maxLength={15}
+                  />
+              </div>
+
+              <div>
+                  <label className="block text-xs text-slate-400 uppercase mb-1">Mass (Gravity strength)</label>
+                  <input 
+                      type="range" min="1" max="1000" step="10" 
+                      value={mass} onChange={e => setMass(Number(e.target.value))}
+                      className="w-full"
+                  />
+                  <div className="text-right text-xs text-blue-300 font-mono">{mass} units</div>
+              </div>
+
+              <div>
+                  <label className="block text-xs text-slate-400 uppercase mb-1">Distance from Center</label>
+                  <input 
+                      type="range" min="50" max="1000" step="10" 
+                      value={dist} onChange={e => setDist(Number(e.target.value))}
+                      className="w-full"
+                  />
+                  <div className="text-right text-xs text-blue-300 font-mono">{dist} units</div>
+              </div>
+
+              <div>
+                  <label className="block text-xs text-slate-400 uppercase mb-1">Initial Tangential Velocity</label>
+                  <input 
+                      type="range" min="0" max="10" step="0.1" 
+                      value={vel} onChange={e => setVel(Number(e.target.value))}
+                      className="w-full"
+                  />
+                  <div className="text-right text-xs text-blue-300 font-mono">{vel.toFixed(1)} units/frame</div>
+              </div>
+
+              <div>
+                  <label className="block text-xs text-slate-400 uppercase mb-2">Color</label>
+                  <div className="flex flex-wrap gap-2">
+                      {COLORS.map(c => (
+                          <button
+                              key={c}
+                              type="button"
+                              onClick={() => setColor(c)}
+                              style={{ backgroundColor: c }}
+                              className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-110 ring-2 ring-white' : 'opacity-70 hover:opacity-100'}`}
+                          />
+                      ))}
+                  </div>
+              </div>
+
+              <button 
+                  type="submit" 
+                  className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                  <Check size={18} /> Spawn Body
+              </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

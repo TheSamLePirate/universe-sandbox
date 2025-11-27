@@ -63,7 +63,7 @@ const Controls: React.FC<ControlsProps> = ({
 }) => {
   return (
     <div 
-        className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-2xl p-3 flex items-center gap-4 shadow-2xl z-10 text-white max-w-[95vw] overflow-x-auto"
+        className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-md border-t border-slate-700 p-2 flex items-center justify-center gap-4 shadow-2xl z-10 text-white"
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

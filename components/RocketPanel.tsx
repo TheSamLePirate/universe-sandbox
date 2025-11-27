@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef } from 'react';
-import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio } from 'lucide-react';
+import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio, ArrowRightLeft } from 'lucide-react';
 import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
 
 interface RocketPanelProps {
@@ -312,37 +312,62 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
         recordGapAndAction(type, undefined, 0, 0, 0, targetId, parentId);
     };
 
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
     return (
         <div 
-            className="fixed top-20 right-4 w-96 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl shadow-2xl z-30 flex flex-col overflow-hidden max-h-[85vh]"
+            className={`fixed top-16 bottom-16 right-0 bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-96'}`}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             onMouseMove={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
         >
-            {/* Header */}
-            <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-indigo-900/30">
-                <div className="flex items-center gap-2 text-white font-bold">
-                    <Rocket size={20} className="text-orange-400" />
-                    Rocket Control Center
-                </div>
-                <div className="flex gap-2">
-                     <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
-                        <Crosshair size={18} />
-                     </button>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white">
-                        <X size={18} />
-                    </button>
-                </div>
-                {notification && (
-                    <div className="absolute top-16 left-4 right-4 bg-green-600 text-white p-2 rounded text-xs font-bold text-center animate-bounce shadow-lg z-50">
-                        {notification}
-                    </div>
+            {/* Header / Toggle */}
+            <div className={`p-2 border-b border-slate-700 flex ${isCollapsed ? 'flex-col justify-start gap-4' : 'justify-between'} items-center bg-indigo-900/30 transition-all`}>
+                <button 
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+                    title={isCollapsed ? "Expand" : "Collapse"}
+                >
+                    {isCollapsed ? <ArrowRightLeft size={18} className="rotate-180" /> : <ArrowRightLeft size={18} />}
+                </button>
+
+                {!isCollapsed && (
+                    <>
+                        <div className="flex items-center gap-2 text-white font-bold truncate">
+                            <Rocket size={20} className="text-orange-400" />
+                            <span className="text-sm">Control</span>
+                        </div>
+                        <div className="flex gap-1">
+                             <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
+                                <Crosshair size={16} />
+                             </button>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded">
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </>
+                )}
+                {isCollapsed && (
+                     <div className="flex flex-col gap-4 items-center mt-2">
+                        <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
+                            <Crosshair size={16} />
+                        </button>
+                     </div>
                 )}
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+            {/* Notification (Overlay when collapsed) */}
+            {notification && (
+                <div className={`absolute top-16 left-4 right-4 bg-green-600 text-white p-2 rounded text-xs font-bold text-center animate-bounce shadow-lg z-50 ${isCollapsed ? 'left-[-200px] w-48' : ''}`}>
+                    {notification}
+                </div>
+            )}
+
+            {/* Content - Hidden when collapsed */}
+            {!isCollapsed && (
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
                 
                 {isSpawning ? (
                     <div className="space-y-4">
@@ -603,8 +628,6 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     </div>
                                 </div>
 
-
-
                                 <div className="pt-4 border-t border-slate-700">
                                     <button onClick={onToggleFollow} className={`w-full py-2 rounded text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isFollowing ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
                                         {isFollowing ? <Ban size={14} /> : <Crosshair size={14} />} {isFollowing ? "Unlock Camera" : "Follow Rocket"}
@@ -614,7 +637,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                         )}
                     </>
                 )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -17,7 +17,7 @@ const CoMInfoPanel: React.FC<CoMInfoPanelProps> = ({ coMData, threshold, onThres
 
   return (
     <div 
-        className="absolute bottom-24 right-4 w-72 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-3 shadow-2xl z-10 flex flex-col pointer-events-auto"
+        className="absolute bottom-24 right-4 w-72 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-none p-3 shadow-2xl z-10 flex flex-col pointer-events-auto"
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

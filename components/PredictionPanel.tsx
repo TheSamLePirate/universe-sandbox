@@ -26,9 +26,9 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
     const toggleExpanded = () => setIsExpanded(!isExpanded);
 
     return (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
+        <div className="fixed top-0 left-0 right-0 z-40 flex flex-col items-center">
             {/* Header / Main Control */}
-            <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-full shadow-xl px-4 py-2 flex items-center gap-4 transition-all hover:bg-slate-800/90">
+            <div className="bg-slate-900/90 backdrop-blur-md border-b border-x border-slate-700 rounded-b-lg shadow-xl px-4 py-1.5 flex items-center gap-4 transition-all hover:bg-slate-800/90">
                 
                 {/* Expand Toggle */}
                 <button 
@@ -61,7 +61,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
 
             {/* Expanded Config Body */}
             {isExpanded && (
-                <div className="mt-2 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl shadow-2xl p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="mt-0 bg-slate-900/95 backdrop-blur-md border-x border-b border-slate-700 rounded-b-lg shadow-2xl p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
                     
                     {/* Steps Slider */}
                     <div className="mb-4">
