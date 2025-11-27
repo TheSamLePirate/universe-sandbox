@@ -1,0 +1,312 @@
+
+import React, { useMemo } from 'react';
+import { Body, PhysicsConfig, Vector2D } from '../types';
+import { Activity, Anchor, ArrowRight, Clock, Compass, Fuel, Gauge, Globe, MapPin, Navigation, Rocket, Timer, Zap } from 'lucide-react';
+
+interface RocketDataPanelProps {
+    rocket: Body;
+    bodies: Body[];
+    physicsConfig: PhysicsConfig;
+    parentBodyId?: string;
+    targetBodyId?: string;
+    predictionPaths: { id: string, color: string, points: Vector2D[] }[];
+    predictionSteps: number;
+    predictSystem: boolean;
+}
+
+const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
+    rocket,
+    bodies,
+    physicsConfig,
+    parentBodyId,
+    targetBodyId,
+    predictionPaths,
+    predictionSteps,
+    predictSystem
+}) => {
+    
+    // --- CALCULATIONS ---
+    const speed = Math.sqrt(rocket.velocity.x**2 + rocket.velocity.y**2);
+    const heading = (rocket.angle || 0) * 180 / Math.PI;
+
+    // Orbital Params
+    let orbitalParams = { altitude: 0, apoapsis: -1, periapsis: -1, period: 0, inclination: 0 };
+    if (parentBodyId) {
+        const parent = bodies.find(b => b.id === parentBodyId);
+        if (parent) {
+             const dx = rocket.position.x - parent.position.x;
+             const dy = rocket.position.y - parent.position.y;
+             const dist = Math.sqrt(dx*dx + dy*dy);
+             const dvx = rocket.velocity.x - parent.velocity.x;
+             const dvy = rocket.velocity.y - parent.velocity.y;
+             const vSq = dvx*dvx + dvy*dvy;
+             
+             const mu = physicsConfig.gravitationalConstant * parent.mass;
+             const E = (vSq / 2) - (mu / dist);
+             
+             orbitalParams.altitude = dist - parent.radius;
+
+             if (E < 0) {
+                 const a = -mu / (2 * E);
+                 const h = (dx * dvy) - (dy * dvx);
+                 const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
+                 orbitalParams.periapsis = (a * (1 - eccentricity)) - parent.radius;
+                 orbitalParams.apoapsis = (a * (1 + eccentricity)) - parent.radius;
+                 orbitalParams.period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
+             }
+        }
+    }
+
+    // Target Params
+    let targetData = { dist: 0, deltaV: 0, name: '' };
+    let phaseData = { current: 0, required: 0, error: 0, ready: false };
+
+    if (targetBodyId) {
+        const target = bodies.find(b => b.id === targetBodyId);
+        if (target) {
+            targetData.name = target.name;
+            const dx = target.position.x - rocket.position.x;
+            const dy = target.position.y - rocket.position.y;
+            targetData.dist = Math.sqrt(dx*dx + dy*dy);
+            
+            const dvx = rocket.velocity.x - target.velocity.x;
+            const dvy = rocket.velocity.y - target.velocity.y;
+            targetData.deltaV = Math.sqrt(dvx*dvx + dvy*dvy);
+
+            // Phase Angle
+            if (parentBodyId) {
+                const parent = bodies.find(b => b.id === parentBodyId);
+                if (parent) {
+                    const rocketAngle = Math.atan2(rocket.position.y - parent.position.y, rocket.position.x - parent.position.x);
+                    const targetAngle = Math.atan2(target.position.y - parent.position.y, target.position.x - parent.position.x);
+                    
+                    let currentPhase = (targetAngle - rocketAngle) * 180 / Math.PI;
+                    while (currentPhase > 180) currentPhase -= 360;
+                    while (currentPhase < -180) currentPhase += 360;
+
+                    const r1 = Math.sqrt(Math.pow(rocket.position.x - parent.position.x, 2) + Math.pow(rocket.position.y - parent.position.y, 2));
+                    const r2 = Math.sqrt(Math.pow(target.position.x - parent.position.x, 2) + Math.pow(target.position.y - parent.position.y, 2));
+                    const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                    const a_transfer = (r1 + r2) / 2;
+                    const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                    
+                    const travelTime = period_transfer / 2;
+                    const targetMotion = (360 / period_target) * travelTime;
+                    const requiredPhase = 180 - targetMotion;
+                    
+                    let normalizedRequired = requiredPhase;
+                    while (normalizedRequired > 180) normalizedRequired -= 360;
+                    while (normalizedRequired < -180) normalizedRequired += 360;
+
+                    const error = Math.abs(currentPhase - normalizedRequired);
+                    phaseData = {
+                        current: currentPhase,
+                        required: normalizedRequired,
+                        error: error,
+                        ready: error < 5
+                    };
+                }
+            }
+        }
+    }
+
+    // Prediction Analysis
+    const predictionAnalysis = useMemo(() => {
+        if (!targetBodyId || !predictionPaths) return null;
+        
+        const rocketPath = predictionPaths.find(p => p.id === rocket.id);
+        const targetPath = predictSystem ? predictionPaths.find(p => p.id === targetBodyId) : null;
+        const targetBody = bodies.find(b => b.id === targetBodyId);
+        
+        if (!rocketPath || !rocketPath.points.length) return null;
+
+        const totalDuration = predictionSteps * physicsConfig.timeStep;
+        const dtPerPoint = totalDuration / rocketPath.points.length;
+
+        let minDist = Infinity;
+        let timeToPe = -1;
+        let timeToAp = -1;
+        let maxDist = 0;
+
+        rocketPath.points.forEach((p, idx) => {
+            const targetPos = targetPath && targetPath.points[idx] ? targetPath.points[idx] : (targetBody?.position || {x:0,y:0});
+            const d = Math.sqrt(Math.pow(p.x - targetPos.x, 2) + Math.pow(p.y - targetPos.y, 2));
+            
+            if (d < minDist) {
+                minDist = d;
+                timeToPe = idx * dtPerPoint;
+            }
+            if (d > maxDist) {
+                maxDist = d;
+                timeToAp = idx * dtPerPoint;
+            }
+        });
+
+        return { timeToPe, timeToAp, closestApproach: minDist - (targetBody?.radius || 0) };
+
+    }, [rocket, targetBodyId, predictionPaths, predictionSteps, physicsConfig.timeStep, bodies, predictSystem]);
+
+
+    return (
+        <div 
+            className="fixed top-20 left-4 w-80 pointer-events-none z-40 font-mono"
+        >
+            {/* MAIN HEADER HUD */}
+            <div className="bg-slate-900/80 border-l-4 border-orange-500 backdrop-blur-md p-4 rounded-r-xl shadow-2xl mb-2">
+                <div className="flex justify-between items-start mb-2">
+                    <div>
+                        <div className="text-[10px] text-orange-400 font-bold tracking-widest uppercase">Telemetry Data</div>
+                        <div className="text-xl font-bold text-white leading-none">{rocket.name}</div>
+                    </div>
+                    {rocket.landedOnBodyId ? (
+                        <div className="flex items-center gap-1 bg-green-900/50 text-green-400 px-2 py-1 rounded text-[10px] font-bold border border-green-500/30">
+                            <Anchor size={12} /> LANDED
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1 bg-blue-900/50 text-blue-400 px-2 py-1 rounded text-[10px] font-bold border border-blue-500/30">
+                            <Rocket size={12} /> IN FLIGHT
+                        </div>
+                    )}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1"><Gauge size={10} /> Velocity</div>
+                        <div className="text-lg text-white font-bold">{speed.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">u/s</span></div>
+                    </div>
+                    <div>
+                        <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1"><Compass size={10} /> Heading</div>
+                        <div className="text-lg text-white font-bold">{heading.toFixed(1)}°</div>
+                    </div>
+                </div>
+
+                {/* FUEL BAR */}
+                <div className="mt-3">
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span className="flex items-center gap-1"><Fuel size={10} /> PROPELLANT</span>
+                        <span className={rocket.fuel && rocket.fuel < 10 ? "text-red-400 font-bold animate-pulse" : ""}>
+                            {((rocket.fuel || 0) / (rocket.maxFuel || 1) * 100).toFixed(0)}%
+                        </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                            className={`h-full transition-all duration-300 ${rocket.fuel && rocket.fuel < 10 ? 'bg-red-500' : 'bg-orange-500'}`}
+                            style={{ width: `${rocket.fuel && rocket.maxFuel ? (rocket.fuel / rocket.maxFuel) * 100 : 0}%` }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* ORBITAL DATA */}
+            {parentBodyId && (
+                <div className="bg-slate-900/80 border-l-4 border-blue-500 backdrop-blur-md p-3 rounded-r-xl shadow-2xl mb-2">
+                    <div className="text-[10px] text-blue-400 font-bold tracking-widest uppercase mb-2 flex items-center gap-2">
+                        <Globe size={12} /> Orbital Info ({bodies.find(b => b.id === parentBodyId)?.name})
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                        <div>
+                             <div className="text-[9px] text-slate-500 uppercase">Altitude</div>
+                             <div className="text-sm text-cyan-300">{orbitalParams.altitude.toFixed(1)} u</div>
+                        </div>
+                        <div>
+                             <div className="text-[9px] text-slate-500 uppercase">Period</div>
+                             <div className="text-sm text-white">{orbitalParams.period > 0 ? orbitalParams.period.toFixed(1) + 's' : '---'}</div>
+                        </div>
+                        
+                        {orbitalParams.apoapsis > 0 ? (
+                            <>
+                                <div className="relative">
+                                     <div className="text-[9px] text-slate-500 uppercase flex items-center gap-1">
+                                        Ap Apoapsis
+                                        {predictionAnalysis && predictionAnalysis.timeToAp >= 0 && (
+                                            <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{predictionAnalysis.timeToAp.toFixed(0)}s</span>
+                                        )}
+                                     </div>
+                                     <div className="text-sm text-orange-300">{orbitalParams.apoapsis.toFixed(1)} u</div>
+                                </div>
+                                <div className="relative">
+                                     <div className="text-[9px] text-slate-500 uppercase flex items-center gap-1">
+                                        Pe Periapsis
+                                        {predictionAnalysis && predictionAnalysis.timeToPe >= 0 && (
+                                            <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{predictionAnalysis.timeToPe.toFixed(0)}s</span>
+                                        )}
+                                     </div>
+                                     <div className="text-sm text-blue-300">{orbitalParams.periapsis.toFixed(1)} u</div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="col-span-2 text-xs text-slate-500 italic">Unbound Trajectory (Escape)</div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* TARGET DATA */}
+            {targetBodyId && (
+                <div className="bg-slate-900/80 border-l-4 border-emerald-500 backdrop-blur-md p-3 rounded-r-xl shadow-2xl">
+                     <div className="text-[10px] text-emerald-400 font-bold tracking-widest uppercase mb-2 flex items-center gap-2">
+                        <Navigation size={12} /> Target: {targetData.name}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                        <div>
+                             <div className="text-[9px] text-slate-500 uppercase">Distance</div>
+                             <div className="text-sm text-white">{targetData.dist.toFixed(1)} u</div>
+                        </div>
+                        <div>
+                             <div className="text-[9px] text-slate-500 uppercase">Rel Speed</div>
+                             <div className="text-sm text-emerald-300">{targetData.deltaV.toFixed(2)} u/s</div>
+                        </div>
+                        {predictionAnalysis && (
+                             <div className="col-span-2 bg-slate-800/50 p-1.5 rounded flex justify-between items-center">
+                                <div className="text-[9px] text-slate-400 uppercase">Closest Approach</div>
+                                <div className="text-sm font-bold text-indigo-300">{predictionAnalysis.closestApproach.toFixed(1)} u</div>
+                             </div>
+                        )}
+                    </div>
+
+                    {/* PHASE ANGLE */}
+                    {parentBodyId && (
+                        <div className="mt-3 pt-2 border-t border-slate-700/50">
+                             <div className="flex justify-between items-center mb-1">
+                                <div className="text-[9px] text-slate-500 uppercase flex items-center gap-1"><Timer size={10} /> Transfer Phase</div>
+                                {phaseData.ready ? (
+                                    <div className="text-[9px] bg-green-500 text-black px-1 rounded font-bold animate-pulse">WINDOW OPEN</div>
+                                ) : (
+                                    <div className="text-[9px] text-slate-600">Wait...</div>
+                                )}
+                             </div>
+                             
+                             <div className="flex items-center gap-2">
+                                 <div className="flex-1 bg-slate-800 h-1.5 rounded-full overflow-hidden relative">
+                                    {/* Indicator Logic */}
+                                     <div 
+                                        className={`absolute top-0 bottom-0 w-1/5 left-1/2 -translate-x-1/2 ${phaseData.ready ? 'bg-green-500/20' : 'bg-slate-700'}`} 
+                                     />
+                                     <div 
+                                        className={`absolute top-0 bottom-0 w-1 ${phaseData.ready ? 'bg-green-500' : 'bg-orange-500'}`}
+                                        style={{ left: `${Math.min(100, Math.max(0, 50 + (phaseData.current - phaseData.required)))}%` }}
+                                     />
+                                 </div>
+                                 <div className="text-[9px] font-mono w-8 text-right text-slate-400">
+                                     {phaseData.error.toFixed(0)}°
+                                 </div>
+                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* FLIGHT COMPUTER STATUS */}
+            {rocket.maneuvers && rocket.maneuvers.some(m => m.status === 'active') && (
+                <div className="mt-2 bg-slate-900/90 border border-green-500/50 p-2 rounded-r-xl shadow-lg flex items-center gap-2 text-green-400 animate-pulse">
+                     <Activity size={14} />
+                     <span className="text-xs font-bold uppercase">Maneuver Executing...</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default RocketDataPanel;
