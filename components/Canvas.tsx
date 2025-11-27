@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData } from '../types';
-import { calculateForces, calculateOrbitalPoints } from '../services/physicsEngine';
+import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
 
 interface CanvasProps {
   bodies: Body[];
@@ -33,6 +33,10 @@ interface CanvasProps {
 
   // Center of Mass Data
   coMData: CoMData | null;
+  
+  // Visualization Toggles
+  showTransferWindow: boolean;
+  showTheoreticalOrbit: boolean;
 }
 
 interface Star {
@@ -94,7 +98,9 @@ const Canvas: React.FC<CanvasProps> = ({
   isRocketSpawning,
   rocketTargetBodyId,
   observerBodyIds,
-  coMData
+  coMData,
+  showTransferWindow,
+  showTheoreticalOrbit
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -788,6 +794,34 @@ const Canvas: React.FC<CanvasProps> = ({
                 if (target) {
                     const points = calculateOrbitalPoints(body, target, physicsConfig.gravitationalConstant);
                     if (points) {
+                        // Draw theoretical elliptical orbit path
+                        if (showTheoreticalOrbit) {
+                            const ellipsePoints = calculateEllipsePoints(body, target, physicsConfig.gravitationalConstant);
+                            if (ellipsePoints && ellipsePoints.length > 0) {
+                                ctx.strokeStyle = body.color || '#ffffff';
+                                ctx.globalAlpha = 0.3;
+                                ctx.lineWidth = 1.5;
+                                ctx.setLineDash([5, 5]);
+                                ctx.beginPath();
+                                
+                                ellipsePoints.forEach((point, idx) => {
+                                    const px = cx + point.x * scale;
+                                    const py = cy + point.y * scale;
+                                    if (Number.isFinite(px) && Number.isFinite(py)) {
+                                        if (idx === 0) {
+                                            ctx.moveTo(px, py);
+                                        } else {
+                                            ctx.lineTo(px, py);
+                                        }
+                                    }
+                                });
+                                
+                                ctx.stroke();
+                                ctx.setLineDash([]);
+                                ctx.globalAlpha = 1.0;
+                            }
+                        }
+                        
                         const drawMarker = (pos: Vector2D, label: string, color: string) => {
                              const px = cx + pos.x * scale;
                              const py = cy + pos.y * scale;
@@ -809,7 +843,7 @@ const Canvas: React.FC<CanvasProps> = ({
                     
                     // --- TRANSFER WINDOW VISUALIZATION (HUD) ---
                     // Only draw if we have a valid Parent reference (needed for phase angles)
-                    if (parent) {
+                    if (showTransferWindow && parent) {
                         // 1. Calculate Positions
                         const rocketPos = body.position;
                         const targetPos = target.position;

@@ -65,6 +65,10 @@ const App: React.FC = () => {
 
   const [rocketTargetBodyId, setRocketTargetBodyId] = useState<string>('');
   const [rocketParentBodyId, setRocketParentBodyId] = useState<string>('');
+  
+  // Visualization toggles for performance
+  const [showTransferWindow, setShowTransferWindow] = useState(true);
+  const [showTheoreticalOrbit, setShowTheoreticalOrbit] = useState(true);
 
   // Manual Creation Mode State
   const [isCreationMode, setIsCreationMode] = useState(false);
@@ -919,6 +923,8 @@ const App: React.FC = () => {
         rocketTargetBodyId={rocketTargetBodyId}
         observerBodyIds={observerBodyIds}
         coMData={currentCoMData}
+        showTransferWindow={showTransferWindow}
+        showTheoreticalOrbit={showTheoreticalOrbit}
       />
 
       {/* DEBUG PANEL */}
@@ -990,6 +996,10 @@ const App: React.FC = () => {
             getSimulationTime={() => simulationTimeRef.current}
             parentBodyId={rocketParentBodyId}
             onParentChange={setRocketParentBodyId}
+            showTransferWindow={showTransferWindow}
+            onToggleTransferWindow={() => setShowTransferWindow(!showTransferWindow)}
+            showTheoreticalOrbit={showTheoreticalOrbit}
+            onToggleTheoreticalOrbit={() => setShowTheoreticalOrbit(!showTheoreticalOrbit)}
             assistantActions={assistantActions}
           />
       )}

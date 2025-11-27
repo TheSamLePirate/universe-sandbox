@@ -25,6 +25,10 @@ interface RocketPanelProps {
     getSimulationTime: () => number;
     parentBodyId?: string;
     onParentChange?: (id: string) => void;
+    showTransferWindow: boolean;
+    onToggleTransferWindow: () => void;
+    showTheoreticalOrbit: boolean;
+    onToggleTheoreticalOrbit: () => void;
 }
 
 const ROCKET_COLORS = ['#f97316', '#22d3ee', '#ffffff', '#ef4444', '#94a3b8', '#a855f7', '#eab308'];
@@ -49,7 +53,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     onUpdatePhysicsConfig,
     getSimulationTime,
     parentBodyId,
-    onParentChange
+    onParentChange,
+    showTransferWindow,
+    onToggleTransferWindow,
+    showTheoreticalOrbit,
+    onToggleTheoreticalOrbit
 }) => {
     const [activeTab, setActiveTab] = useState<'flight' | 'mission' | 'config'>('flight');
 
@@ -625,6 +633,32 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     <div>
                                         <div className="flex justify-between text-xs mb-1 text-slate-400"><span>Physics Step</span><span className="text-indigo-300 font-mono">{physicsConfig.timeStep.toFixed(3)}</span></div>
                                         <input type="range" min="0.001" max="1.0" step="0.001" value={physicsConfig.timeStep} onChange={(e) => onUpdatePhysicsConfig({ timeStep: Number(e.target.value) })} className="w-full accent-indigo-500 bg-slate-700 h-1 rounded-lg" />
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-700">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Eye size={12} /> Visualizations</h4>
+                                    
+                                    <div className="space-y-2">
+                                        <button 
+                                            onClick={onToggleTheoreticalOrbit}
+                                            className={`w-full py-2 rounded text-xs font-bold transition-colors flex items-center justify-between px-3 ${showTheoreticalOrbit ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Globe size={14} /> Theoretical Orbit
+                                            </span>
+                                            <span className="text-[10px]">{showTheoreticalOrbit ? 'ON' : 'OFF'}</span>
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={onToggleTransferWindow}
+                                            className={`w-full py-2 rounded text-xs font-bold transition-colors flex items-center justify-between px-3 ${showTransferWindow ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <TrendingUp size={14} /> Transfer Window
+                                            </span>
+                                            <span className="text-[10px]">{showTransferWindow ? 'ON' : 'OFF'}</span>
+                                        </button>
                                     </div>
                                 </div>
 

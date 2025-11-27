@@ -652,3 +652,76 @@ export const calculateOrbitalPoints = (
 
     return { periapsis, apoapsis };
 };
+
+/**
+ * Calculate points along an elliptical orbit for visualization
+ * Returns an array of points that form the theoretical ellipse
+ */
+export const calculateEllipsePoints = (
+    body: Body,
+    parent: Body,
+    gConst: number,
+    numPoints: number = 64
+): Vector2D[] | null => {
+    const mu = gConst * parent.mass;
+    if (mu <= 0) return null;
+
+    const rx = body.position.x - parent.position.x;
+    const ry = body.position.y - parent.position.y;
+    const vx = body.velocity.x - parent.velocity.x;
+    const vy = body.velocity.y - parent.velocity.y;
+
+    const r = Math.sqrt(rx * rx + ry * ry);
+    const vSq = vx * vx + vy * vy;
+
+    const h = rx * vy - ry * vx;
+
+    const ex = (vy * h) / mu - rx / r;
+    const ey = (-vx * h) / mu - ry / r;
+    const eccentricity = Math.sqrt(ex * ex + ey * ey);
+
+    const epsilon = vSq / 2 - mu / r;
+
+    // Only draw ellipse for bound orbits
+    if (epsilon >= 0 || eccentricity >= 0.99) return null;
+
+    const a = -mu / (2 * epsilon);
+    const b = a * Math.sqrt(1 - eccentricity * eccentricity);
+
+    // Eccentricity vector points from focus (parent) toward periapsis
+    // Get the angle of the eccentricity vector (direction to periapsis)
+    let eAngle = 0;
+    if (eccentricity > 0.0001) {
+        eAngle = Math.atan2(ey, ex);
+    }
+
+    // The parent body is at one focus of the ellipse
+    // The center of the ellipse is offset from the parent by distance 'c' 
+    // in the direction OPPOSITE to periapsis (away from eccentricity vector)
+    const c = a * eccentricity;
+    const centerX = parent.position.x - c * Math.cos(eAngle);
+    const centerY = parent.position.y - c * Math.sin(eAngle);
+
+    // Generate points along the ellipse
+    const points: Vector2D[] = [];
+    for (let i = 0; i <= numPoints; i++) {
+        const theta = (i / numPoints) * 2 * Math.PI;
+        
+        // Point on ellipse in local coordinates (centered at origin)
+        // theta = 0 corresponds to periapsis direction
+        const localX = a * Math.cos(theta);
+        const localY = b * Math.sin(theta);
+        
+        // Rotate by eccentricity angle (periapsis direction)
+        const rotatedX = localX * Math.cos(eAngle) - localY * Math.sin(eAngle);
+        const rotatedY = localX * Math.sin(eAngle) + localY * Math.cos(eAngle);
+        
+        // Translate to world coordinates
+        points.push({
+            x: centerX + rotatedX,
+            y: centerY + rotatedY
+        });
+    }
+
+    return points;
+};
