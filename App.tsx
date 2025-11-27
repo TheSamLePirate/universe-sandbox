@@ -973,6 +973,8 @@ const App: React.FC = () => {
                   prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
               );
           }}
+          followingBodyId={followingBodyId}
+          onFollowBody={handleToggleFollow}
       />
 
       {showRocketPanel && (

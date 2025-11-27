@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Activity, CheckSquare, Square, Rocket, Globe } from 'lucide-react';
+import { ChevronDown, ChevronUp, Activity, CheckSquare, Square, Rocket, Globe, Crosshair } from 'lucide-react';
 import { Body } from '../types';
 
 interface PredictionPanelProps {
@@ -10,6 +10,8 @@ interface PredictionPanelProps {
     onStepsChange: (steps: number) => void;
     selectedBodyIds: string[];
     onToggleBody: (id: string) => void;
+    followingBodyId: string | null;
+    onFollowBody: (id: string) => void;
 }
 
 const PredictionPanel: React.FC<PredictionPanelProps> = ({
@@ -19,7 +21,9 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
     predictionSteps,
     onStepsChange,
     selectedBodyIds,
-    onToggleBody
+    onToggleBody,
+    followingBodyId,
+    onFollowBody
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -94,14 +98,17 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
 
                         {bodies.map(body => {
                             const isSelected = selectedBodyIds.includes(body.id);
+                            const isFollowing = followingBodyId === body.id;
                             return (
                                 <div 
                                     key={body.id}
-                                    onClick={() => onToggleBody(body.id)}
-                                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border border-transparent
+                                    className={`flex items-center justify-between p-2 rounded-lg transition-colors border border-transparent
                                         ${isSelected ? 'bg-blue-500/10 border-blue-500/30' : 'hover:bg-slate-800'}`}
                                 >
-                                    <div className="flex items-center gap-2 overflow-hidden">
+                                    <div 
+                                        className="flex items-center gap-2 overflow-hidden flex-1 cursor-pointer"
+                                        onClick={() => onToggleBody(body.id)}
+                                    >
                                         {body.isRocket ? (
                                             <Rocket size={14} className="text-orange-400 shrink-0" />
                                         ) : (
@@ -112,8 +119,24 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                                         </span>
                                     </div>
                                     
-                                    <div className={isSelected ? "text-blue-400" : "text-slate-600"}>
-                                        {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onFollowBody(body.id);
+                                            }}
+                                            className={`p-1 rounded transition-colors ${isFollowing ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-700 hover:text-blue-400'}`}
+                                            title={isFollowing ? "Following" : "Follow"}
+                                        >
+                                            <Crosshair size={12} />
+                                        </button>
+                                        
+                                        <div 
+                                            className={`cursor-pointer ${isSelected ? "text-blue-400" : "text-slate-600"}`}
+                                            onClick={() => onToggleBody(body.id)}
+                                        >
+                                            {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                                        </div>
                                     </div>
                                 </div>
                             );
