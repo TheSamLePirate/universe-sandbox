@@ -1,6 +1,6 @@
 
 
-import { GoogleGenAI, Type, FunctionDeclaration, Tool, Modality } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, Tool, Modality, ThinkingLevel } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -294,11 +294,14 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     `;
 
     return ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-pro-preview',
         config: { 
             systemInstruction,
             tools: tools,
             temperature: 0.7,
+            thinkingConfig: {
+                thinkingLevel: ThinkingLevel.LOW,
+            },
         },
         history: initialHistory.map(h => ({
             role: h.role,

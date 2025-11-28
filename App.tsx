@@ -382,7 +382,7 @@ const App: React.FC = () => {
       const currentScale = scaleRef.current;
       const currentOffset = offsetRef.current;
       
-      const nextScale = Math.max(0.05, Math.min(10.0, currentScale * factor));
+      const nextScale = Math.max(0.01, Math.min(100.0, currentScale * factor));
       
       if (Math.abs(nextScale - currentScale) < 0.000001) return;
 
