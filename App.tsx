@@ -1,25 +1,25 @@
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Canvas from './components/Canvas';
 import Controls from './components/Controls';
-import InfoPanel from './components/InfoPanel';
-import Assistant from './components/Assistant';
-import BuilderPanel, { NewBodyData } from './components/BuilderPanel';
+import RocketDataPanel from './components/RocketDataPanel';
 import ManualCreationPanel from './components/ManualCreationPanel';
+import InfoPanel from './components/InfoPanel';
+import BuilderPanel, { NewBodyData } from './components/BuilderPanel';
 import SettingsPanel from './components/SettingsPanel';
 import GravityObserverPanel from './components/GravityObserverPanel';
 import CoMInfoPanel from './components/CoMInfoPanel';
 import RocketPanel from './components/RocketPanel';
-import RocketDataPanel from './components/RocketDataPanel';
 import PredictionPanel from './components/PredictionPanel';
+import Assistant from './components/Assistant';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
-import { Body, Vector2D, AssistantActions, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, Preset, CoMData, Maneuver, RocketSpawnConfig } from './types';
+import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
+import useIsMobile from './hooks/useIsMobile';
 
 const App: React.FC = () => {
   // --- State ---
+  const isMobile = useIsMobile();
   const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
 
   const [currentPresetId, setCurrentPresetId] = useState(defaultPreset.id);
@@ -1025,7 +1025,7 @@ const App: React.FC = () => {
       />
 
       {/* DEBUG PANEL */}
-      <div className="fixed bottom-4 left-4 z-50 pointer-events-auto font-mono text-xs">
+      <div className={`fixed ${isMobile ? 'top-0 right-0' : 'top-4 right-4'} z-10 pointer-events-auto font-mono text-xs`}>
           <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
               {/* Time and FPS Row */}
               <div className="flex items-center gap-3">
@@ -1040,110 +1040,40 @@ const App: React.FC = () => {
                           const minutes = Math.floor((totalSeconds % 3600) / 60);
                           let seconds = totalSeconds % 60;  
 
-                          
-                          
                           const parts = [];
                           if (years > 0) parts.push(`${years}y`);
-
-                          if (months > 0) {
-                            if (months < 10) {
-                              parts.push(`0${months}mo`);
-                            } else {
-                              parts.push(`${months}mo`);
-                            }
-                          }
-
-                          if (days > 0) {
-                            if (days < 10) {
-                              parts.push(`0${days}d`);
-                            } else {
-                              parts.push(`${days}d`);
-                            }
-                          }
-
-                          if (hours > 0) {
-                            if (hours < 10) {
-                              parts.push(`0${hours}h`);
-                            } else {
-                              parts.push(`${hours}h`);
-                            }
-                          }
-
-
-                          if (minutes > 0) {
-                            if (minutes < 10) {
-                              parts.push(`0${minutes}m`);
-                            } else {
-                              parts.push(`${minutes}m`);
-                            }
-                          }else {
-                            parts.push(`00m`);
-                          }
-
-                          if(seconds > 0) {
-                            if (seconds < 10) {
-                            parts.push(`0${seconds}s`);
-                            } else {
-                                parts.push(`${seconds}s`);
-                            }
-                          }else {
-                            parts.push(`00s`);
-                          }
+                          if (months > 0) parts.push(months < 10 ? `0${months}mo` : `${months}mo`);
+                          if (days > 0) parts.push(days < 10 ? `0${days}d` : `${days}d`);
+                          if (hours > 0) parts.push(hours < 10 ? `0${hours}h` : `${hours}h`);
+                          if (minutes > 0) parts.push(minutes < 10 ? `0${minutes}m` : `${minutes}m`);
+                          else if (parts.length > 0) parts.push('00m');
+                          if (seconds > 0) parts.push(seconds < 10 ? `0${seconds}s` : `${seconds}s`);
+                          else if (parts.length > 0) parts.push('00s');
                           
-                          
-                          return `T+ ${parts.join(' ')}`;
+                          return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
                       })()}
                   </div>
-                  <div className="h-4 w-px bg-slate-700 mx-2"></div>
-                  <div className={`font-bold flex items-center gap-2 ${fps < 30 ? 'text-red-400' : 'text-blue-400'}`}>
-                      <Activity size={12} /> {fps} FPS
-                  </div>
+                  <div className="w-px h-3 bg-slate-700 mx-1" />
+                  <div className={fps < 30 ? "text-red-400" : "text-green-400"}>{fps.toFixed(0)} FPS</div>
               </div>
 
-              {/* Memory Row */}
-              {memoryUsage && (
-                  <div className="pt-2 border-t border-slate-700/50">
-                      <div className="flex items-center justify-between gap-3 mb-1.5">
-                          <div className="flex items-center gap-2 text-purple-400">
-                              <MemoryStick size={12} />
-                              <span className="font-bold">Memory</span>
-                          </div>
-                          <button
-                              onClick={() => {
-                                  if (window.gc) {
-                                      window.gc();
-                                  } else {
-                                      console.log('Garbage collection not available. Run Chrome with --expose-gc flag.');
-                                  }
-                              }}
-                              className="text-slate-500 hover:text-red-400 transition-colors p-1 hover:bg-slate-800 rounded"
-                              title="Force Garbage Collection (requires --expose-gc flag)"
-                          >
-                              <Trash2 size={10} />
-                          </button>
-                      </div>
-                      
-                      {/* Memory Bar */}
-                      <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
-                          <div 
-                              className={`h-full transition-all duration-300 ${
-                                  memoryUsage.percent > 90 ? 'bg-red-500' : 
-                                  memoryUsage.percent > 70 ? 'bg-yellow-500' : 
-                                  'bg-purple-500'
-                              }`}
-                              style={{ width: `${Math.min(memoryUsage.percent, 100)}%` }}
-                          />
-                      </div>
-                      
-                      {/* Memory Stats */}
-                      <div className="flex justify-between text-[10px] mt-1 text-slate-400">
-                          <span>{memoryUsage.used.toFixed(1)} MB</span>
-                          <span className={memoryUsage.percent > 90 ? 'text-red-400 font-bold' : ''}>
-                              {memoryUsage.percent.toFixed(1)}%
-                          </span>
-                          <span>{memoryUsage.total.toFixed(0)} MB</span>
-                      </div>
-                  </div>
+              {/* Extended Debug Info (Desktop Only) */}
+              {!isMobile && (
+                  <>
+                    <div className="h-px bg-slate-700/50" />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-400">
+                        <div>Bodies: <span className="text-slate-200">{bodies.length}</span></div>
+                        <div>Particles: <span className="text-slate-200">{particles.length}</span></div>
+                        <div>Scale: <span className="text-slate-200">{scale.toExponential(2)}</span></div>
+                        <div>Physics: <span className="text-slate-200">{physicsConfig.timeStep * 1000}ms</span></div>
+                        {memoryUsage && (
+                             <div className="col-span-2 flex items-center gap-1 mt-1 pt-1 border-t border-slate-700/30">
+                                <MemoryStick size={10} />
+                                <span>{memoryUsage.used.toFixed(0)}MB / {memoryUsage.total.toFixed(0)}MB ({memoryUsage.percent.toFixed(0)}%)</span>
+                             </div>
+                        )}
+                    </div>
+                  </>
               )}
           </div>
       </div>

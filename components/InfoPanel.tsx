@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { Body } from '../types';
 import { X, Crosshair, Ban, Trash2, Sun, ArrowRightLeft } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface InfoPanelProps {
   body: Body | null;
@@ -20,6 +20,7 @@ const InfoPanel: React.FC<InfoPanelProps> = ({ body, onClose, allBodies, isFollo
   const currentVel = Math.sqrt(body.velocity.x * body.velocity.x + body.velocity.y * body.velocity.y).toFixed(2);
 
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const isMobile = useIsMobile();
     
   // Prepare data for a comparison chart (Mass comparison relative to Earth approx)
   const chartData = allBodies
@@ -32,7 +33,7 @@ const InfoPanel: React.FC<InfoPanelProps> = ({ body, onClose, allBodies, isFollo
 
   return (
     <div 
-        className={`fixed top-16 bottom-16 left-0 bg-slate-900/90 backdrop-blur-md border-r border-slate-700 shadow-2xl overflow-hidden flex flex-col z-20 transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-80'}`}
+        className={`fixed ${isMobile ? `${isCollapsed ? 'bottom-20 h-auto' : 'top-0 bottom-20'} left-0 right-0 w-full` : 'top-16 bottom-16 left-0 w-80'} bg-slate-900/90 backdrop-blur-md border-r border-slate-700 shadow-2xl overflow-hidden flex flex-col z-20 transition-all duration-300 ${!isMobile && isCollapsed ? 'w-12' : ''}`}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Glasses, ArrowRightLeft } from 'lucide-react';
 import { Body } from '../types';
 import { calculateForces } from '../services/physicsEngine';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface GravityObserverPanelProps {
     bodies: Body[];
@@ -84,9 +84,11 @@ const GravityObserverPanel: React.FC<GravityObserverPanelProps> = ({
         }
     }, [velA, velB, samplingRate, bodyA, bodyB]); 
 
+    const isMobile = useIsMobile();
+
     return (
         <div 
-            className="absolute top-20 left-4 w-80 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-none p-4 shadow-2xl z-20"
+            className={`absolute ${isMobile ? 'top-20 left-4 right-4 w-auto' : 'top-20 left-4 w-80'} bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-none p-4 shadow-2xl z-20`}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}

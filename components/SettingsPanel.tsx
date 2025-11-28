@@ -47,7 +47,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             onPointerUp={(e) => e.stopPropagation()}
             onPointerMove={(e) => e.stopPropagation()}
         >
-            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-none w-[500px] max-h-[85vh] shadow-2xl flex flex-col overflow-hidden">
+            <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-none w-full max-w-[500px] mx-4 max-h-[85vh] shadow-2xl flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                     <div className="flex items-center gap-2 text-white font-bold text-lg">

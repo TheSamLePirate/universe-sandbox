@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Activity, CheckSquare, Square, Rocket, Globe, Crosshair } from 'lucide-react';
 import { Body } from '../types';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface PredictionPanelProps {
     bodies: Body[];
@@ -26,13 +27,14 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
     onFollowBody
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const isMobile = useIsMobile();
 
     const toggleExpanded = () => setIsExpanded(!isExpanded);
 
     return (
-        <div className="fixed top-0 left-0 right-0 z-40 flex flex-col items-center">
+        <div className={`fixed ${isMobile ? 'top-0 left-0' : 'top-0 left-0 right-0'} z-50 flex flex-col items-center pointer-events-none`}>
             {/* Header / Main Control */}
-            <div className="bg-slate-900/90 backdrop-blur-md border-b border-x border-slate-700 rounded-b-lg shadow-xl px-4 py-1.5 flex items-center gap-4 transition-all hover:bg-slate-800/90">
+            <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-md border-b border-x border-slate-700 rounded-b-lg shadow-xl px-4 py-1.5 flex items-center gap-4 transition-all hover:bg-slate-800/90">
                 
                 {/* Expand Toggle */}
                 <button 
@@ -65,7 +67,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
 
             {/* Expanded Config Body */}
             {isExpanded && (
-                <div className="mt-0 bg-slate-900/95 backdrop-blur-md border-x border-b border-slate-700 rounded-b-lg shadow-2xl p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="pointer-events-auto mt-0 bg-slate-900/95 backdrop-blur-md border-x border-b border-slate-700 rounded-b-lg shadow-2xl p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
                     
                     {/* Steps Slider */}
                     <div className="mb-4">

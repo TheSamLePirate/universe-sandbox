@@ -3,6 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio, ArrowRightLeft } from 'lucide-react';
 import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface RocketPanelProps {
     onClose: () => void;
@@ -321,10 +322,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     };
 
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const isMobile = useIsMobile();
 
     return (
         <div 
-            className={`fixed top-16 bottom-16 right-0 bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${isCollapsed ? 'w-12' : 'w-96'}`}
+            className={`fixed ${isMobile ? `bottom-20 left-0 right-0 ${isCollapsed ? 'h-auto' : 'h-[50vh]'}` : 'top-16 bottom-16 right-0 w-96'} bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${!isMobile && isCollapsed ? 'w-12' : ''}`}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
