@@ -626,7 +626,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                 <div className="space-y-2">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Clock size={12} /> Time Dilation</h4>
                                     <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
-                                        {[0.1, 1, 10, 100].map(val => (
+                                        {[0.1, 1, 10, 100,1000].map(val => (
                                             <button key={val} onClick={() => onSpeedChange(val)} className={`flex-1 py-1 rounded text-[10px] font-bold ${Math.abs(speed - val) < 0.01 ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}>{val}x</button>
                                         ))}
                                     </div>

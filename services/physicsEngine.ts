@@ -424,9 +424,11 @@ export const updatePhysics = (
 
         let newTrail = body.trail;
         if (s === steps - 1) {
+            // Only add trail points 50% of the time to reduce memory
             if (Math.random() > 0.5) { 
                 newTrail = [...body.trail, { x: newX, y: newY }];
-                const limit = trailLength || 150;
+                // Aggressive trail limiting - max 50 points per body
+                const limit = trailLength || 150;;
                 if (newTrail.length > limit) {
                     newTrail = newTrail.slice(-limit);
                 }
@@ -553,7 +555,9 @@ export const predictSystemTrajectories = (
         points: [] as Vector2D[]
     }));
 
-    const stride = Math.max(1, Math.floor(steps / 500));
+    // Limit points to prevent memory issues - max 10000 points per path
+    const MAX_POINTS = 10000;
+    const stride = Math.max(1, Math.ceil(steps / MAX_POINTS));
 
     for(let k=0; k<steps; k++) {
         const forces = calculateForces(simBodies, gConst);
@@ -573,15 +577,17 @@ export const predictSystemTrajectories = (
             };
         });
 
+        // Only record points at stride intervals to limit memory
         if (k % stride === 0) {
             paths.forEach(path => {
-                const currentSimBody = simBodies.find(sb => sb.id === path.id);
-                if (currentSimBody) {
-                    path.points.push(currentSimBody.position);
+                const body = simBodies.find(sb => sb.id === path.id);
+                if (body && path.points.length < MAX_POINTS) {
+                    path.points.push({ x: body.position.x, y: body.position.y });
                 }
             });
         }
     }
+
     return paths;
 };
 

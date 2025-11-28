@@ -16,7 +16,7 @@ import PredictionPanel from './components/PredictionPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
 import { Body, Vector2D, AssistantActions, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, Preset, CoMData, Maneuver, RocketSpawnConfig } from './types';
-import { Terminal, Activity } from 'lucide-react';
+import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- State ---
@@ -81,6 +81,7 @@ const App: React.FC = () => {
   const [currentCoMData, setCurrentCoMData] = useState<CoMData | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [fps, setFps] = useState(0);
+  const [memoryUsage, setMemoryUsage] = useState<{ used: number; total: number; percent: number } | null>(null);
   
   const bodiesRef = useRef(bodies);
   const particlesRef = useRef(particles);
@@ -103,6 +104,10 @@ const App: React.FC = () => {
   // FPS Tracking
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(0);
+  
+  // Throttle prediction calculations to avoid memory leaks
+  const lastPredictionTimeRef = useRef(0);
+  const PREDICTION_UPDATE_INTERVAL = 500; // Update predictions every 500ms to reduce memory pressure
 
   // Refs for Prediction Logic (to access fresh state inside animate loop)
   // Refs for Prediction Logic (to access fresh state inside animate loop)
@@ -112,6 +117,8 @@ const App: React.FC = () => {
   const predictionStepsRef = useRef(predictionSteps);
   const isPredictionEnabledRef = useRef(isPredictionEnabled);
   const predictionBodyIdsRef = useRef(predictionBodyIds);
+  const rocketTargetBodyIdRef = useRef(rocketTargetBodyId);
+  const rocketParentBodyIdRef = useRef(rocketParentBodyId);
 
   useEffect(() => { bodiesRef.current = bodies; }, [bodies]);
   useEffect(() => { particlesRef.current = particles; }, [particles]);
@@ -133,6 +140,8 @@ const App: React.FC = () => {
   useEffect(() => { predictionStepsRef.current = predictionSteps; }, [predictionSteps]);
   useEffect(() => { isPredictionEnabledRef.current = isPredictionEnabled; }, [isPredictionEnabled]);
   useEffect(() => { predictionBodyIdsRef.current = predictionBodyIds; }, [predictionBodyIds]);
+  useEffect(() => { rocketTargetBodyIdRef.current = rocketTargetBodyId; }, [rocketTargetBodyId]);
+  useEffect(() => { rocketParentBodyIdRef.current = rocketParentBodyId; }, [rocketParentBodyId]);
 
   useEffect(() => {
       if (bodies.length === 0) {
@@ -140,12 +149,28 @@ const App: React.FC = () => {
       }
   }, [bodies.length]);
 
+  // --- Window Resize ---
   useEffect(() => {
-    const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
+    const handleResize = () => setDimensions({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // --- Memory Monitoring ---
+  useEffect(() => {
+    const updateMemory = () => {
+      if ('memory' in performance && (performance as any).memory) {
+        const mem = (performance as any).memory;
+        const used = mem.usedJSHeapSize / (1024 * 1024); // MB
+        const total = mem.jsHeapSizeLimit / (1024 * 1024); // MB
+        const percent = (used / total) * 100;
+        setMemoryUsage({ used, total, percent });
+      }
+    };
+
+    updateMemory();
+    const interval = setInterval(updateMemory, 1000); // Update every second
+    return () => clearInterval(interval);
   }, []);
 
   // --- Animation Loop ---
@@ -172,6 +197,40 @@ const App: React.FC = () => {
       );
       const nextBodies = physicsResult.bodies;
       
+      // Clean up references to destroyed bodies
+      const bodyIds = new Set(nextBodies.map(b => b.id));
+      
+      // If selected body was destroyed, deselect it
+      if (selectedBodyIdRef.current && !bodyIds.has(selectedBodyIdRef.current)) {
+          setSelectedBodyId(null);
+          selectedBodyIdRef.current = null;
+      }
+      
+      // If following body was destroyed, stop following
+      if (followingBodyIdRef.current && !bodyIds.has(followingBodyIdRef.current)) {
+          setFollowingBodyId(null);
+          followingBodyIdRef.current = null;
+      }
+      
+      // Clean up prediction body IDs
+      if (predictionBodyIdsRef.current.length > 0) {
+          const validPredictionIds = predictionBodyIdsRef.current.filter(id => bodyIds.has(id));
+          if (validPredictionIds.length !== predictionBodyIdsRef.current.length) {
+              setPredictionBodyIds(validPredictionIds);
+              predictionBodyIdsRef.current = validPredictionIds;
+          }
+      }
+      
+      // Clean up target/parent references
+      if (rocketTargetBodyIdRef.current && !bodyIds.has(rocketTargetBodyIdRef.current)) {
+          setRocketTargetBodyId('');
+          rocketTargetBodyIdRef.current = '';
+      }
+      if (rocketParentBodyIdRef.current && !bodyIds.has(rocketParentBodyIdRef.current)) {
+          setRocketParentBodyId('');
+          rocketParentBodyIdRef.current = '';
+      }
+      
       let nextParticles = particlesRef.current.map(p => ({
           ...p,
           x: p.x + p.vx * dt,
@@ -182,35 +241,45 @@ const App: React.FC = () => {
       if (physicsResult.newParticles.length > 0) {
           nextParticles = [...nextParticles, ...physicsResult.newParticles];
       }
+      
+      // Hard limit on particles to prevent memory issues
+      const MAX_PARTICLES = 1000;
+      if (nextParticles.length > MAX_PARTICLES) {
+          nextParticles = nextParticles.slice(-MAX_PARTICLES);
+      }
 
       bodiesRef.current = nextBodies;
       particlesRef.current = nextParticles;
       setBodies(nextBodies);
       setParticles(nextParticles);
 
-      // --- PREDICTION TRAILS (Throttled: Every 10 frames) ---
-      // --- PREDICTION TRAILS (Throttled: Every 10 frames) ---
-      if (frameCountRef.current % 10 === 0) {
+      // --- PREDICTION TRAILS (Throttled to prevent memory leaks) ---
+      const shouldUpdatePredictions = time - lastPredictionTimeRef.current >= PREDICTION_UPDATE_INTERVAL;
+      
+      if (shouldUpdatePredictions) {
+          lastPredictionTimeRef.current = time;
           let newPaths: { id: string, color: string, points: Vector2D[] }[] = [];
           
           if (isCreationModeRef.current && creationCandidateRef.current) {
-               const allBodies = [...bodiesRef.current, creationCandidateRef.current];
-               newPaths = predictSystemTrajectories(
-                   allBodies, 
-                   predictionStepsRef.current, 
-                   physicsConfigRef.current.timeStep, 
-                   physicsConfigRef.current.gravitationalConstant,
-                   [creationCandidateRef.current.id] 
-               );
-          } else if (isPredictionEnabledRef.current) {
-               newPaths = predictSystemTrajectories(
-                  bodiesRef.current,
+              const allBodies = [...nextBodies, creationCandidateRef.current];
+              newPaths = predictSystemTrajectories(
+                  allBodies, 
+                  predictionStepsRef.current, 
+                  physicsConfigRef.current.timeStep,
+                  physicsConfigRef.current.gravitationalConstant,
+                  [creationCandidateRef.current.id]
+              );
+          } else if (isPredictionEnabledRef.current && predictionBodyIdsRef.current.length > 0) {
+              // Pass ALL bodies for simulation, but only return paths for selected ones
+              newPaths = predictSystemTrajectories(
+                  nextBodies,
                   predictionStepsRef.current,
                   physicsConfigRef.current.timeStep,
                   physicsConfigRef.current.gravitationalConstant,
                   predictionBodyIdsRef.current
-               );
+              );
           }
+          
           setPredictionPaths(newPaths);
       }
 
@@ -703,10 +772,38 @@ const App: React.FC = () => {
                   20, 8, '#4ECDC4', 0, 0, 'Manually placed body'
               );
               newCandidate.position = { x: worldX, y: worldY };
-              newCandidate.velocity = { x: 2, y: 0 }; 
+              newCandidate.velocity = { x: 0, y: 0 }; 
               setCreationCandidate(newCandidate);
+              
+              // Calculate initial prediction
+              const allBodies = [...bodies, newCandidate];
+              const newPaths = predictSystemTrajectories(
+                allBodies,
+                predictionSteps,
+                physicsConfig.timeStep,
+                physicsConfig.gravitationalConstant,
+                [newCandidate.id]
+              );
+              setPredictionPaths(newPaths);
           }
       }
+  };
+
+  const handleUpdateCandidate = (updates: Partial<Body>) => {
+    if (!creationCandidate) return;
+    const updated = { ...creationCandidate, ...updates };
+    setCreationCandidate(updated);
+    
+    // Recalculate prediction for the updated candidate
+    const allBodies = [...bodies, updated];
+    const newPaths = predictSystemTrajectories(
+      allBodies,
+      predictionSteps,
+      physicsConfig.timeStep,
+      physicsConfig.gravitationalConstant,
+      [updated.id]
+    );
+    setPredictionPaths(newPaths);
   };
 
   const handleSpawnManual = () => {
@@ -928,16 +1025,126 @@ const App: React.FC = () => {
       />
 
       {/* DEBUG PANEL */}
-      <div className="fixed bottom-4 left-4 z-50 pointer-events-none font-mono text-xs">
-          <div className="bg-slate-900/80 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm flex items-center gap-3">
-              <Terminal size={12} />
-              <div className="font-bold">
-                  T+ {simulationTimeRef.current.toFixed(2)}s
+      <div className="fixed bottom-4 left-4 z-50 pointer-events-auto font-mono text-xs">
+          <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
+              {/* Time and FPS Row */}
+              <div className="flex items-center gap-3">
+                  <Terminal size={12} />
+                  <div className="font-bold">
+                      {(() => {
+                          const totalSeconds = Math.floor(simulationTimeRef.current);
+                          const years = Math.floor(totalSeconds / (365.25 * 24 * 3600));
+                          const months = Math.floor((totalSeconds % (365.25 * 24 * 3600)) / (30.44 * 24 * 3600));
+                          const days = Math.floor((totalSeconds % (30.44 * 24 * 3600)) / (24 * 3600));
+                          const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+                          const minutes = Math.floor((totalSeconds % 3600) / 60);
+                          let seconds = totalSeconds % 60;  
+
+                          
+                          
+                          const parts = [];
+                          if (years > 0) parts.push(`${years}y`);
+
+                          if (months > 0) {
+                            if (months < 10) {
+                              parts.push(`0${months}mo`);
+                            } else {
+                              parts.push(`${months}mo`);
+                            }
+                          }
+
+                          if (days > 0) {
+                            if (days < 10) {
+                              parts.push(`0${days}d`);
+                            } else {
+                              parts.push(`${days}d`);
+                            }
+                          }
+
+                          if (hours > 0) {
+                            if (hours < 10) {
+                              parts.push(`0${hours}h`);
+                            } else {
+                              parts.push(`${hours}h`);
+                            }
+                          }
+
+
+                          if (minutes > 0) {
+                            if (minutes < 10) {
+                              parts.push(`0${minutes}m`);
+                            } else {
+                              parts.push(`${minutes}m`);
+                            }
+                          }else {
+                            parts.push(`00m`);
+                          }
+
+                          if(seconds > 0) {
+                            if (seconds < 10) {
+                            parts.push(`0${seconds}s`);
+                            } else {
+                                parts.push(`${seconds}s`);
+                            }
+                          }else {
+                            parts.push(`00s`);
+                          }
+                          
+                          
+                          return `T+ ${parts.join(' ')}`;
+                      })()}
+                  </div>
+                  <div className="h-4 w-px bg-slate-700 mx-2"></div>
+                  <div className={`font-bold flex items-center gap-2 ${fps < 30 ? 'text-red-400' : 'text-blue-400'}`}>
+                      <Activity size={12} /> {fps} FPS
+                  </div>
               </div>
-              <div className="h-4 w-px bg-slate-700 mx-2"></div>
-              <div className={`font-bold flex items-center gap-2 ${fps < 30 ? 'text-red-400' : 'text-blue-400'}`}>
-                  <Activity size={12} /> {fps} FPS
-              </div>
+
+              {/* Memory Row */}
+              {memoryUsage && (
+                  <div className="pt-2 border-t border-slate-700/50">
+                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                          <div className="flex items-center gap-2 text-purple-400">
+                              <MemoryStick size={12} />
+                              <span className="font-bold">Memory</span>
+                          </div>
+                          <button
+                              onClick={() => {
+                                  if (window.gc) {
+                                      window.gc();
+                                  } else {
+                                      console.log('Garbage collection not available. Run Chrome with --expose-gc flag.');
+                                  }
+                              }}
+                              className="text-slate-500 hover:text-red-400 transition-colors p-1 hover:bg-slate-800 rounded"
+                              title="Force Garbage Collection (requires --expose-gc flag)"
+                          >
+                              <Trash2 size={10} />
+                          </button>
+                      </div>
+                      
+                      {/* Memory Bar */}
+                      <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                              className={`h-full transition-all duration-300 ${
+                                  memoryUsage.percent > 90 ? 'bg-red-500' : 
+                                  memoryUsage.percent > 70 ? 'bg-yellow-500' : 
+                                  'bg-purple-500'
+                              }`}
+                              style={{ width: `${Math.min(memoryUsage.percent, 100)}%` }}
+                          />
+                      </div>
+                      
+                      {/* Memory Stats */}
+                      <div className="flex justify-between text-[10px] mt-1 text-slate-400">
+                          <span>{memoryUsage.used.toFixed(1)} MB</span>
+                          <span className={memoryUsage.percent > 90 ? 'text-red-400 font-bold' : ''}>
+                              {memoryUsage.percent.toFixed(1)}%
+                          </span>
+                          <span>{memoryUsage.total.toFixed(0)} MB</span>
+                      </div>
+                  </div>
+              )}
           </div>
       </div>
       
@@ -1029,10 +1236,13 @@ const App: React.FC = () => {
           <ManualCreationPanel
             candidate={creationCandidate}
             predictionSteps={predictionSteps}
-            onUpdate={(u) => setCreationCandidate(prev => prev ? ({ ...prev, ...u }) : null)}
+            onUpdate={handleUpdateCandidate}
             onStepsChange={setPredictionSteps}
             onSpawn={handleSpawnManual}
-            onCancel={toggleCreationMode}
+            onCancel={() => {
+                setIsCreationMode(false);
+                setCreationCandidate(null);
+            }}
           />
       )}
 

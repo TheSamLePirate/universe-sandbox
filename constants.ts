@@ -14,7 +14,7 @@ export const DEFAULT_VISUAL_CONFIG: VisualConfig = {
     showGlow: true,
     glowIntensity: 1.0,
     showTrails: true,
-    trailLength: 150,
+    trailLength: 50, // Reduced from 150 to prevent memory issues
     centerOfMassThreshold: 2000,
     showStars: true,
     showNebula: true,
