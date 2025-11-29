@@ -923,43 +923,49 @@ const App: React.FC = () => {
           }
           return "Unknown action.";
       },
-      programManeuver: (rocketName, thrust, duration, angleOffset) => {
+      programAdvancedFlightPlan: (rocketName, maneuvers) => {
           const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
           if (!rocket) return `Rocket '${rocketName}' not found.`;
           
-          const newManeuver: Maneuver = {
-            id: `m_${Date.now()}`,
-            type: 'burn',
-            thrust,
-            duration,
-            angleOffset: (angleOffset * Math.PI) / 180,
-            progress: 0,
-            status: 'pending'
-          };
+          const newManeuvers: Maneuver[] = maneuvers.map((m: any, idx: number) => {
+             const maneuver: Maneuver = {
+                 id: `m_${Date.now()}_${idx}`,
+                 type: m.type,
+                 thrust: m.thrust || 0,
+                 duration: m.duration || 0,
+                 angleOffset: m.angleOffset ? (m.angleOffset * Math.PI) / 180 : 0,
+                 progress: 0,
+                 status: 'pending'
+             };
+
+             // Map specific parameters
+             if (m.type === 'rotate') {
+                 maneuver.param = m.rotationAngle;
+             } else if (m.type === 'sas') {
+                 maneuver.param = m.sasMode;
+             } else if (m.type === 'wait_for_transfer') {
+                 maneuver.param = m.phaseAngleError || 1.0;
+             } else if (m.type === 'wait_for_altitude') {
+                 maneuver.param = `${m.targetAltitude}:${m.altitudeDirection || 'ascending'}`;
+             } else if (m.type === 'burn_until_altitude') {
+                 maneuver.param = m.targetAltitude;
+             }
+
+             // Map body references
+             if (m.targetBodyName) {
+                 const target = bodiesRef.current.find(b => b.name.toLowerCase() === m.targetBodyName.toLowerCase());
+                 if (target) maneuver.targetBodyId = target.id;
+             }
+             if (m.parentBodyName) {
+                 const parent = bodiesRef.current.find(b => b.name.toLowerCase() === m.parentBodyName.toLowerCase());
+                 if (parent) maneuver.parentBodyId = parent.id;
+             }
+
+             return maneuver;
+          });
           
-          const updated = rocket.maneuvers ? [...rocket.maneuvers, newManeuver] : [newManeuver];
-          updateRocket(rocket.id, { maneuvers: updated });
-          
-          return `Maneuver programmed for ${rocket.name}: ${thrust}N for ${duration}s. Use 'Control Panel' to execute.`;
-      },
-      programFlightPlan: (rocketName, plan) => {
-          const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
-          if (!rocket) return `Rocket '${rocketName}' not found.`;
-          
-          const newManeuvers: Maneuver[] = plan.map((p, idx) => ({
-             id: `m_${Date.now()}_${idx}`,
-             type: 'burn',
-             thrust: p.thrust,
-             duration: p.duration,
-             angleOffset: (p.angleOffset * Math.PI) / 180,
-             progress: 0,
-             status: 'pending'
-          }));
-          
-          const existingNonPending = rocket.maneuvers ? rocket.maneuvers.filter(m => m.status !== 'pending') : [];
-          updateRocket(rocket.id, { maneuvers: [...existingNonPending, ...newManeuvers] });
-          
-          return `Flight plan programmed for ${rocket.name} with ${newManeuvers.length} steps. Ready to execute.`;
+          updateRocket(rocket.id, { maneuvers: newManeuvers });
+          return `Flight plan with ${newManeuvers.length} maneuvers programmed for ${rocket.name}.`;
       },
       executeManeuverPlan: (rocketName) => {
           const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));

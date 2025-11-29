@@ -159,8 +159,7 @@ export interface AssistantActions {
     // Rocket Actions
     spawnRocket: (parentBodyName?: string) => string;
     controlRocket: (rocketName: string, action: 'rotate' | 'thrust' | 'stop', value?: number) => string;
-    programManeuver: (rocketName: string, thrust: number, duration: number, angleOffset: number) => string;
-    programFlightPlan: (rocketName: string, plan: { thrust: number, duration: number, angleOffset: number }[]) => string;
+    programAdvancedFlightPlan: (rocketName: string, maneuvers: any[]) => string;
     executeManeuverPlan: (rocketName: string) => string;
     getRocketTelemetry: (rocketName: string, targetBodyName?: string) => string;
 }

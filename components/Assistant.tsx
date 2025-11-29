@@ -19,7 +19,7 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -287,18 +287,10 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
                                 args.value as number | undefined
                             );
                             break;
-                        case 'program_maneuver':
-                            result = actions.programManeuver(
-                                args.rocketName as string,
-                                Number(args.thrust),
-                                Number(args.duration),
-                                Number(args.angleOffset)
-                            );
-                            break;
-                        case 'program_flight_plan':
-                             result = actions.programFlightPlan(
+                        case 'program_advanced_flight_plan':
+                             result = actions.programAdvancedFlightPlan(
                                  args.rocketName as string,
-                                 args.plan as { thrust: number, duration: number, angleOffset: number }[]
+                                 args.maneuvers as any[]
                              );
                              break;
                         case 'execute_maneuver_plan':

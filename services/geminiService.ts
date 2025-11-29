@@ -184,43 +184,78 @@ const controlRocketTool: FunctionDeclaration = {
     },
 };
 
-const programManeuverTool: FunctionDeclaration = {
-    name: "program_maneuver",
-    description: "Program a SINGLE maneuver into the rocket's flight computer.",
+const programAdvancedFlightPlanTool: FunctionDeclaration = {
+    name: "program_advanced_flight_plan",
+    description: `Program a comprehensive flight plan with multiple maneuver types. Supports all maneuver types:
+    - 'burn': Timed thrust burn with specific angle
+    - 'wait': Passive wait for specified duration
+    - 'rotate': Rotate rocket by degrees
+    - 'sas': Set Stability Assist System mode
+    - 'auto_land': Automatic landing on target body
+    - 'auto_transfer': Automatic Hohmann transfer to target
+    - 'auto_circularize': Circularize orbit around target
+    - 'wait_for_transfer': Wait for optimal transfer window
+    - 'wait_for_altitude': Wait until reaching target altitude (ascending/descending)
+    - 'burn_until_altitude': Burn continuously until reaching target altitude`,
     parameters: {
         type: Type.OBJECT,
         properties: {
             rocketName: { type: Type.STRING, description: "Name of the rocket." },
-            thrust: { type: Type.NUMBER, description: "Thrust power (0.001-0.1). Rocket mass is typically 0.001." },
-            duration: { type: Type.NUMBER, description: "Burn duration in seconds (0.1-10.0)." },
-            angleOffset: { type: Type.NUMBER, description: "Angle relative to current heading in degrees (0 = forward)." },
-        },
-        required: ["rocketName", "thrust", "duration", "angleOffset"],
-    },
-};
-
-const programFlightPlanTool: FunctionDeclaration = {
-    name: "program_flight_plan",
-    description: "Program a FULL SEQUENCE of maneuvers (flight plan) for a rocket. Overwrites existing pending maneuvers.",
-    parameters: {
-        type: Type.OBJECT,
-        properties: {
-            rocketName: { type: Type.STRING, description: "Name of the rocket." },
-            plan: {
+            maneuvers: {
                 type: Type.ARRAY,
-                description: "List of maneuvers to execute in order.",
+                description: "List of maneuvers to execute in sequence.",
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        thrust: { type: Type.NUMBER, description: "Thrust Power" },
-                        duration: { type: Type.NUMBER, description: "Duration in seconds" },
-                        angleOffset: { type: Type.NUMBER, description: "Angle offset degrees" }
+                        type: { 
+                            type: Type.STRING, 
+                            description: "Maneuver type: 'burn', 'wait', 'rotate', 'sas', 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer', 'wait_for_altitude', 'burn_until_altitude'" 
+                        },
+                        // For 'burn' and 'burn_until_altitude'
+                        thrust: { type: Type.NUMBER, description: "Thrust power (0.001-0.1). Required for 'burn' and 'burn_until_altitude'." },
+                        duration: { type: Type.NUMBER, description: "Duration in seconds. Required for 'burn' and 'wait'." },
+                        angleOffset: { type: Type.NUMBER, description: "Angle offset in degrees relative to rocket heading. Required for 'burn' and 'burn_until_altitude'." },
+                        
+                        // For 'rotate'
+                        rotationAngle: { type: Type.NUMBER, description: "Rotation angle in degrees (e.g., 90, -45). Required for 'rotate'." },
+                        
+                        // For 'sas'
+                        sasMode: { 
+                            type: Type.STRING, 
+                            description: "SAS mode: 'off', 'prograde', 'retrograde', 'radial_out', 'radial_in'. Required for 'sas'." 
+                        },
+                        
+                        // For auto maneuvers and altitude maneuvers
+                        targetBodyName: { 
+                            type: Type.STRING, 
+                            description: "Name of target body. Required for 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer'." 
+                        },
+                        parentBodyName: { 
+                            type: Type.STRING, 
+                            description: "Name of parent/reference body (optional, auto-detects if not specified). For transfers and altitude maneuvers." 
+                        },
+                        
+                        // For 'wait_for_transfer'
+                        phaseAngleError: { 
+                            type: Type.NUMBER, 
+                            description: "Phase angle error margin in degrees (e.g., 0.5-2.0). Required for 'wait_for_transfer'." 
+                        },
+                        
+                        // For 'wait_for_altitude' and 'burn_until_altitude'
+                        targetAltitude: { 
+                            type: Type.NUMBER, 
+                            description: "Target altitude in kilometers. Required for 'wait_for_altitude' and 'burn_until_altitude'." 
+                        },
+                        altitudeDirection: { 
+                            type: Type.STRING, 
+                            description: "'ascending' (going up) or 'descending' (going down). Required for 'wait_for_altitude'." 
+                        },
                     },
-                    required: ["thrust", "duration", "angleOffset"]
+                    required: ["type"]
                 }
             }
         },
-        required: ["rocketName", "plan"],
+        required: ["rocketName", "maneuvers"],
     },
 };
 
@@ -264,8 +299,7 @@ const tools: Tool[] = [{
         setCameraTool,
         spawnRocketTool,
         controlRocketTool,
-        programManeuverTool,
-        programFlightPlanTool,
+        programAdvancedFlightPlanTool,
         executeManeuverPlanTool,
         getRocketTelemetryTool
     ]
@@ -284,11 +318,70 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     - Rockets: You can 'spawn_rocket' on planets or in space. You can 'control_rocket' to rotate or thrust manually.
     - Telemetry: Use 'get_rocket_telemetry' to find a rocket's speed, or its distance/angle/delta-v relative to a planet.
     
-    FLIGHT PLANNING:
-    - To create a flight plan, use 'program_flight_plan' with a list of maneuvers.
-    - To execute the plan, use 'execute_maneuver_plan'. 
-    - The execution tool ONLY executes. You must program the plan first.
-    - Note: Rocket mass is very small (0.001). Typical thrust values are 0.01 to 0.1 N.
+    ADVANCED FLIGHT PLANNING:
+    You can create sophisticated mission plans using 'program_advanced_flight_plan' with these maneuver types:
+    
+    1. BURN: Timed thrust burn
+       - Parameters: thrust (0.001-0.1), duration (seconds), angleOffset (degrees)
+       - Example: {type: "burn", thrust: 0.01, duration: 2.0, angleOffset: 0}
+    
+    2. WAIT: Passive coast for duration
+       - Parameters: duration (seconds)
+       - Example: {type: "wait", duration: 5.0}
+    
+    3. ROTATE: Turn rocket by degrees
+       - Parameters: rotationAngle (degrees)
+       - Example: {type: "rotate", rotationAngle: 90}
+    
+    4. SAS: Set stability assist mode
+       - Parameters: sasMode ("off", "prograde", "retrograde", "radial_out", "radial_in")
+       - Example: {type: "sas", sasMode: "prograde"}
+    
+    5. AUTO_LAND: Automatic landing on target
+       - Parameters: targetBodyName
+       - Example: {type: "auto_land", targetBodyName: "Moon"}
+    
+    6. AUTO_TRANSFER: Automatic Hohmann transfer
+       - Parameters: targetBodyName, parentBodyName (optional)
+       - Example: {type: "auto_transfer", targetBodyName: "Mars", parentBodyName: "Sun"}
+    
+    7. AUTO_CIRCULARIZE: Circularize current orbit
+       - Parameters: targetBodyName
+       - Example: {type: "auto_circularize", targetBodyName: "Earth"}
+    
+    8. WAIT_FOR_TRANSFER: Wait for optimal transfer window
+       - Parameters: targetBodyName, parentBodyName (optional), phaseAngleError (degrees, e.g., 0.5-2.0)
+       - Example: {type: "wait_for_transfer", targetBodyName: "Mars", phaseAngleError: 1.0}
+    
+    9. WAIT_FOR_ALTITUDE: Wait until reaching altitude
+       - Parameters: targetAltitude (km), altitudeDirection ("ascending" or "descending"), parentBodyName (optional)
+       - Example: {type: "wait_for_altitude", targetAltitude: 200, altitudeDirection: "ascending"}
+       - Use "ascending" to wait for apoapsis, "descending" for periapsis
+    
+    10. BURN_UNTIL_ALTITUDE: Burn continuously until altitude reached
+        - Parameters: targetAltitude (km), thrust, angleOffset (degrees), parentBodyName (optional)
+        - Example: {type: "burn_until_altitude", targetAltitude: 300, thrust: 0.01, angleOffset: 0}
+    
+    EXAMPLE MISSION PLANS:
+    
+    Earth to Moon Transfer:
+    [
+      {type: "burn_until_altitude", targetAltitude: 200, thrust: 0.01, angleOffset: 0},
+      {type: "wait_for_altitude", targetAltitude: 190, altitudeDirection: "ascending"},
+      {type: "sas", sasMode: "prograde"},
+      {type: "wait_for_transfer", targetBodyName: "Moon", phaseAngleError: 1.0},
+      {type: "auto_transfer", targetBodyName: "Moon"},
+      {type: "auto_land", targetBodyName: "Moon"}
+    ]
+    
+    Orbit Circularization:
+    [
+      {type: "wait_for_altitude", targetAltitude: 150, altitudeDirection: "ascending"},
+      {type: "auto_circularize", targetBodyName: "Earth"}
+    ]
+    
+    To execute: Use 'execute_maneuver_plan' after programming.
+    Note: Rocket mass is very small (0.001). Typical thrust values are 0.01 to 0.1 N.
     
     Be helpful, scientific, and concise. If you execute a tool, strictly confirm what you did in the text response.
     `;
