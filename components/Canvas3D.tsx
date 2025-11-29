@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Stars, Line, Html, Billboard, Text } from '@react-three/drei';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
+import { Canvas, useThree, useFrame, extend } from '@react-three/fiber';
+import { OrbitControls, Stars, Html, Line, Trail } from '@react-three/drei';
 import * as THREE from 'three';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData } from '../types';
 import { calculateOrbitalPoints, calculateEllipsePoints, calculateForces } from '../services/physicsEngine';
@@ -141,8 +141,8 @@ const BodyMesh: React.FC<{
                             color={body.color}
                             transparent={isGhost}
                             opacity={isGhost ? 0.5 : 1}
-                            roughness={0.3}
-                            metalness={0.7}
+                            roughness={0.9}
+                            metalness={0.1}
                         />
                     </mesh>
                     
@@ -564,6 +564,101 @@ const ObserverOverlay: React.FC<{
     );
 };
 
+const GravityGrid: React.FC<{ bodies: Body[], visualConfig: VisualConfig, width: number, height: number, scale: number, offset: Vector2D }> = ({ bodies, visualConfig, width, height, scale, offset }) => {
+    const geometryRef = useRef<THREE.BufferGeometry>(null);
+    const { camera } = useThree(); // Access the 3D camera
+    
+    useFrame(() => {
+        if (!geometryRef.current || !visualConfig.showGrid) return;
+
+        // Calculate grid spacing (same logic as 2D)
+        const targetScreenSpacing = 15; // Reduced from 50 to increase density (more vertices)
+        const baseGridSpacing = visualConfig.gridSpacing; 
+        
+        // Use camera distance to determine scale in 3D
+        // visibleHeight at z=0 = 2 * cameraZ * tan(fov/2)
+        // scale ~ height / visibleHeight
+        const cameraZ = Math.max(10, camera.position.z);
+        const fov = (camera as THREE.PerspectiveCamera).fov || 50;
+        const visibleHeight = 2 * cameraZ * Math.tan((fov * Math.PI) / 360);
+        const effectiveScale = height / visibleHeight;
+        
+        const approximateWorldSpacing = targetScreenSpacing / effectiveScale;
+        const power = Math.round(Math.log2(approximateWorldSpacing / baseGridSpacing));
+        const renderGridSize = baseGridSpacing * Math.pow(2, power);
+        const spacing = renderGridSize;
+
+        // Calculate view bounds based on camera position
+        const centerX = camera.position.x;
+        const centerY = camera.position.y;
+        
+        // Calculate visible range with a generous buffer (4x) to cover tilt/rotation
+        const aspect = width / height;
+        const rangeY = visibleHeight * 2; // 2x buffer up/down
+        const rangeX = visibleHeight * aspect * 2; // 2x buffer left/right
+        
+        const startX = Math.floor((centerX - rangeX) / spacing) * spacing;
+        const endX = Math.floor((centerX + rangeX) / spacing) * spacing;
+        const startY = Math.floor((centerY - rangeY) / spacing) * spacing;
+        const endY = Math.floor((centerY + rangeY) / spacing) * spacing;
+
+        const points: number[] = [];
+        
+        // Helper to distort point
+        const getDistortedPoint = (wx: number, wy: number) => {
+            let dx = 0;
+            let dy = 0;
+            
+            for (const body of bodies) {
+                if (body.mass < 10) continue; 
+                const bdx = body.position.x - wx;
+                const bdy = -body.position.y - wy; // Negate body Y to match our world space
+                const distSq = bdx*bdx + bdy*bdy;
+                if (distSq > 500000 && body.mass < 1000) continue;
+                const dist = Math.sqrt(distSq);
+                if (dist < 1) continue;
+                // Exaggerated effect: Increased multiplier from 30 to 150, max force from 60 to 300
+                const force = Math.min(300, (body.mass * 10) / (distSq + 500)); 
+                dx += (bdx / dist) * force;
+                dy += (bdy / dist) * force;
+            }
+            return { x: wx + dx, y: wy + dy };
+        };
+
+        // Vertical lines
+        for (let x = startX; x <= endX; x += spacing) {
+            for (let y = startY; y < endY; y += spacing) {
+                const p1 = getDistortedPoint(x, y);
+                const p2 = getDistortedPoint(x, y + spacing);
+                points.push(p1.x, p1.y, 0);
+                points.push(p2.x, p2.y, 0);
+            }
+        }
+
+        // Horizontal lines
+        for (let y = startY; y <= endY; y += spacing) {
+            for (let x = startX; x < endX; x += spacing) {
+                const p1 = getDistortedPoint(x, y);
+                const p2 = getDistortedPoint(x + spacing, y);
+                points.push(p1.x, p1.y, 0);
+                points.push(p2.x, p2.y, 0);
+            }
+        }
+
+        geometryRef.current.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+        geometryRef.current.attributes.position.needsUpdate = true;
+    });
+
+    if (!visualConfig.showGrid) return null;
+
+    return (
+        <lineSegments>
+            <bufferGeometry ref={geometryRef} />
+            <lineBasicMaterial color="#64748b" transparent opacity={visualConfig.gridOpacity} />
+        </lineSegments>
+    );
+};
+
 const CoMOverlay: React.FC<{ coMData: CoMData | null, visualConfig: VisualConfig }> = ({ coMData, visualConfig }) => {
     if (!visualConfig.showCenterOfMass || !coMData) return null;
 
@@ -614,15 +709,50 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
     const previousFollowingId = useRef<string | null>(null);
     const wasFollowingCoM = useRef(false);
 
+    // Initial Camera Setup to match 2D view
+    useEffect(() => {
+        if (!followingBodyId && !followingCoM) {
+            // Calculate visible height at z=0 based on 2D scale
+            // 2D: height / scale = visible world height
+            // 3D: 2 * dist * tan(fov/2) = visible world height
+            // dist = (height / scale) / (2 * tan(fov/2))
+            
+            const fov = 50; // Default FOV for PerspectiveCamera
+            const dist = (height / scale) / (2 * Math.tan((fov * Math.PI) / 360));
+            
+            // Center in 2D is (-offset.x/scale, -offset.y/scale)
+            // In 3D we negate Y, so y becomes offset.y/scale
+            const centerX = -offset.x / scale;
+            const centerY = offset.y / scale; // -(-offset.y/scale)
+            
+            camera.position.set(centerX, centerY, dist);
+            camera.lookAt(centerX, centerY, 0);
+            camera.up.set(0, 1, 0); // Standard orientation
+            
+            if (controlsRef.current) {
+                controlsRef.current.target.set(centerX, centerY, 0);
+                controlsRef.current.update();
+            }
+        }
+    }, []); // Run once on mount
+
     useFrame(() => {
         let targetPos: THREE.Vector3 | null = null;
         let isContinuous = false;
+        let isRocketFollowing = false;
+        let rocketBody: Body | null = null;
 
         if (followingBodyId) {
             const body = bodies.find(b => b.id === followingBodyId);
             if (body) {
                 targetPos = new THREE.Vector3(body.position.x, -body.position.y, 0); // Negate Y
                 isContinuous = previousFollowingId.current === followingBodyId;
+                
+                // Check if following a rocket
+                if (body.isRocket) {
+                    isRocketFollowing = true;
+                    rocketBody = body;
+                }
             }
         } else if (followingCoM && coMData) {
             targetPos = new THREE.Vector3(coMData.refinedCoM.x, -coMData.refinedCoM.y, 0); // Negate Y
@@ -630,15 +760,52 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
         }
 
         if (targetPos && controlsRef.current) {
-            if (isContinuous) {
-                // Continuous following: Maintain relative camera position
-                const currentTarget = controlsRef.current.target as THREE.Vector3;
-                const delta = targetPos.clone().sub(currentTarget);
-                camera.position.add(delta);
-                controlsRef.current.target.copy(targetPos);
+            if (isRocketFollowing && rocketBody) {
+                // THIRD-PERSON ROCKET VIEW (Cockpit perspective)
+                const rocketAngle = -(rocketBody.angle || 0); // Negate for Y-flip
+                const cameraDistance = rocketBody.radius * 15; // Distance behind rocket
+                const cameraHeight = rocketBody.radius * 8; // Height above rocket
+                
+                // Position camera behind and above the rocket
+                const cameraX = rocketBody.position.x - Math.cos(rocketAngle) * cameraDistance;
+                const cameraY = -rocketBody.position.y - Math.sin(rocketAngle) * cameraDistance; // Negate Y
+                const cameraZ = cameraHeight;
+                
+                // Look-at point: ahead of the rocket
+                const lookAheadDistance = rocketBody.radius * 20;
+                const lookAtX = rocketBody.position.x + Math.cos(rocketAngle) * lookAheadDistance;
+                const lookAtY = -rocketBody.position.y + Math.sin(rocketAngle) * lookAheadDistance; // Negate Y
+                const lookAtZ = 0;
+                
+                // Set camera up vector to Z-axis to keep horizon level
+                camera.up.set(0, 0, 1);
+                
+                camera.position.set(cameraX, cameraY, cameraZ);
+                camera.lookAt(lookAtX, lookAtY, lookAtZ);
+                
+                // Update controls target to the look-at point
+                controlsRef.current.target.set(lookAtX, lookAtY, lookAtZ);
+                controlsRef.current.update();
             } else {
-                // Just started following: Snap target
-                controlsRef.current.target.copy(targetPos);
+                // NORMAL FOLLOWING (for planets/stars/CoM)
+                if (isContinuous) {
+                    // Continuous following: Maintain relative camera position
+                    const currentTarget = controlsRef.current.target as THREE.Vector3;
+                    const delta = targetPos.clone().sub(currentTarget);
+                    camera.position.add(delta);
+                    controlsRef.current.target.copy(targetPos);
+                } else {
+                    // Just started following: Snap target
+                    controlsRef.current.target.copy(targetPos);
+                    
+                    // If following CoM, enforce vertical top-down view
+                    if (followingCoM) {
+                        const dist = camera.position.distanceTo(controlsRef.current.target);
+                        camera.position.set(targetPos.x, targetPos.y, dist); // Directly above
+                        camera.lookAt(targetPos);
+                        camera.up.set(0, 1, 0); // Reset orientation
+                    }
+                }
             }
         }
 
@@ -665,15 +832,17 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
     return (
         <>
             {/* NO ambient light - pure darkness except for stars */}
+
+            <ambientLight intensity={0} />
             
             {/* Star Point Lights - VERY STRONG */}
             {bodies.filter(b => b.isStar).map(star => (
                 <pointLight 
                     key={`light-${star.id}`}
                     position={[star.position.x, -star.position.y, 100]} // Negate Y 
-                    intensity={10000} 
+                    intensity={100000} 
                     distance={100000}
-                    decay={1.2}
+                    decay={1.1}
                     castShadow
                     shadow-mapSize={[4096*16, 4096*16]}
                     shadow-camera-near={1}
@@ -684,6 +853,16 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             ))}
             
             {visualConfig.showStars && <Stars radius={5000} depth={50} count={visualConfig.starDensity * 5} factor={4} saturation={0} fade speed={1} />}
+
+            {/* Gravity Grid */}
+            <GravityGrid 
+                bodies={bodies} 
+                visualConfig={visualConfig} 
+                width={width} 
+                height={height} 
+                scale={scale} 
+                offset={offset} 
+            />
 
             {/* Bodies */}
             {bodies.map(body => (
@@ -767,8 +946,7 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
                  <meshBasicMaterial transparent opacity={0} />
             </mesh>
             
-            {/* Grid Helper */}
-            {visualConfig.showGrid && <gridHelper args={[100000, 1000]} rotation={[Math.PI/2, 0, 0]} position={[0, 0, -10]} />}
+            {/* Grid Helper Removed - replaced by GravityGrid */}
 
             <OrbitControls 
                 ref={controlsRef}
