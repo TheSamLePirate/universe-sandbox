@@ -370,6 +370,101 @@ export const updatePhysics = (
                               m.status = 'completed';
                           }
                       }
+                      // Handle wait_for_altitude
+                      else if (m.type === 'wait_for_altitude') {
+                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
+                          
+                          if (!refParent) {
+                              // Auto-detect parent (most massive body)
+                              refParent = currentBodies.filter(b => !b.isRocket).sort((a,b) => b.mass - a.mass)[0];
+                          }
+                          
+                          if (refParent) {
+                              const dx = updatedBody.position.x - refParent.position.x;
+                              const dy = updatedBody.position.y - refParent.position.y;
+                              const distance = Math.sqrt(dx*dx + dy*dy);
+                              const altitude = distance - refParent.radius; // Altitude above surface
+                              
+                              // Parse param: "altitude:direction" or just altitude for backward compatibility
+                              let targetAltitude = 100;
+                              let direction: 'ascending' | 'descending' = 'ascending';
+                              
+                              if (typeof m.param === 'string' && m.param.includes(':')) {
+                                  const parts = m.param.split(':');
+                                  targetAltitude = Number(parts[0]) || 100;
+                                  direction = parts[1] as 'ascending' | 'descending';
+                              } else {
+                                  targetAltitude = Number(m.param) || 100;
+                              }
+                              
+                              // Store previous altitude to detect direction of change
+                              if (m.progress === 0 && !m.startTime) {
+                                  m.startTime = Date.now();
+                                  (m as any).previousAltitude = altitude;
+                              }
+                              
+                              const previousAltitude = (m as any).previousAltitude || altitude;
+                              const isAscending = altitude > previousAltitude;
+                              const isDescending = altitude < previousAltitude;
+                              
+                              // Check if we've reached the target altitude in the correct direction
+                              if (direction === 'ascending') {
+                                  // Wait for altitude to be rising and reach target
+                                  if (altitude >= targetAltitude && (isAscending || previousAltitude < targetAltitude)) {
+                                      m.status = 'completed';
+                                      m.progress = 1;
+                                  }
+                              } else {
+                                  // Wait for altitude to be falling and reach target
+                                  if (altitude <= targetAltitude && (isDescending || previousAltitude > targetAltitude)) {
+                                      m.status = 'completed';
+                                      m.progress = 1;
+                                  }
+                              }
+                              
+                              // Update previous altitude for next frame
+                              (m as any).previousAltitude = altitude;
+                          } else {
+                              m.status = 'completed';
+                          }
+                      }
+                      // Handle burn_until_altitude
+                      else if (m.type === 'burn_until_altitude') {
+                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
+                          
+                          if (!refParent) {
+                              // Auto-detect parent (most massive body)
+                              refParent = currentBodies.filter(b => !b.isRocket).sort((a,b) => b.mass - a.mass)[0];
+                          }
+                          
+                          if (refParent) {
+                              const dx = updatedBody.position.x - refParent.position.x;
+                              const dy = updatedBody.position.y - refParent.position.y;
+                              const distance = Math.sqrt(dx*dx + dy*dy);
+                              const altitude = distance - refParent.radius;
+                              const targetAltitude = Number(m.param) || 100;
+                              
+                              if (altitude >= targetAltitude) {
+                                  // Target reached, complete maneuver
+                                  m.status = 'completed';
+                                  m.progress = 1;
+                                  updatedBody.thrust = { x: 0, y: 0 };
+                              } else {
+                                  // Continue burning in specified direction
+                                  const heading = updatedBody.angle || 0;
+                                  const thrustAngle = heading + (m.angleOffset || 0);
+                                  const thrust = m.thrust || 0.005;
+                                  
+                                  updatedBody.thrust = {
+                                      x: Math.cos(thrustAngle) * thrust,
+                                      y: Math.sin(thrustAngle) * thrust
+                                  };
+                                  m.progress = altitude / targetAltitude; // Progress based on altitude
+                              }
+                          } else {
+                              m.status = 'completed';
+                          }
+                      }
 
                       // Handle Time-Based (Burn/Wait)
                       if (m.status === 'active' && (m.type === 'burn' || m.type === 'wait')) {

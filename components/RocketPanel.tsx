@@ -76,10 +76,10 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [thrustPower, setThrustPower] = useState(0.01);
     const [burstDuration, setBurstDuration] = useState(2.0);
     const [burstAngle, setBurstAngle] = useState(0); 
-    const [maneuverParam, setManeuverParam] = useState<string | number>('');
-    const [maneuverTargetId, setManeuverTargetId] = useState<string>('');
-    const [maneuverParentId, setManeuverParentId] = useState<string>('');
-    
+    const [maneuverParam, setManeuverParam] = useState<string>(''); // Generic param (angle, altitude, etc.)
+    const [maneuverTargetId, setManeuverTargetId] = useState<string>(''); // Target body for auto maneuvers
+    const [maneuverParentId, setManeuverParentId] = useState<string>(''); // Parent body for transfers
+    const [altitudeDirection, setAltitudeDirection] = useState<'ascending' | 'descending'>('ascending'); // Direction for altitude waits
     const [notification, setNotification] = useState<string | null>(null);
 
     // Manual Control
@@ -145,6 +145,16 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 newManeuver.targetBodyId = maneuverTargetId;
                 newManeuver.parentBodyId = maneuverParentId;
                 newManeuver.param = Number(maneuverParam) || 1.0; // Error margin in degrees
+                break;
+            case 'wait_for_altitude':
+                newManeuver.param = `${Number(maneuverParam)}:${altitudeDirection}`; // Altitude:direction
+                newManeuver.parentBodyId = maneuverParentId; // Reference body
+                break;
+            case 'burn_until_altitude':
+                newManeuver.param = Number(maneuverParam); // Target altitude in km
+                newManeuver.parentBodyId = maneuverParentId; // Reference body
+                newManeuver.thrust = thrustPower; // Thrust power
+                newManeuver.angleOffset = (burstAngle * Math.PI) / 180; // Angle in radians
                 break;
         }
 
@@ -997,6 +1007,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <option value="auto_circularize">Auto Circularize</option>
                                         <option value="auto_transfer">Auto Transfer</option>
                                         <option value="wait_for_transfer">Wait for Transfer Window</option>
+                                        <option value="wait_for_altitude">Wait for Altitude</option>
+                                        <option value="burn_until_altitude">Burn Until Altitude</option>
                                         <option value="auto_land">Auto Land</option>
                                     </select>
                                 </div>
@@ -1126,6 +1138,46 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                     />
                                                 </div>
                                             )}
+                                        </div>
+                                    )}
+
+                                    {maneuverType === 'wait_for_altitude' && (
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Target Altitude (km)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={maneuverParam}
+                                                    onChange={(e) => setManeuverParam(e.target.value)}
+                                                    placeholder="e.g. 100"
+                                                    step="1"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Direction</label>
+                                                <select 
+                                                    value={altitudeDirection}
+                                                    onChange={(e) => setAltitudeDirection(e.target.value as 'ascending' | 'descending')}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="ascending">Ascending (Going Up)</option>
+                                                    <option value="descending">Descending (Going Down)</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Reference Body</label>
+                                                <select 
+                                                    value={maneuverParentId}
+                                                    onChange={(e) => setManeuverParentId(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Auto-detect</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -1521,6 +1573,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <option value="auto_circularize">Auto Circularize</option>
                                             <option value="auto_transfer">Auto Transfer</option>
                                             <option value="wait_for_transfer">Wait for Transfer Window</option>
+                                            <option value="wait_for_altitude">Wait for Altitude</option>
+                                            <option value="burn_until_altitude">Burn Until Altitude</option>
                                             <option value="auto_land">Auto Land</option>
                                         </select>
                                     </div>
@@ -1652,6 +1706,100 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 )}
                                             </div>
                                         )}
+
+                                        {maneuverType === 'wait_for_altitude' && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Target Altitude (km)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={maneuverParam}
+                                                        onChange={(e) => setManeuverParam(e.target.value)}
+                                                        placeholder="e.g. 100"
+                                                        step="1"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Direction</label>
+                                                    <select 
+                                                        value={altitudeDirection}
+                                                        onChange={(e) => setAltitudeDirection(e.target.value as 'ascending' | 'descending')}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="ascending">Ascending (Going Up)</option>
+                                                        <option value="descending">Descending (Going Down)</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Reference Body</label>
+                                                    <select 
+                                                        value={maneuverParentId}
+                                                        onChange={(e) => setManeuverParentId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Auto-detect</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {maneuverType === 'burn_until_altitude' && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Target Altitude (km)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={maneuverParam}
+                                                        onChange={(e) => setManeuverParam(e.target.value)}
+                                                        placeholder="e.g. 100"
+                                                        step="1"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                                {maneuverType === 'burn_until_altitude' && (
+                                                    <>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="text-[10px] text-slate-500 block mb-1">Thrust</label>
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={thrustPower}
+                                                                    onChange={(e) => setThrustPower(parseFloat(e.target.value))}
+                                                                    step="0.01"
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[10px] text-slate-500 block mb-1">Angle Offset (deg)</label>
+                                                                <input 
+                                                                    type="number" 
+                                                                    value={burstAngle}
+                                                                    onChange={(e) => setBurstAngle(parseFloat(e.target.value))}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Reference Body</label>
+                                                    <select 
+                                                        value={maneuverParentId}
+                                                        onChange={(e) => setManeuverParentId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Auto-detect</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <button 
@@ -1676,7 +1824,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
                                                 <div className="flex-1 text-slate-300">
                                                     <span className="font-bold text-slate-200 mr-1">
-                                                        {m.type === 'wait' ? 'WAIT' : m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
+                                                        {m.type === 'wait' ? 'WAIT' : 
+                                                         m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : 
+                                                         m.type === 'wait_for_altitude' ? 'WAIT ALT' :
+                                                         m.type === 'burn_until_altitude' ? 'BURN TO ALT' :
+                                                         m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
                                                     </span>
                                                     <span className="text-slate-500 font-mono">
                                                         {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
@@ -1684,6 +1836,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         {m.type==='rotate' ? `${m.param}°` : ''}
                                                         {m.type==='sas' ? `${m.param}` : ''}
                                                         {m.type==='wait_for_transfer' ? `Err < ${m.param}°` : ''}
+                                                        {(m.type==='wait_for_altitude' || m.type==='burn_until_altitude') ? `${m.param}km` : ''}
                                                         {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}
                                                     </span>
                                                 </div>
