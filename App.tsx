@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Canvas from './components/Canvas';
+import Canvas3D from './components/Canvas3D';
 import Controls from './components/Controls';
 import RocketDataPanel from './components/RocketDataPanel';
 import ManualCreationPanel from './components/ManualCreationPanel';
@@ -82,6 +83,7 @@ const App: React.FC = () => {
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [fps, setFps] = useState(0);
   const [memoryUsage, setMemoryUsage] = useState<{ used: number; total: number; percent: number } | null>(null);
+  const [use3D, setUse3D] = useState(false);
   
   const bodiesRef = useRef(bodies);
   const particlesRef = useRef(particles);
@@ -998,31 +1000,61 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden select-none">
-      <Canvas 
-        bodies={bodies} 
-        particles={particles}
-        width={dimensions.width}
-        height={dimensions.height}
-        scale={scale}
-        offset={offset}
-        onPan={handlePan}
-        onZoom={handleZoom}
-        onSelectBody={handleSelectBody}
-        selectedBodyId={selectedBodyId}
-        visualConfig={visualConfig}
-        physicsConfig={physicsConfig}
-        isCreationMode={isCreationMode}
-        creationCandidate={creationCandidate}
-        predictionPaths={predictionPaths}
-        onCanvasClick={handleCanvasClick}
-        isRocketMode={showRocketPanel}
-        isRocketSpawning={isRocketSpawning}
-        rocketTargetBodyId={rocketTargetBodyId}
-        observerBodyIds={observerBodyIds}
-        coMData={currentCoMData}
-        showTransferWindow={showTransferWindow}
-        showTheoreticalOrbit={showTheoreticalOrbit}
-      />
+      {use3D ? (
+        <Canvas3D 
+            bodies={bodies} 
+            particles={particles}
+            width={dimensions.width}
+            height={dimensions.height}
+            scale={scale}
+            offset={offset}
+            onPan={handlePan}
+            onZoom={handleZoom}
+            onSelectBody={handleSelectBody}
+            selectedBodyId={selectedBodyId}
+            visualConfig={visualConfig}
+            physicsConfig={physicsConfig}
+            isCreationMode={isCreationMode}
+            creationCandidate={creationCandidate}
+            predictionPaths={predictionPaths}
+            onCanvasClick={handleCanvasClick}
+            isRocketMode={showRocketPanel}
+            isRocketSpawning={isRocketSpawning}
+            rocketTargetBodyId={rocketTargetBodyId}
+            observerBodyIds={observerBodyIds}
+            coMData={currentCoMData}
+            showTransferWindow={showTransferWindow}
+            showTheoreticalOrbit={showTheoreticalOrbit}
+            followingBodyId={followingBodyId}
+            followingCoM={followingCoM}
+        />
+      ) : (
+        <Canvas 
+            bodies={bodies} 
+            particles={particles}
+            width={dimensions.width}
+            height={dimensions.height}
+            scale={scale}
+            offset={offset}
+            onPan={handlePan}
+            onZoom={handleZoom}
+            onSelectBody={handleSelectBody}
+            selectedBodyId={selectedBodyId}
+            visualConfig={visualConfig}
+            physicsConfig={physicsConfig}
+            isCreationMode={isCreationMode}
+            creationCandidate={creationCandidate}
+            predictionPaths={predictionPaths}
+            onCanvasClick={handleCanvasClick}
+            isRocketMode={showRocketPanel}
+            isRocketSpawning={isRocketSpawning}
+            rocketTargetBodyId={rocketTargetBodyId}
+            observerBodyIds={observerBodyIds}
+            coMData={currentCoMData}
+            showTransferWindow={showTransferWindow}
+            showTheoreticalOrbit={showTheoreticalOrbit}
+        />
+      )}
 
       {/* DEBUG PANEL */}
       <div className={`fixed ${isMobile ? 'top-0 right-0' : 'top-4 right-4'} z-10 pointer-events-auto font-mono text-xs`}>
@@ -1189,6 +1221,8 @@ const App: React.FC = () => {
             onReset={handleResetSettings}
             onExport={handleExportState}
             onImport={handleImportState}
+            use3D={use3D}
+            setUse3D={setUse3D}
           />
       )}
 

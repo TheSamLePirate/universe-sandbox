@@ -13,6 +13,8 @@ interface SettingsPanelProps {
     onReset: () => void;
     onExport: () => void;
     onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    use3D: boolean;
+    setUse3D: (use3D: boolean) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
@@ -23,7 +25,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     onClose,
     onReset,
     onExport,
-    onImport
+    onImport,
+    use3D,
+    setUse3D
 }) => {
     const [activeTab, setActiveTab] = useState<'visuals' | 'physics'>('visuals');
 
@@ -106,6 +110,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         </div>
                                     </label>
                                 ))}
+
+                                
+                                <label className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer hover:bg-slate-750 transition-colors col-span-2 border border-indigo-500/30">
+                                    <span className="text-sm text-indigo-300 font-bold">Use 3D Canvas (Beta)</span>
+                                    <div className={`w-10 h-5 rounded-full relative transition-colors ${use3D ? 'bg-indigo-600' : 'bg-slate-600'}`}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={use3D} 
+                                            onChange={(e) => setUse3D(e.target.checked)}
+                                            className="hidden"
+                                        />
+                                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${use3D ? 'left-6' : 'left-1'}`} />
+                                    </div>
+                                </label>
                             </div>
 
                             <div className="space-y-4">
