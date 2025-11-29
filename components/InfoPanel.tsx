@@ -117,11 +117,11 @@ const InfoPanel: React.FC<InfoPanelProps> = ({ body, onClose, allBodies, isFollo
               <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="bg-slate-800/50 p-3 rounded-lg">
                       <div className="text-xs text-slate-500 mb-1">REAL MASS</div>
-                      <div className="text-sm font-mono text-blue-300">{body.realMass}</div>
+                      <div className="text-sm font-mono text-blue-300">{body.mass}</div>
                   </div>
                   <div className="bg-slate-800/50 p-3 rounded-lg">
                       <div className="text-xs text-slate-500 mb-1">DIAMETER</div>
-                      <div className="text-sm font-mono text-blue-300">{body.realDiameter}</div>
+                      <div className="text-sm font-mono text-blue-300">{body.radius*2}</div>
                   </div>
                   <div className="bg-slate-800/50 p-3 rounded-lg">
                       <div className="text-xs text-slate-500 mb-1">ORBIT PERIOD</div>

@@ -243,7 +243,7 @@ const App: React.FC = () => {
       }
       
       // Hard limit on particles to prevent memory issues
-      const MAX_PARTICLES = 1000;
+      const MAX_PARTICLES = 10000;
       if (nextParticles.length > MAX_PARTICLES) {
           nextParticles = nextParticles.slice(-MAX_PARTICLES);
       }
@@ -1087,7 +1087,7 @@ const App: React.FC = () => {
       )}
       
       {/* NEW ROCKET HUD */}
-      {showRocketPanel && selectedBodyId && bodies.find(b => b.id === selectedBodyId)?.isRocket && (
+      {!isMobile && showRocketPanel && selectedBodyId && bodies.find(b => b.id === selectedBodyId)?.isRocket && (
           <RocketDataPanel 
              rocket={bodies.find(b => b.id === selectedBodyId)!}
              bodies={bodies}
@@ -1140,10 +1140,13 @@ const App: React.FC = () => {
             showTheoreticalOrbit={showTheoreticalOrbit}
             onToggleTheoreticalOrbit={() => setShowTheoreticalOrbit(!showTheoreticalOrbit)}
             assistantActions={assistantActions}
+            predictionPaths={predictionPaths}
+            predictionSteps={predictionSteps}
+            predictSystem={isPredictionEnabled}
           />
       )}
 
-      {selectedBodyId && !isCreationMode && !isRocketSpawning && (
+      {selectedBodyId && !isCreationMode && !isRocketSpawning && !showRocketPanel && (
         <InfoPanel 
             body={bodies.find(b => b.id === selectedBodyId) || null} 
             onClose={() => setSelectedBodyId(null)}

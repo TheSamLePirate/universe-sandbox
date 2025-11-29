@@ -180,7 +180,7 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
         return (
             <div className="fixed top-4 left-4 right-4 z-40 font-mono pointer-events-auto">
                  <div 
-                    className="bg-slate-900/90 border border-slate-700 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden transition-all duration-300"
+                    className="bg-slate-900/50 border border-slate-700 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden transition-all duration-300"
                     onClick={() => setIsExpanded(!isExpanded)}
                  >
                     {/* Mobile Header (Always Visible) */}

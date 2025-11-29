@@ -71,7 +71,7 @@ const Controls: React.FC<ControlsProps> = ({
           <>
             {/* Mobile Bottom Bar - Minimal Footprint */}
             <div 
-                className="fixed bottom-4 left-4 right-4 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-2xl p-3 flex items-center justify-between shadow-2xl z-50 text-white"
+                className="fixed bottom-0 left-0 right-0 bg-slate-900/10 backdrop-blur-sm border border-slate-700 rounded-2xl p-1 flex items-center justify-between shadow-2xl z-[10] text-white"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
             >
@@ -91,9 +91,9 @@ const Controls: React.FC<ControlsProps> = ({
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center ">
                     {/* Speed Slider (Mobile) */}
-                    <div className="flex flex-col w-20">
+                    <div className="flex flex-col w-50">
                          <div className="flex justify-between text-[8px] text-slate-400 font-bold uppercase">
                             <span>Speed</span>
                             <span>{speed.toFixed(1)}x</span>
@@ -101,7 +101,7 @@ const Controls: React.FC<ControlsProps> = ({
                         <input 
                             type="range" 
                             min="0.01" 
-                            max="5.0" 
+                            max="100" 
                             step="0.1"
                             value={speed}
                             onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
@@ -111,9 +111,16 @@ const Controls: React.FC<ControlsProps> = ({
 
                     <button 
                         onClick={onToggleCreationMode}
-                        className={`p-3 rounded-full transition-colors ${isCreationMode ? 'bg-orange-600 text-white animate-pulse' : 'text-slate-300 hover:bg-slate-800'}`}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl ${isCreationMode ? 'bg-orange-600 text-white animate-pulse' : 'text-slate-300 hover:bg-slate-800'}`}
                     >
                         <Hammer size={24} />
+                    </button>
+
+                    <button 
+                        onClick={onToggleRocketPanel} 
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl ${showRocketPanel ? 'bg-orange-600 text-white animate-pulse' : 'text-slate-300 hover:bg-slate-800'}`}
+                    >
+                        <Rocket size={24} />
                     </button>
 
                     <button 
@@ -165,7 +172,7 @@ const Controls: React.FC<ControlsProps> = ({
                             <input 
                                 type="range" 
                                 min="0.01" 
-                                max="5.0" 
+                                max="100" 
                                 step="0.1"
                                 value={speed}
                                 onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
@@ -216,7 +223,7 @@ const Controls: React.FC<ControlsProps> = ({
                             </button>
 
                              <button 
-                                onClick={onOpenSettings} 
+                                onClick={() => {onOpenSettings(); setShowMobileMenu(false)}} 
                                 className="flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-800 text-slate-400"
                             >
                                 <Settings size={20} />

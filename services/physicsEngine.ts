@@ -43,11 +43,11 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
 
 const createExplosion = (x: number, y: number, color: string, intensity: number): Particle[] => {
     const particles: Particle[] = [];
-    const count = Math.min(50, Math.floor(intensity * 10)); // Cap particles for performance
+    const count = Math.min(200, Math.floor(intensity * 10)); // Cap particles for performance
     
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 2 + 0.5;
+        const speed = Math.random() * 10 + 5;
         particles.push({
             id: `p_${Date.now()}_${i}`,
             x: x,
@@ -510,11 +510,23 @@ export const updatePhysics = (
 
                       const newRadius = Math.cbrt(Math.pow(currentBody.radius, 3) + Math.pow(otherBody.radius, 3));
 
+
+                      const lightBody = currentBody.mass > otherBody.mass ? otherBody : currentBody;
+                      const heavyBody = currentBody.mass > otherBody.mass ? currentBody : otherBody;
+
                       const pX = (currentBody.position.x * currentBody.mass + otherBody.position.x * otherBody.mass) / totalMass;
                       const pY = (currentBody.position.y * currentBody.mass + otherBody.position.y * otherBody.mass) / totalMass;
 
-                      allNewParticles.push(...createExplosion(pX, pY, currentBody.mass > otherBody.mass ? otherBody.color : currentBody.color, Math.sqrt(otherBody.mass)));
+                      //collision point is at the intersection of the two circles
+                      const collisionPointX = currentBody.position.x + (otherBody.position.x - currentBody.position.x) * (currentBody.radius / (currentBody.radius + otherBody.radius));
+                      const collisionPointY = currentBody.position.y + (otherBody.position.y - currentBody.position.y) * (currentBody.radius / (currentBody.radius + otherBody.radius)); 
 
+
+                      
+                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, currentBody.mass > otherBody.mass ? otherBody.color : currentBody.color, Math.sqrt(otherBody.mass)));
+
+
+                      
                       currentBody = {
                           ...currentBody,
                           mass: totalMass,
@@ -523,8 +535,9 @@ export const updatePhysics = (
                           velocity: { x: vX, y: vY },
                           name: currentBody.mass > otherBody.mass ? currentBody.name : otherBody.name, 
                           description: `${currentBody.name} merged with ${otherBody.name}`,
-                          trail: [],
+                          trail: currentBody.mass > otherBody.mass ? currentBody.trail : otherBody.trail,
                           landedOnBodyId: undefined 
+                          
                       };
                   }
               }

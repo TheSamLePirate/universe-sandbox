@@ -9,19 +9,19 @@ export const DEFAULT_VISUAL_CONFIG: VisualConfig = {
     showGrid: false,
     gridSpacing: 100,
     gridOpacity: 0.25,
-    showWaves: true,
+    showWaves: false,
     waveSpeedMultiplier: 0.1,
     showGlow: true,
     glowIntensity: 1.0,
     showTrails: true,
-    trailLength: 50, // Reduced from 150 to prevent memory issues
+    trailLength: 500, // Reduced from 150 to prevent memory issues
     centerOfMassThreshold: 2000,
     showStars: true,
     showNebula: true,
     starDensity: 800,
     starTwinkleSpeed: 2.0,
-    nebulaCloudCount: 15,
-    nebulaOpacity: 0.2,
+    nebulaCloudCount: 40,
+    nebulaOpacity: 0.9,
     showCenterOfMass: false,
     showEclipses: false
 };
@@ -163,36 +163,7 @@ const SYSTEM_FIGURE_8: Body[] = [
 // --- 3-BODY CHOREOGRAPHIES (Scaled) ---
 // Base mass M=500. Distance Scale D=120. G=0.5.
 // Velocity Scale Factor K = sqrt(G*M/D) = sqrt(0.5*500/120) = 1.443
-const choreoScaleV = 1.443;
-const choreoScaleD = 120;
-const choreoMass = 500;
 
-const SYSTEM_BUTTERFLY: Body[] = [
-    { ...createBody('bf_1', 'Wing 1', choreoMass, 15, '#f368e0', 0, 0, 'Butterfly Choreography', '500', '30', 'N/A', true),
-      position: { x: 1 * choreoScaleD, y: 0 }, velocity: { x: 0.30689 * choreoScaleV, y: 0.12551 * choreoScaleV } },
-    { ...createBody('bf_2', 'Wing 2', choreoMass, 15, '#0abde3', 0, 0, 'Butterfly Choreography', '500', '30', 'N/A', true),
-      position: { x: -1 * choreoScaleD, y: 0 }, velocity: { x: 0.30689 * choreoScaleV, y: 0.12551 * choreoScaleV } },
-    { ...createBody('bf_3', 'Body', choreoMass, 15, '#ff9f43', 0, 0, 'Butterfly Choreography', '500', '30', 'N/A', true),
-      position: { x: 0, y: 0 }, velocity: { x: -2 * 0.30689 * choreoScaleV, y: -2 * 0.12551 * choreoScaleV } }
-];
-
-const SYSTEM_MOTH: Body[] = [
-    { ...createBody('mt_1', 'Wing L', choreoMass, 15, '#1dd1a1', 0, 0, 'Moth Choreography', '500', '30', 'N/A', true),
-      position: { x: 1 * choreoScaleD, y: 0 }, velocity: { x: 0.46444 * choreoScaleV, y: 0.39606 * choreoScaleV } },
-    { ...createBody('mt_2', 'Wing R', choreoMass, 15, '#5f27cd', 0, 0, 'Moth Choreography', '500', '30', 'N/A', true),
-      position: { x: -1 * choreoScaleD, y: 0 }, velocity: { x: 0.46444 * choreoScaleV, y: 0.39606 * choreoScaleV } },
-    { ...createBody('mt_3', 'Head', choreoMass, 15, '#c8d6e5', 0, 0, 'Moth Choreography', '500', '30', 'N/A', true),
-      position: { x: 0, y: 0 }, velocity: { x: -2 * 0.46444 * choreoScaleV, y: -2 * 0.39606 * choreoScaleV } }
-];
-
-const SYSTEM_YIN_YANG: Body[] = [
-    { ...createBody('yy_1', 'Yin', choreoMass, 15, '#2e86de', 0, 0, 'Yin-Yang / Goggle Choreography', '500', '30', 'N/A', true),
-      position: { x: 1 * choreoScaleD, y: 0 }, velocity: { x: 0.08330 * choreoScaleV, y: 0.12789 * choreoScaleV } },
-    { ...createBody('yy_2', 'Yang', choreoMass, 15, '#ee5253', 0, 0, 'Yin-Yang / Goggle Choreography', '500', '30', 'N/A', true),
-      position: { x: -1 * choreoScaleD, y: 0 }, velocity: { x: 0.08330 * choreoScaleV, y: 0.12789 * choreoScaleV } },
-    { ...createBody('yy_3', 'Balance', choreoMass, 15, '#ffffff', 0, 0, 'Yin-Yang / Goggle Choreography', '500', '30', 'N/A', true),
-      position: { x: 0, y: 0 }, velocity: { x: -2 * 0.08330 * choreoScaleV, y: -2 * 0.12789 * choreoScaleV } }
-];
 
 // Lagrange Equilateral Triangle
 // 3 Equal masses in a perfect triangle. Velocity v = sqrt(GM / (R * sqrt(3)))
@@ -312,27 +283,6 @@ export const PRESETS: Preset[] = [
         bodies: SYSTEM_FIGURE_8,
         defaultScale: 1.5,
         description: 'Three equal masses chasing each other in a stable figure-eight pattern.'
-    },
-    {
-        id: 'butterfly',
-        name: 'Butterfly',
-        bodies: SYSTEM_BUTTERFLY,
-        defaultScale: 1.3,
-        description: 'A stable choreography where bodies trace a butterfly shape.'
-    },
-    {
-        id: 'moth',
-        name: 'Moth',
-        bodies: SYSTEM_MOTH,
-        defaultScale: 1.3,
-        description: 'A complex, stable periodic orbit resembling a moth.'
-    },
-    {
-        id: 'yinyang',
-        name: 'Yin-Yang',
-        bodies: SYSTEM_YIN_YANG,
-        defaultScale: 1.3,
-        description: 'A beautiful periodic choreography also known as the Goggle orbit.'
     },
     {
         id: 'equilateral',
