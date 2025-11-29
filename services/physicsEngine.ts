@@ -280,30 +280,39 @@ export const updatePhysics = (
                           if (target) {
                                 const res = calculateOrbitalManeuver(updatedBody, target, m.type as any, gConst, currentBodies, refParentId);
                                 if (res) {
-                                    // Mass Change Correction: Estimate avg mass during burn for better duration accuracy
-                                    const estimatedBurnMass = updatedBody.mass * 0.98; // Adjusted down for safety
-                                    
                                     // CLAMP thrust to prevent physics instability
-                                    let thrust = (estimatedBurnMass * res.deltaV) / (res.deltaV > 1 ? 0.05 : 0.02); // Initial guess
+                                    let thrust = MAX_ROCKET_THRUST * 0.8; // Use 80% of max thrust for stability
                                     
-                                    if (thrust > MAX_ROCKET_THRUST) {
-                                        thrust = MAX_ROCKET_THRUST;
-                                        // Recalculate needed duration for this thrust
-                                        // F * t = m * dv  => t = (m*dv)/F
-                                        var calcDuration = (estimatedBurnMass * res.deltaV) / thrust;
-                                    } else {
-                                        var calcDuration = (estimatedBurnMass * res.deltaV) / thrust;
-                                    }
+                                    // Calculate burn duration accounting for changing mass
+                                    // The rocket loses mass as it burns fuel, so acceleration increases
+                                    // We need to integrate: dv = (F/m(t)) * dt
+                                    // For simplicity, we'll use the initial mass and add a correction factor
                                     
-                                    let currentHeading = updatedBody.angle || 0;
-                                    let angleOffset = res.angle - currentHeading;
-                                    while (angleOffset > Math.PI) angleOffset -= 2*Math.PI;
-                                    while (angleOffset < -Math.PI) angleOffset += 2*Math.PI;
+                                    // Simple approach: duration = (mass * deltaV) / thrust
+                                    // But this underestimates because mass decreases during burn
+                                    // Correction: multiply by a factor to account for mass loss
                                     
+                                    const initialMass = updatedBody.mass;
+                                    const baseDuration = (initialMass * res.deltaV) / thrust;
+                                    
+                                    // Estimate fuel consumption during burn
+                                    // From fuel consumption code: consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt
+                                    // Total fuel consumed ≈ thrust * FUEL_CONSUMPTION_RATE * duration
+                                    const FUEL_CONSUMPTION_RATE = 0.5; // From constants at top of file
+                                    const estimatedFuelConsumed = thrust * FUEL_CONSUMPTION_RATE * baseDuration;
+                                    
+                                    // Mass decreases, so we need MORE time to achieve the same deltaV
+                                    // Use iterative correction or a multiplier
+                                    // A good approximation: multiply duration by 1.5 to account for mass loss
+                                    const correctedDuration = baseDuration * 1.5;
+                                    
+                                    // Store the absolute burn angle (not relative to heading)
+                                    // We'll use this directly in the burn execution
                                     m.type = 'burn';
                                     m.thrust = thrust;
-                                    m.duration = calcDuration;
-                                    m.angleOffset = angleOffset;
+                                    m.duration = correctedDuration;
+                                    m.angleOffset = res.angle; // Store absolute angle
+                                    m.param = 'absolute'; // Flag to indicate this is an absolute angle, not offset
                                     // Don't complete yet, it is now a burn
                                 } else {
                                     m.status = 'completed';
@@ -312,12 +321,70 @@ export const updatePhysics = (
                               m.status = 'completed';
                           }
                       }
+                      // Handle wait_for_transfer
+                      else if (m.type === 'wait_for_transfer') {
+                          const target = currentBodies.find(b => b.id === m.targetBodyId);
+                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
+                          
+                          if (!refParent && target) {
+                              // Auto-detect parent (most massive body)
+                              refParent = currentBodies.filter(b => !b.isRocket && b.id !== target.id).sort((a,b) => b.mass - a.mass)[0];
+                          }
+                          
+                          if (target && refParent) {
+                              // Calculate current phase angle
+                              const rPos = { x: updatedBody.position.x - refParent.position.x, y: updatedBody.position.y - refParent.position.y };
+                              const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
+                              
+                              const angle1 = Math.atan2(rPos.y, rPos.x);
+                              const angle2 = Math.atan2(tPos.y, tPos.x);
+                              
+                              let currentPhase = angle2 - angle1;
+                              while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
+                              while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
+                              
+                              // Calculate required phase angle for Hohmann transfer
+                              const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
+                              const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
+                              const mu = gConst * refParent.mass;
+                              
+                              const a_transfer = (r1 + r2) / 2;
+                              const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+                              const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
+                              const angle_change = omega_target * t_transfer;
+                              
+                              let requiredPhase = Math.PI - angle_change;
+                              while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
+                              while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+                              
+                              // Check if within error margin
+                              const errorMargin = ((Number(m.param) || 1.0) * Math.PI) / 180;
+                              let diff = Math.abs(currentPhase - requiredPhase);
+                              if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                              
+                              if (diff < errorMargin) {
+                                  m.status = 'completed';
+                                  m.progress = 1;
+                              }
+                          } else {
+                              m.status = 'completed';
+                          }
+                      }
 
                       // Handle Time-Based (Burn/Wait)
                       if (m.status === 'active' && (m.type === 'burn' || m.type === 'wait')) {
                           if (m.type === 'burn') {
-                              const heading = updatedBody.angle || 0;
-                              const thrustAngle = heading + m.angleOffset;
+                              // Check if this is an absolute angle (from auto-maneuvers) or relative offset
+                              let thrustAngle;
+                              if (m.param === 'absolute') {
+                                  // Use the angle directly (it's already absolute)
+                                  thrustAngle = m.angleOffset;
+                              } else {
+                                  // Traditional burn: angle is relative to rocket's heading/orientation
+                                  const heading = updatedBody.angle || 0;
+                                  thrustAngle = heading + m.angleOffset;
+                              }
+                              
                               updatedBody.thrust = {
                                   x: Math.cos(thrustAngle) * m.thrust,
                                   y: Math.sin(thrustAngle) * m.thrust
@@ -393,18 +460,22 @@ export const updatePhysics = (
             // Find parent to stick to
             const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
             if (parent) {
-                const dx = body.position.x - parent.position.x;
-                const dy = body.position.y - parent.position.y;
-                const currentAngle = Math.atan2(dy, dx);
-                const surfaceDist = parent.radius + body.radius; 
+                // Store the landing angle to maintain fixed position on surface
+                // If not stored yet, calculate and store it
+                if (body.landingAngle === undefined) {
+                    const dx = body.position.x - parent.position.x;
+                    const dy = body.position.y - parent.position.y;
+                    body.landingAngle = Math.atan2(dy, dx);
+                }
                 
-                const newX = parent.position.x + Math.cos(currentAngle) * surfaceDist;
-                const newY = parent.position.y + Math.sin(currentAngle) * surfaceDist;
+                const surfaceDist = parent.radius + body.radius;
+                const newX = parent.position.x + Math.cos(body.landingAngle) * surfaceDist;
+                const newY = parent.position.y + Math.sin(body.landingAngle) * surfaceDist;
                 
                 return {
                     ...body,
                     position: { x: newX, y: newY },
-                    velocity: { ...parent.velocity }, 
+                    velocity: { ...parent.velocity },
                     trail: [] 
                 };
             } else {

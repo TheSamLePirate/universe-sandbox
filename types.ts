@@ -7,7 +7,7 @@ export interface Vector2D {
 
 export interface Maneuver {
     id: string;
-    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer'; // Type of action
+    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'wait_for_transfer'; // Type of action
     param?: number | string; // Extra data (degrees for rotate, mode for SAS)
     targetBodyId?: string; // For auto maneuvers that require a reference
     parentBodyId?: string; // For transfers that require a central body reference
@@ -42,6 +42,7 @@ export interface Body {
   thrust?: Vector2D; // Current active thrust vector
   maneuvers?: Maneuver[];
   landedOnBodyId?: string; // ID of the body this rocket is resting on
+  landingAngle?: number; // Fixed angle on surface (to prevent drift)
   sasMode?: SASMode; // Stability Assist System mode
   orbitReferenceId?: string; // Explicit parent body ID set by user/flight computer
   

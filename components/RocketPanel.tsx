@@ -71,10 +71,15 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<'flight' | 'mission' | 'config'>('flight');
 
-    // Burst Config
+    // Burst/Maneuver Config
+    const [maneuverType, setManeuverType] = useState<Maneuver['type']>('burn');
     const [thrustPower, setThrustPower] = useState(0.01);
     const [burstDuration, setBurstDuration] = useState(2.0);
     const [burstAngle, setBurstAngle] = useState(0); 
+    const [maneuverParam, setManeuverParam] = useState<string | number>('');
+    const [maneuverTargetId, setManeuverTargetId] = useState<string>('');
+    const [maneuverParentId, setManeuverParentId] = useState<string>('');
+    
     const [notification, setNotification] = useState<string | null>(null);
 
     // Manual Control
@@ -101,20 +106,51 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
         }
     };
 
-    const handleAddBurst = () => {
+    const handleAddManeuver = () => {
         if (!selectedRocket) return;
-        const newManeuver: Maneuver = {
+        
+        let newManeuver: Maneuver = {
             id: `m_${Date.now()}`,
-            type: 'burn',
-            thrust: thrustPower,
-            duration: burstDuration,
-            angleOffset: (burstAngle * Math.PI) / 180,
+            type: maneuverType,
+            thrust: 0,
+            duration: 0,
+            angleOffset: 0,
             progress: 0,
             status: 'pending'
         };
+
+        // Configure based on type
+        switch (maneuverType) {
+            case 'burn':
+                newManeuver.thrust = thrustPower;
+                newManeuver.duration = burstDuration;
+                newManeuver.angleOffset = (burstAngle * Math.PI) / 180;
+                break;
+            case 'wait':
+                newManeuver.duration = burstDuration;
+                break;
+            case 'rotate':
+                newManeuver.param = Number(maneuverParam); // Angle in degrees
+                break;
+            case 'sas':
+                newManeuver.param = maneuverParam as string; // SAS Mode
+                break;
+            case 'auto_land':
+            case 'auto_transfer':
+            case 'auto_circularize':
+                newManeuver.targetBodyId = maneuverTargetId;
+                newManeuver.parentBodyId = maneuverParentId;
+                break;
+            case 'wait_for_transfer':
+                newManeuver.targetBodyId = maneuverTargetId;
+                newManeuver.parentBodyId = maneuverParentId;
+                newManeuver.param = Number(maneuverParam) || 1.0; // Error margin in degrees
+                break;
+        }
+
         const updatedManeuvers = selectedRocket.maneuvers ? [...selectedRocket.maneuvers, newManeuver] : [newManeuver];
         onUpdateRocket(selectedRocket.id, { maneuvers: updatedManeuvers });
-        showNotification("Maneuver added to plan");
+        showNotification(`${maneuverType.toUpperCase()} Maneuver added`);
     };
 
     const handleRemoveManeuver = (mId: string) => {
@@ -942,25 +978,166 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     </div>
 
                                     {/* Manual Burn Editor */}
-                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Add Manual Burn</div>
-                                        <div className="grid grid-cols-3 gap-2 mb-2">
-                                            <div>
-                                                <label className="text-[8px] text-slate-500 block mb-1">Thrust (N)</label>
-                                                <input type="number" value={thrustPower} onChange={e=>setThrustPower(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white" placeholder="N" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[8px] text-slate-500 block mb-1">Duration (s)</label>
-                                                <input type="number" value={burstDuration} onChange={e=>setBurstDuration(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white" placeholder="Sec" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[8px] text-slate-500 block mb-1">Angle (deg)</label>
-                                                <input type="number" value={burstAngle} onChange={e=>setBurstAngle(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white" placeholder="Deg" />
-                                            </div>
-                                        </div>
-                                        <button onClick={handleAddBurst} className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1"><Plus size={14} /> Add to Queue</button>
-                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700 space-y-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">Add Maneuver</h4>
+                                </div>
 
+                                {/* Type Selector */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select 
+                                        value={maneuverType}
+                                        onChange={(e) => setManeuverType(e.target.value as Maneuver['type'])}
+                                        className="col-span-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                                    >
+                                        <option value="burn">Burn (Thrust)</option>
+                                        <option value="wait">Wait (Coast)</option>
+                                        <option value="rotate">Rotate (Turn)</option>
+                                        <option value="sas">SAS (Stabilizer)</option>
+                                        <option value="auto_circularize">Auto Circularize</option>
+                                        <option value="auto_transfer">Auto Transfer</option>
+                                        <option value="wait_for_transfer">Wait for Transfer Window</option>
+                                        <option value="auto_land">Auto Land</option>
+                                    </select>
+                                </div>
+
+                                {/* Dynamic Inputs based on Type */}
+                                <div className="space-y-2">
+                                    {maneuverType === 'burn' && (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Thrust</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={thrustPower}
+                                                        onChange={(e) => setThrustPower(parseFloat(e.target.value))}
+                                                        step="0.01"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Duration (s)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={burstDuration}
+                                                        onChange={(e) => setBurstDuration(parseFloat(e.target.value))}
+                                                        step="0.1"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Angle Offset (deg)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={burstAngle}
+                                                    onChange={(e) => setBurstAngle(parseFloat(e.target.value))}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {maneuverType === 'wait' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">Duration (s)</label>
+                                            <input 
+                                                type="number" 
+                                                value={burstDuration}
+                                                onChange={(e) => setBurstDuration(parseFloat(e.target.value))}
+                                                step="0.1"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {maneuverType === 'rotate' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">Rotation Angle (deg)</label>
+                                            <input 
+                                                type="number" 
+                                                value={maneuverParam}
+                                                onChange={(e) => setManeuverParam(e.target.value)}
+                                                placeholder="e.g. 90 or -45"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {maneuverType === 'sas' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                            <select 
+                                                value={maneuverParam}
+                                                onChange={(e) => setManeuverParam(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            >
+                                                <option value="">Select Mode...</option>
+                                                <option value="off">Off (Hold)</option>
+                                                <option value="prograde">Prograde</option>
+                                                <option value="retrograde">Retrograde</option>
+                                                <option value="radial_out">Radial Out</option>
+                                                <option value="radial_in">Radial In</option>
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {(maneuverType === 'auto_land' || maneuverType === 'auto_transfer' || maneuverType === 'auto_circularize' || maneuverType === 'wait_for_transfer') && (
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Target Body</label>
+                                                <select 
+                                                    value={maneuverTargetId}
+                                                    onChange={(e) => setManeuverTargetId(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Select Target...</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Parent Body (Optional)</label>
+                                                    <select 
+                                                        value={maneuverParentId}
+                                                        onChange={(e) => setManeuverParentId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Auto-detect</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {maneuverType === 'wait_for_transfer' && (
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Phase Angle Error (deg)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={maneuverParam}
+                                                        onChange={(e) => setManeuverParam(e.target.value)}
+                                                        placeholder="e.g. 0.5"
+                                                        step="0.1"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button 
+                                    onClick={handleAddManeuver}
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 rounded flex items-center justify-center gap-1 transition-colors"
+                                >
+                                    <Plus size={14} />
+                                    Add to Plan
+                                </button>
+                            </div>
                                     {/* Queue List */}
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase">
@@ -1324,15 +1501,166 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Plan Editor (Add Burst) */}
-                                <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Add Manual Burn</div>
-                                    <div className="grid grid-cols-3 gap-2 mb-2">
-                                        <input type="number" value={thrustPower} onChange={e=>setThrustPower(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white" placeholder="N" />
-                                        <input type="number" value={burstDuration} onChange={e=>setBurstDuration(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white" placeholder="Sec" />
-                                        <input type="number" value={burstAngle} onChange={e=>setBurstAngle(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white" placeholder="Deg" />
+                                {/* Plan Editor (Dynamic Form) */}
+                                <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700 space-y-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wider">Add Maneuver</h4>
                                     </div>
-                                    <button onClick={handleAddBurst} className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded flex items-center justify-center gap-1"><Plus size={12} /> Add to Queue</button>
+
+                                    {/* Type Selector */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <select 
+                                            value={maneuverType}
+                                            onChange={(e) => setManeuverType(e.target.value as Maneuver['type'])}
+                                            className="col-span-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                                        >
+                                            <option value="burn">Burn (Thrust)</option>
+                                            <option value="wait">Wait (Coast)</option>
+                                            <option value="rotate">Rotate (Turn)</option>
+                                            <option value="sas">SAS (Stabilizer)</option>
+                                            <option value="auto_circularize">Auto Circularize</option>
+                                            <option value="auto_transfer">Auto Transfer</option>
+                                            <option value="wait_for_transfer">Wait for Transfer Window</option>
+                                            <option value="auto_land">Auto Land</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Dynamic Inputs based on Type */}
+                                    <div className="space-y-2">
+                                        {maneuverType === 'burn' && (
+                                            <>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Thrust</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={thrustPower}
+                                                            onChange={(e) => setThrustPower(parseFloat(e.target.value))}
+                                                            step="0.01"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Duration (s)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={burstDuration}
+                                                            onChange={(e) => setBurstDuration(parseFloat(e.target.value))}
+                                                            step="0.1"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Angle Offset (deg)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={burstAngle}
+                                                        onChange={(e) => setBurstAngle(parseFloat(e.target.value))}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {maneuverType === 'wait' && (
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Duration (s)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={burstDuration}
+                                                    onChange={(e) => setBurstDuration(parseFloat(e.target.value))}
+                                                    step="0.1"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {maneuverType === 'rotate' && (
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Rotation Angle (deg)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={maneuverParam}
+                                                    onChange={(e) => setManeuverParam(e.target.value)}
+                                                    placeholder="e.g. 90 or -45"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {maneuverType === 'sas' && (
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                                <select 
+                                                    value={maneuverParam}
+                                                    onChange={(e) => setManeuverParam(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Select Mode...</option>
+                                                    <option value="off">Off (Hold)</option>
+                                                    <option value="prograde">Prograde</option>
+                                                    <option value="retrograde">Retrograde</option>
+                                                    <option value="radial_out">Radial Out</option>
+                                                    <option value="radial_in">Radial In</option>
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        {(maneuverType === 'auto_land' || maneuverType === 'auto_transfer' || maneuverType === 'auto_circularize' || maneuverType === 'wait_for_transfer') && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Target Body</label>
+                                                    <select 
+                                                        value={maneuverTargetId}
+                                                        onChange={(e) => setManeuverTargetId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Select Target...</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
+                                                    <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Parent Body (Optional)</label>
+                                                        <select 
+                                                            value={maneuverParentId}
+                                                            onChange={(e) => setManeuverParentId(e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        >
+                                                            <option value="">Auto-detect</option>
+                                                            {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                                <option key={b.id} value={b.id}>{b.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {maneuverType === 'wait_for_transfer' && (
+                                                    <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Phase Angle Error (deg)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={maneuverParam}
+                                                            onChange={(e) => setManeuverParam(e.target.value)}
+                                                            placeholder="e.g. 0.5"
+                                                            step="0.1"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button 
+                                        onClick={handleAddManeuver}
+                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs py-2 rounded flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                        <Plus size={14} />
+                                        Add to Plan
+                                    </button>
                                 </div>
 
                                 {/* List */}
@@ -1347,10 +1675,16 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <div key={m.id} className={`text-[10px] flex items-center gap-2 p-1.5 rounded border ${m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}>
                                                 <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
                                                 <div className="flex-1 text-slate-300">
-                                                    {m.type === 'wait' ? 'Wait' : m.type.startsWith('auto_') ? m.type.replace('auto_','Auto-').toUpperCase() : m.type.toUpperCase()} 
-                                                    <span className="text-slate-500 ml-2 font-mono">
-                                                        {m.type==='wait'||m.type==='burn' ? m.duration.toFixed(2)+'s' : ''}
-                                                        {m.type==='rotate' ? m.param+'°' : ''}
+                                                    <span className="font-bold text-slate-200 mr-1">
+                                                        {m.type === 'wait' ? 'WAIT' : m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
+                                                    </span>
+                                                    <span className="text-slate-500 font-mono">
+                                                        {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
+                                                        {m.type==='burn' ? ` @ ${(m.thrust*100).toFixed(0)}%` : ''}
+                                                        {m.type==='rotate' ? `${m.param}°` : ''}
+                                                        {m.type==='sas' ? `${m.param}` : ''}
+                                                        {m.type==='wait_for_transfer' ? `Err < ${m.param}°` : ''}
+                                                        {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}
                                                     </span>
                                                 </div>
                                                 {m.status==='pending' && <button onClick={()=>handleRemoveManeuver(m.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={10} /></button>}

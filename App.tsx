@@ -17,6 +17,7 @@ import { updatePhysics, predictSystemTrajectories } from './services/physicsEngi
 import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
+import { useRocketSound } from './hooks/useRocketSound';
 
 const App: React.FC = () => {
   // --- State ---
@@ -31,6 +32,9 @@ const App: React.FC = () => {
   }, [importedPreset]);
 
   const [bodies, setBodies] = useState<Body[]>(defaultPreset.bodies);
+  
+  // Enable Rocket Sound
+  useRocketSound(bodies);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [isRunning, setIsRunning] = useState(false); // Default to false
   const [speed, setSpeed] = useState(1.0);
