@@ -12,9 +12,10 @@ import CoMInfoPanel from './components/CoMInfoPanel';
 import RocketPanel from './components/RocketPanel';
 import PredictionPanel from './components/PredictionPanel';
 import Assistant from './components/Assistant';
+import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
-import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData } from './types';
+import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -126,7 +127,32 @@ const App: React.FC = () => {
   const rocketTargetBodyIdRef = useRef(rocketTargetBodyId);
   const rocketParentBodyIdRef = useRef(rocketParentBodyId);
 
-  useEffect(() => { bodiesRef.current = bodies; }, [bodies]);
+  // Flight Computer State
+  const [flightComputerModules, setFlightComputerModules] = useState<FlightComputerModule[]>([]);
+
+  const handleAddModule = (type: FlightComputerModuleType) => {
+      const newModule: FlightComputerModule = {
+          id: `fc_mod_${Date.now()}`,
+          type,
+          isEnabled: true,
+          primaryBodyId: selectedBodyId || bodies[0]?.id || '',
+          referenceBodyId: bodies.find(b => b.mass > (bodies.find(s => s.id === (selectedBodyId || bodies[0]?.id))?.mass || 0))?.id || bodies[0]?.id || '',
+          color: '#a855f7' // Default purple
+      };
+      setFlightComputerModules(prev => [...prev, newModule]);
+  };
+
+  const handleRemoveModule = (id: string) => {
+      setFlightComputerModules(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleUpdateModule = (id: string, updates: Partial<FlightComputerModule>) => {
+      setFlightComputerModules(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  const handleToggleModule = (id: string) => {
+      setFlightComputerModules(prev => prev.map(m => m.id === id ? { ...m, isEnabled: !m.isEnabled } : m));
+  };
   useEffect(() => { particlesRef.current = particles; }, [particles]);
   useEffect(() => { followingBodyIdRef.current = followingBodyId; }, [followingBodyId]);
   useEffect(() => { followingCoMRef.current = followingCoM; }, [followingCoM]);
@@ -1037,6 +1063,7 @@ const App: React.FC = () => {
             showTheoreticalOrbit={showTheoreticalOrbit}
             followingBodyId={followingBodyId}
             followingCoM={followingCoM}
+            flightComputerModules={flightComputerModules}
         />
       ) : (
         <Canvas 
@@ -1063,6 +1090,7 @@ const App: React.FC = () => {
             coMData={currentCoMData}
             showTransferWindow={showTransferWindow}
             showTheoreticalOrbit={showTheoreticalOrbit}
+            flightComputerModules={flightComputerModules}
         />
       )}
 
@@ -1120,6 +1148,18 @@ const App: React.FC = () => {
           </div>
       </div>
       
+      {/* Flight Computer Panel */}
+      <FlightComputerPanel 
+          modules={flightComputerModules}
+          bodies={bodies}
+          physicsConfig={physicsConfig}
+          onAddModule={handleAddModule}
+          onRemoveModule={handleRemoveModule}
+          onUpdateModule={handleUpdateModule}
+          onToggleModule={handleToggleModule}
+      />
+
+      {/* Assistant */}
       {showAssistant && (
           <Assistant 
             selectedBodyName={selectedBodyId ? bodies.find(b => b.id === selectedBodyId)?.name || null : null}
@@ -1136,6 +1176,9 @@ const App: React.FC = () => {
              physicsConfig={physicsConfig}
              parentBodyId={rocketParentBodyId}
              targetBodyId={rocketTargetBodyId}
+             predictionPaths={predictionPaths}
+             predictionSteps={predictionSteps}
+             predictSystem={isPredictionEnabled}
           />
       )}
 
@@ -1181,7 +1224,6 @@ const App: React.FC = () => {
             onToggleTransferWindow={() => setShowTransferWindow(!showTransferWindow)}
             showTheoreticalOrbit={showTheoreticalOrbit}
             onToggleTheoreticalOrbit={() => setShowTheoreticalOrbit(!showTheoreticalOrbit)}
-            assistantActions={assistantActions}
             predictionPaths={predictionPaths}
             predictionSteps={predictionSteps}
             predictSystem={isPredictionEnabled}

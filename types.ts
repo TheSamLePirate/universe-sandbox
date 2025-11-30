@@ -170,3 +170,15 @@ export interface RocketSpawnConfig {
     radius: number;
     color: string;
 }
+
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide';
+
+export interface FlightComputerModule {
+    id: string;
+    type: FlightComputerModuleType;
+    isEnabled: boolean;
+    primaryBodyId: string; // The subject (e.g., Rocket)
+    referenceBodyId: string; // The parent/center (e.g., Earth)
+    targetBodyId?: string; // The target (e.g., Moon) - Optional depending on type
+    color: string; // For visualization lines
+}

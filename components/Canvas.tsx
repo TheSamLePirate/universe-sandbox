@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData } from '../types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
 
 interface CanvasProps {
@@ -37,6 +37,7 @@ interface CanvasProps {
   // Visualization Toggles
   showTransferWindow: boolean;
   showTheoreticalOrbit: boolean;
+  flightComputerModules: FlightComputerModule[];
 }
 
 interface Star {
@@ -100,7 +101,8 @@ const Canvas: React.FC<CanvasProps> = ({
   observerBodyIds,
   coMData,
   showTransferWindow,
-  showTheoreticalOrbit
+  showTheoreticalOrbit,
+  flightComputerModules
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -821,108 +823,120 @@ const Canvas: React.FC<CanvasProps> = ({
                                 ctx.globalAlpha = 1.0;
                             }
                         }
-                        
-                        const drawMarker = (pos: Vector2D, label: string, color: string) => {
-                             const px = cx + pos.x * scale;
-                             const py = cy + pos.y * scale;
-                             if (Number.isFinite(px) && Number.isFinite(py)) {
-                                 // Draw Dot
-                                 ctx.fillStyle = color;
-                                 ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
-                                 // Draw Label
-                                 ctx.font = 'bold 10px sans-serif';
-                                 ctx.fillText(label, px + 6, py - 6);
-                             }
-                        };
-                        
-                        drawMarker(points.periapsis, "Pe", "#22d3ee"); // Cyan for Periapsis
-                        if (points.apoapsis) {
-                            drawMarker(points.apoapsis, "Ap", "#f97316"); // Orange for Apoapsis
+
+                        // Draw Pe/Ap markers
+                        if (points.periapsis) {
+                            const px = cx + points.periapsis.x * scale;
+                            const py = cy + points.periapsis.y * scale;
+                            if (Number.isFinite(px) && Number.isFinite(py)) {
+                                ctx.fillStyle = '#22d3ee'; ctx.font = 'bold 10px sans-serif';
+                                ctx.fillText('Pe', px + 4, py + 4);
+                                ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+                            }
                         }
-                    }
-                    
-                    // --- TRANSFER WINDOW VISUALIZATION (HUD) ---
-                    // Only draw if we have a valid Parent reference (needed for phase angles)
-                    if (showTransferWindow && parent) {
-                        // 1. Calculate Positions
-                        const rocketPos = body.position;
-                        const targetPos = target.position;
-                        const parentPos = parent.position;
-                        
-                        const rocketAngle = Math.atan2(rocketPos.y - parentPos.y, rocketPos.x - parentPos.x);
-                        
-                        // 2. Calculate Required Phase (Hohmann Logic - duplicated from DataPanel for visualization)
-                        const r1 = Math.sqrt(Math.pow(rocketPos.x - parentPos.x, 2) + Math.pow(rocketPos.y - parentPos.y, 2));
-                        const r2 = Math.sqrt(Math.pow(targetPos.x - parentPos.x, 2) + Math.pow(targetPos.y - parentPos.y, 2));
-                        const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
-                        const a_transfer = (r1 + r2) / 2;
-                        const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
-                        
-                        const travelTime = period_transfer / 2;
-                        const targetMotion = (360 / period_target) * travelTime;
-                        const requiredPhaseDeg = 180 - targetMotion;
-                        const requiredPhaseRad = requiredPhaseDeg * Math.PI / 180;
-                        
-                        // 3. Ideal Target Angle
-                        const idealTargetAngle = rocketAngle + requiredPhaseRad;
-                        const idealX = parentPos.x + Math.cos(idealTargetAngle) * r2;
-                        const idealY = parentPos.y + Math.sin(idealTargetAngle) * r2;
-
-                        const px = cx + parentPos.x * scale;
-                        const py = cy + parentPos.y * scale;
-                        const rx = cx + rocketPos.x * scale;
-                        const ry = cy + rocketPos.y * scale;
-                        const tx = cx + targetPos.x * scale;
-                        const ty = cy + targetPos.y * scale;
-                        const ix = cx + idealX * scale;
-                        const iy = cy + idealY * scale;
-                        
-                        if (Number.isFinite(px) && Number.isFinite(py)) {
-                             // Draw Lines
-                             ctx.lineWidth = 1;
-                             ctx.setLineDash([2, 4]);
-                             
-                             // Line to Rocket
-                             ctx.strokeStyle = 'rgba(34, 211, 238, 0.4)'; // Cyan
-                             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(rx, ry); ctx.stroke();
-                             
-                             // Line to Ideal Target Spot
-                             ctx.strokeStyle = 'rgba(249, 115, 22, 0.4)'; // Orange
-                             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ix, iy); ctx.stroke();
-                             
-                             // Visual Wedge (Tolerance)
-                             const wedgeRadius = r2 * scale;
-                             const tolerance = 5 * Math.PI / 180;
-                             
-                             // Check if real target is in window
-                             const targetAngle = Math.atan2(targetPos.y - parentPos.y, targetPos.x - parentPos.x);
-                             let diff = Math.abs(targetAngle - idealTargetAngle);
-                             while(diff > Math.PI) diff -= 2*Math.PI;
-                             diff = Math.abs(diff);
-                             const inWindow = diff < tolerance;
-
-                             ctx.beginPath();
-                             ctx.moveTo(px, py);
-                             ctx.arc(px, py, wedgeRadius, idealTargetAngle - tolerance, idealTargetAngle + tolerance);
-                             ctx.lineTo(px, py);
-                             ctx.fillStyle = inWindow ? 'rgba(34, 197, 94, 0.15)' : 'rgba(249, 115, 22, 0.1)';
-                             ctx.fill();
-                             ctx.strokeStyle = inWindow ? 'rgba(34, 197, 94, 0.5)' : 'rgba(249, 115, 22, 0.5)';
-                             ctx.stroke();
-
-                             // Label Ideal Spot
-                             ctx.fillStyle = inWindow ? '#22c55e' : '#f97316';
-                             ctx.beginPath(); ctx.arc(ix, iy, 3, 0, Math.PI*2); ctx.fill();
-                             ctx.font = '9px monospace';
-                             ctx.fillText("WINDOW", ix + 5, iy);
-
-                             ctx.setLineDash([]);
+                        if (points.apoapsis) {
+                            const ax = cx + points.apoapsis.x * scale;
+                            const ay = cy + points.apoapsis.y * scale;
+                            if (Number.isFinite(ax) && Number.isFinite(ay)) {
+                                ctx.fillStyle = '#f97316'; ctx.font = 'bold 10px sans-serif';
+                                ctx.fillText('Ap', ax + 4, ay + 4);
+                                ctx.beginPath(); ctx.arc(ax, ay, 2, 0, Math.PI * 2); ctx.fill();
+                            }
                         }
                     }
                 }
             }
        }
     }
+
+    // --- FLIGHT COMPUTER MODULES VISUALIZATION ---
+    flightComputerModules.forEach(module => {
+        if (!module.isEnabled) return;
+
+        const primary = bodies.find(b => b.id === module.primaryBodyId);
+        const reference = bodies.find(b => b.id === module.referenceBodyId);
+        const target = bodies.find(b => b.id === module.targetBodyId);
+
+        if (!primary || !reference) return;
+
+        if (module.type === 'orbit_info') {
+            // Calculate and draw theoretical orbit
+            const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
+            const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);
+
+            if (ellipsePoints && ellipsePoints.length > 0) {
+                ctx.beginPath();
+                ctx.moveTo(cx + ellipsePoints[0].x * scale, cy + ellipsePoints[0].y * scale);
+                for (let i = 1; i < ellipsePoints.length; i++) {
+                    ctx.lineTo(cx + ellipsePoints[i].x * scale, cy + ellipsePoints[i].y * scale);
+                }
+                ctx.strokeStyle = module.color;
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.6;
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Draw Pe/Ap markers
+            if (orbitalPoints?.periapsis) {
+                const px = cx + orbitalPoints.periapsis.x * scale;
+                const py = cy + orbitalPoints.periapsis.y * scale;
+                if (Number.isFinite(px) && Number.isFinite(py)) {
+                    ctx.fillStyle = module.color; ctx.font = 'bold 10px sans-serif';
+                    ctx.fillText('Pe', px + 4, py + 4);
+                    ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+            if (orbitalPoints?.apoapsis) {
+                const ax = cx + orbitalPoints.apoapsis.x * scale;
+                const ay = cy + orbitalPoints.apoapsis.y * scale;
+                if (Number.isFinite(ax) && Number.isFinite(ay)) {
+                    ctx.fillStyle = module.color; ctx.font = 'bold 10px sans-serif';
+                    ctx.fillText('Ap', ax + 4, ay + 4);
+                    ctx.beginPath(); ctx.arc(ax, ay, 2, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+        } else if (module.type === 'transfer_window' && target) {
+             const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
+             const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
+             const a_transfer = (r1 + r2) / 2;
+             const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+             const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+             const travelTime = period_transfer / 2;
+             const targetMotion = (360 / period_target) * travelTime;
+             const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
+             
+             const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
+             const idealTargetAngle = primaryAngle + requiredPhaseRad;
+             const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
+             const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
+
+             const px = cx + reference.position.x * scale;
+             const py = cy + reference.position.y * scale;
+             const bx = cx + primary.position.x * scale;
+             const by = cy + primary.position.y * scale;
+             const ix = cx + idealX * scale;
+             const iy = cy + idealY * scale;
+
+             ctx.setLineDash([5, 5]);
+             ctx.lineWidth = 1;
+             
+             // Line to Primary
+             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by);
+             ctx.strokeStyle = module.color; ctx.globalAlpha = 0.4; ctx.stroke();
+             
+             // Line to Ideal Position
+             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ix, iy);
+             ctx.strokeStyle = module.color; ctx.globalAlpha = 0.4; ctx.stroke();
+             
+             ctx.fillStyle = module.color; ctx.font = '10px monospace';
+             ctx.fillText('WINDOW', ix + 5, iy + 5);
+             
+             ctx.setLineDash([]); ctx.globalAlpha = 1.0;
+        }
+    });
 
     // --- OBSERVER MODE VISUALIZATION ---
     if (observerBodyIds.a && observerBodyIds.b) {

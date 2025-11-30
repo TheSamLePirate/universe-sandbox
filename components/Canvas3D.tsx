@@ -1,8 +1,9 @@
+
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame, extend } from '@react-three/fiber';
 import { OrbitControls, Stars, Html, Line, Trail } from '@react-three/drei';
 import * as THREE from 'three';
-import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData } from '../types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule } from '../types';
 import { calculateOrbitalPoints, calculateEllipsePoints, calculateForces } from '../services/physicsEngine';
 
 interface Canvas3DProps {
@@ -36,7 +37,10 @@ interface Canvas3DProps {
   showTheoreticalOrbit: boolean;
   followingBodyId: string | null;
   followingCoM: boolean;
+  flightComputerModules: FlightComputerModule[];
 }
+
+// ... (rest of file)
 
 // --- TEXTURE GENERATION ---
 const useGlowTexture = () => {
@@ -701,8 +705,87 @@ const CoMOverlay: React.FC<{ coMData: CoMData | null, visualConfig: VisualConfig
     );
 };
 
+
+
+const FlightComputerOverlay: React.FC<{ 
+    modules: FlightComputerModule[];
+    bodies: Body[];
+    physicsConfig: PhysicsConfig;
+}> = ({ modules, bodies, physicsConfig }) => {
+    return (
+        <group>
+            {modules.map(module => {
+                if (!module.isEnabled) return null;
+
+                const primary = bodies.find(b => b.id === module.primaryBodyId);
+                const reference = bodies.find(b => b.id === module.referenceBodyId);
+                const target = bodies.find(b => b.id === module.targetBodyId);
+
+                if (!primary || !reference) return null;
+
+                if (module.type === 'orbit_info') {
+                    // Calculate and draw theoretical orbit
+                    const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
+                    const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);
+
+                    return (
+                        <group key={module.id}>
+                            {ellipsePoints.length > 0 && (
+                                <Line 
+                                    points={ellipsePoints.map(p => new THREE.Vector3(p.x, -p.y, 0))} // Negate Y
+                                    color={module.color}
+                                    lineWidth={1}
+                                    dashed
+                                    opacity={0.6}
+                                    transparent
+                                />
+                            )}
+                            {orbitalPoints?.periapsis && (
+                                <Html position={[orbitalPoints.periapsis.x, -orbitalPoints.periapsis.y, 0]}>
+                                    <div className="text-[10px] font-bold" style={{ color: module.color }}>Pe</div>
+                                </Html>
+                            )}
+                            {orbitalPoints?.apoapsis && (
+                                <Html position={[orbitalPoints.apoapsis.x, -orbitalPoints.apoapsis.y, 0]}>
+                                    <div className="text-[10px] font-bold" style={{ color: module.color }}>Ap</div>
+                                </Html>
+                            )}
+                        </group>
+                    );
+                } else if (module.type === 'transfer_window' && target) {
+                     const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
+                     const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
+                     const a_transfer = (r1 + r2) / 2;
+                     const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+                     const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+                     const travelTime = period_transfer / 2;
+                     const targetMotion = (360 / period_target) * travelTime;
+                     const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
+                     
+                     const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
+                     const idealTargetAngle = primaryAngle + requiredPhaseRad;
+                     const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
+                     const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
+
+                     return (
+                         <group key={module.id}>
+                            <Line points={[[reference.position.x, -reference.position.y, 0], [primary.position.x, -primary.position.y, 0]]} color={module.color} opacity={0.4} transparent dashed />
+                            <Line points={[[reference.position.x, -reference.position.y, 0], [idealX, -idealY, 0]]} color={module.color} opacity={0.4} transparent dashed />
+                            <Html position={[idealX, -idealY, 0]}>
+                                <div className="text-[8px] font-mono" style={{ color: module.color }}>WINDOW</div>
+                            </Html>
+                         </group>
+                     );
+                }
+
+                return null;
+            })}
+        </group>
+    );
+};
+
 const SceneContent: React.FC<Canvas3DProps> = (props) => {
-    const { bodies, particles, visualConfig, selectedBodyId, onSelectBody, onCanvasClick, isCreationMode, creationCandidate, predictionPaths, width, height, scale, offset, isRocketMode, rocketTargetBodyId, showTheoreticalOrbit, showTransferWindow, physicsConfig, observerBodyIds, followingBodyId, followingCoM, coMData } = props;
+    const { bodies, particles, visualConfig, selectedBodyId, onSelectBody, onCanvasClick, isCreationMode, creationCandidate, predictionPaths, width, height, scale, offset, isRocketMode, rocketTargetBodyId, showTheoreticalOrbit, showTransferWindow, physicsConfig, observerBodyIds, followingBodyId, followingCoM, coMData, flightComputerModules } = props;
     
     const controlsRef = useRef<any>(null);
     const { camera } = useThree();
@@ -913,7 +996,14 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
                 </>
             )}
 
-            {/* Rocket Overlay */}
+            {/* Flight Computer Overlay */}
+            <FlightComputerOverlay 
+                modules={flightComputerModules}
+                bodies={bodies}
+                physicsConfig={physicsConfig}
+            />
+
+            {/* Rocket Overlay (Legacy/Quick View) */}
             {isRocketMode && selectedBodyId && (
                 <RocketOverlay 
                     bodies={bodies} 

@@ -76,7 +76,7 @@ export const calculateOrbitalManeuver = (
     gConst: number,
     bodies: Body[],
     parentId?: string
-): { deltaV: number; angle: number } | null => {
+): { deltaV: number; angle: number; duration?: number } | null => {
     if (!rocket || !target) return null;
 
     // Relative Position/Velocity
@@ -107,7 +107,7 @@ export const calculateOrbitalManeuver = (
         const dvAngle = Math.atan2(-relVel.y, -relVel.x);
         return { deltaV: dvMag, angle: dvAngle };
     } else if (type === 'auto_transfer') {
-        // Hohmann Transfer Logic
+        // PRECISE HOHMANN TRANSFER LOGIC
         let parent = null;
         if (parentId) {
             parent = bodies.find(b => b.id === parentId);
@@ -146,29 +146,18 @@ export const calculateOrbitalManeuver = (
         const vTargetCurr = Math.sqrt(tVel.x*tVel.x + tVel.y*tVel.y);
 
         // 3. Determine r2 (Destination Radius)
-        // Instead of using current distance, use Semi-Major Axis of target to handle eccentricity better
+        // Use Semi-Major Axis of target to handle eccentricity better
         const targetEnergy = (vTargetCurr*vTargetCurr)/2 - mu/rTargetCurr;
-        
-        // Safety check if target is parabolic/hyperbolic relative to parent (shouldn't happen for stable planets)
-        if (targetEnergy >= 0) return null;
-
-        const r2 = -mu / (2 * targetEnergy); // Semi-major axis of target
+        if (targetEnergy >= 0) return null; // Hyperbolic/Parabolic target orbit not supported
+        const r2 = -mu / (2 * targetEnergy); 
 
         // 4. Hohmann Transfer Calculation
-        // Energy of transfer orbit
         const transferEnergy = -mu / (r1 + r2);
-        // Velocity needed at r1 (Vis-Viva Equation)
         const vNeeded = Math.sqrt(2 * (transferEnergy + mu/r1));
-
-        // 5. Delta V
         const deltaVMag = vNeeded - v1;
 
-        // 6. Direction (Prograde or Retrograde)
-        // Prograde angle is the direction of current velocity
+        // 5. Direction (Prograde or Retrograde)
         const progradeAngle = Math.atan2(rVel.y, rVel.x);
-        
-        // If deltaV is positive, we speed up (Prograde). 
-        // If negative, we slow down (Retrograde, which is Prograde + PI).
         const burnAngle = progradeAngle + (deltaVMag < 0 ? Math.PI : 0);
 
         return {
@@ -280,40 +269,26 @@ export const updatePhysics = (
                           if (target) {
                                 const res = calculateOrbitalManeuver(updatedBody, target, m.type as any, gConst, currentBodies, refParentId);
                                 if (res) {
-                                    // CLAMP thrust to prevent physics instability
-                                    let thrust = MAX_ROCKET_THRUST * 0.8; // Use 80% of max thrust for stability
+                                    // PRECISE BURN CALCULATION
+                                    // Use a fixed thrust that is high enough to be precise but low enough to be stable
+                                    // Or use max thrust.
+                                    let thrust = MAX_ROCKET_THRUST; 
                                     
-                                    // Calculate burn duration accounting for changing mass
-                                    // The rocket loses mass as it burns fuel, so acceleration increases
-                                    // We need to integrate: dv = (F/m(t)) * dt
-                                    // For simplicity, we'll use the initial mass and add a correction factor
+                                    // Calculate burn duration
+                                    // Since fuel is weightless, Mass is CONSTANT.
+                                    // F = ma => a = F/m
+                                    // dv = a * t => t = dv / a = dv / (F/m) = (dv * m) / F
                                     
-                                    // Simple approach: duration = (mass * deltaV) / thrust
-                                    // But this underestimates because mass decreases during burn
-                                    // Correction: multiply by a factor to account for mass loss
-                                    
-                                    const initialMass = updatedBody.mass;
-                                    const baseDuration = (initialMass * res.deltaV) / thrust;
-                                    
-                                    // Estimate fuel consumption during burn
-                                    // From fuel consumption code: consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt
-                                    // Total fuel consumed ≈ thrust * FUEL_CONSUMPTION_RATE * duration
-                                    const FUEL_CONSUMPTION_RATE = 0.5; // From constants at top of file
-                                    const estimatedFuelConsumed = thrust * FUEL_CONSUMPTION_RATE * baseDuration;
-                                    
-                                    // Mass decreases, so we need MORE time to achieve the same deltaV
-                                    // Use iterative correction or a multiplier
-                                    // A good approximation: multiply duration by 1.5 to account for mass loss
-                                    const correctedDuration = baseDuration * 1.5;
+                                    const mass = updatedBody.mass;
+                                    const duration = (mass * res.deltaV) / thrust;
                                     
                                     // Store the absolute burn angle (not relative to heading)
-                                    // We'll use this directly in the burn execution
                                     m.type = 'burn';
                                     m.thrust = thrust;
-                                    m.duration = correctedDuration;
+                                    m.duration = duration;
                                     m.angleOffset = res.angle; // Store absolute angle
                                     m.param = 'absolute'; // Flag to indicate this is an absolute angle, not offset
-                                    // Don't complete yet, it is now a burn
+                                    m.progress = 0;
                                 } else {
                                     m.status = 'completed';
                                 }
@@ -358,7 +333,8 @@ export const updatePhysics = (
                               while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
                               
                               // Check if within error margin
-                              const errorMargin = ((Number(m.param) || 1.0) * Math.PI) / 180;
+                              // Use a very tight margin for precision
+                              const errorMargin = 0.5 * Math.PI / 180; // 0.5 degrees
                               let diff = Math.abs(currentPhase - requiredPhase);
                               if (diff > Math.PI) diff = 2 * Math.PI - diff;
                               
@@ -480,24 +456,51 @@ export const updatePhysics = (
                                   thrustAngle = heading + m.angleOffset;
                               }
                               
-                              updatedBody.thrust = {
-                                  x: Math.cos(thrustAngle) * m.thrust,
-                                  y: Math.sin(thrustAngle) * m.thrust
-                              };
-                          } else {
-                              updatedBody.thrust = { x: 0, y: 0 };
-                          }
-
-                          if (m.duration > 0) {
-                              const progressInc = dt / m.duration;
-                              m.progress += progressInc;
-                              if (m.progress >= 1) {
-                                  m.progress = 1;
-                                  m.status = 'completed';
+                              // TIME-STEP INDEPENDENT BURN LOGIC
+                              // Check how much time is remaining in the burn
+                              const remainingTime = m.duration * (1 - m.progress);
+                              
+                              // If remaining time is less than dt, we only burn for remainingTime
+                              const burnDt = Math.min(dt, remainingTime);
+                              
+                              if (burnDt > 0) {
+                                  // Apply thrust for this partial step
+                                  // We apply the force scaled by the fraction of the step we are burning
+                                  // F_effective = F_actual * (burnDt / dt)
+                                  const scale = burnDt / dt;
+                                  
+                                  updatedBody.thrust = {
+                                      x: Math.cos(thrustAngle) * m.thrust * scale,
+                                      y: Math.sin(thrustAngle) * m.thrust * scale
+                                  };
+                              } else {
                                   updatedBody.thrust = { x: 0, y: 0 };
                               }
+
+                              if (m.duration > 0) {
+                                  const progressInc = dt / m.duration;
+                                  m.progress += progressInc;
+                                  if (m.progress >= 1) {
+                                      m.progress = 1;
+                                      m.status = 'completed';
+                                      updatedBody.thrust = { x: 0, y: 0 };
+                                  }
+                              } else {
+                                  m.status = 'completed';
+                              }
                           } else {
-                              m.status = 'completed';
+                              // Wait maneuver
+                              updatedBody.thrust = { x: 0, y: 0 };
+                              if (m.duration > 0) {
+                                  const progressInc = dt / m.duration;
+                                  m.progress += progressInc;
+                                  if (m.progress >= 1) {
+                                      m.progress = 1;
+                                      m.status = 'completed';
+                                  }
+                              } else {
+                                  m.status = 'completed';
+                              }
                           }
                       }
 
@@ -526,12 +529,9 @@ export const updatePhysics = (
                       const consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt;
                       updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
                       
-                      // Update Mass (Mass = DryMass + FuelMass)
-                      if (updatedBody.dryMass) {
-                          const fuelMassRatio = 0.5; // Fuel is heavy
-                          const currentFuelMass = (updatedBody.fuel / (updatedBody.maxFuel || 100)) * (updatedBody.dryMass * fuelMassRatio);
-                          updatedBody.mass = updatedBody.dryMass + currentFuelMass;
-                      }
+                      // WEIGHTLESS FUEL: Do NOT update mass.
+                      // Mass remains constant (Dry Mass + Fuel Mass is fixed, or just Dry Mass).
+                      // This ensures constant acceleration for precise maneuvers.
                   }
               }
           }
