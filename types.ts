@@ -7,7 +7,7 @@ export interface Vector2D {
 
 export interface Maneuver {
     id: string;
-    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'wait_for_transfer' | 'wait_for_altitude' | 'burn_until_altitude' | 'change_simulation_speed'; // Type of action
+    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'auto_intercept' | 'wait_for_transfer' | 'wait_for_altitude' | 'burn_until_altitude' | 'change_simulation_speed'; // Type of action
     param?: number | string; // Extra data (degrees for rotate, mode for SAS)
     targetBodyId?: string; // For auto maneuvers that require a reference
     parentBodyId?: string; // For transfers that require a central body reference

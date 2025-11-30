@@ -72,10 +72,11 @@ const normalize = (v: Vector2D) => {
 export const calculateOrbitalManeuver = (
     rocket: Body,
     target: Body,
-    type: 'auto_circularize' | 'auto_land' | 'auto_transfer',
+    type: 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'auto_intercept',
     gConst: number,
     bodies: Body[],
-    parentId?: string
+    parentId?: string,
+    param?: number | string
 ): { deltaV: number; angle: number; duration?: number } | null => {
     if (!rocket || !target) return null;
 
@@ -164,6 +165,51 @@ export const calculateOrbitalManeuver = (
             deltaV: Math.abs(deltaVMag),
             angle: burnAngle
         };
+    } else if (type === 'auto_intercept') {
+        const timeOfFlight = Number(param) || 30;
+        
+        const steps = 50; 
+        const dt = timeOfFlight / steps;
+        
+        const predResult = predictSystemTrajectories(bodies, steps, dt, gConst, [target.id]);
+        const targetPath = predResult.find(p => p.id === target.id);
+        
+        if (!targetPath || targetPath.points.length === 0) return null;
+        const finalPos = targetPath.points[targetPath.points.length - 1];
+
+        let parent = null;
+        if (parentId) parent = bodies.find(b => b.id === parentId);
+        if (!parent) {
+             let strongestG = 0;
+             bodies.forEach(other => {
+                 if (other.id === rocket.id || other.isRocket || other.id === target.id) return;
+                 const dx = other.position.x - rocket.position.x;
+                 const dy = other.position.y - rocket.position.y;
+                 const distSq = dx*dx + dy*dy;
+                 const gForce = other.mass / distSq; 
+                 if (gForce > strongestG) {
+                     strongestG = gForce;
+                     parent = other;
+                 }
+             });
+        }
+        if (!parent) return null;
+        const mu = gConst * parent.mass;
+
+        const r1Rel = { x: rocket.position.x - parent.position.x, y: rocket.position.y - parent.position.y };
+        const r2Rel = { x: finalPos.x - parent.position.x, y: finalPos.y - parent.position.y };
+
+        const lambert = solveLambert(r1Rel, r2Rel, timeOfFlight, mu, false);
+
+        if (lambert) {
+            const vCurrentRel = { x: rocket.velocity.x - parent.velocity.x, y: rocket.velocity.y - parent.velocity.y };
+            const dv = { x: lambert.v1.x - vCurrentRel.x, y: lambert.v1.y - vCurrentRel.y };
+            
+            return {
+                deltaV: Math.sqrt(dv.x*dv.x + dv.y*dv.y),
+                angle: Math.atan2(dv.y, dv.x)
+            };
+        }
     }
 
     return null;
@@ -1007,4 +1053,99 @@ export const calculateEllipsePoints = (
     }
 
     return points;
+};
+
+/**
+ * Solves Lambert's problem to find the velocity required to travel from r1 to r2 in time dt.
+ * Uses a Universal Variable formulation.
+ */
+export const solveLambert = (
+    r1: Vector2D,
+    r2: Vector2D,
+    dt: number,
+    mu: number,
+    cw: boolean = false
+): { v1: Vector2D, v2: Vector2D } | null => {
+    const r1Mag = Math.sqrt(r1.x * r1.x + r1.y * r1.y);
+    const r2Mag = Math.sqrt(r2.x * r2.x + r2.y * r2.y);
+    
+    if (dt <= 0 || mu <= 0 || r1Mag === 0 || r2Mag === 0) return null;
+
+    // 1. Calculate Transfer Angle (dNu)
+    const cross = r1.x * r2.y - r1.y * r2.x;
+    const dot = r1.x * r2.x + r1.y * r2.y;
+    
+    let dNu = Math.atan2(Math.abs(cross), dot);
+    
+    // Determine transfer direction
+    if (cw) {
+        if (cross > 0) dNu = 2 * Math.PI - dNu;
+    } else {
+        if (cross < 0) dNu = 2 * Math.PI - dNu;
+    }
+    
+    const A = Math.sin(dNu) * Math.sqrt(r1Mag * r2Mag / (1 - Math.cos(dNu)));
+
+    // Stumpff functions
+    const stumpffC = (z: number) => {
+        if (z > 0) return (1 - Math.cos(Math.sqrt(z))) / z;
+        if (z < 0) return (Math.cosh(Math.sqrt(-z)) - 1) / (-z);
+        return 0.5;
+    };
+    
+    const stumpffS = (z: number) => {
+        if (z > 0) return (Math.sqrt(z) - Math.sin(Math.sqrt(z))) / (z * Math.sqrt(z));
+        if (z < 0) return (Math.sinh(Math.sqrt(-z)) - Math.sqrt(-z)) / ((-z) * Math.sqrt(-z));
+        return 1 / 6;
+    };
+
+    let z = 0;
+    let ratio = 1;
+    let iter = 0;
+    const MAX_ITER = 50;
+    const TOLERANCE = 1e-5;
+
+    while (Math.abs(ratio) > TOLERANCE && iter < MAX_ITER) {
+        const C = stumpffC(z);
+        const S = stumpffS(z);
+        
+        const y = r1Mag + r2Mag + A * (z * S - 1) / Math.sqrt(C);
+        
+        if (isNaN(y) || y < 0) { z += 0.1; iter++; continue; }
+
+        const x = Math.sqrt(y / C);
+        const t = (x * x * x * S + A * Math.sqrt(y)) / Math.sqrt(mu);
+        
+        if (Math.abs(t - dt) < 1e-4) break;
+        
+        // Simple adaptive step for robustness
+        // (Newton-Raphson is faster but can be unstable if initial guess is poor)
+        if (t < dt) {
+             z -= 0.1; 
+        } else {
+             z += 0.1;
+        }
+        
+        iter++;
+    }
+
+    const C = stumpffC(z);
+    const S = stumpffS(z);
+    const y = r1Mag + r2Mag + A * (z * S - 1) / Math.sqrt(C);
+    
+    const f = 1 - y / r1Mag;
+    const g = A * Math.sqrt(y / mu);
+    const gDot = 1 - y / r2Mag;
+    
+    const v1 = {
+        x: (r2.x - f * r1.x) / g,
+        y: (r2.y - f * r1.y) / g
+    };
+    
+    const v2 = {
+        x: (gDot * r2.x - r1.x) / g,
+        y: (gDot * r2.y - r1.y) / g
+    };
+
+    return { v1, v2 };
 };

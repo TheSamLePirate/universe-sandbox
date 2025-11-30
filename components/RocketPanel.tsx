@@ -146,8 +146,12 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
             case 'auto_land':
             case 'auto_transfer':
             case 'auto_circularize':
+            case 'auto_intercept':
                 newManeuver.targetBodyId = maneuverTargetId;
                 newManeuver.parentBodyId = maneuverParentId;
+                if (maneuverType === 'auto_intercept') {
+                     newManeuver.param = Number(maneuverParam) || 30;
+                }
                 break;
             case 'wait_for_transfer':
                 newManeuver.targetBodyId = maneuverTargetId;
@@ -1083,6 +1087,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <option value="sas">SAS (Stabilizer)</option>
                                         <option value="auto_circularize">Auto Circularize</option>
                                         <option value="auto_transfer">Auto Transfer</option>
+                                        <option value="auto_intercept">Auto Intercept (Lambert)</option>
                                         <option value="wait_for_transfer">Wait for Transfer Window</option>
                                             <option value="wait_for_altitude">Wait for Altitude</option>
                                             <option value="burn_until_altitude">Burn Until Altitude</option>
@@ -1221,7 +1226,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         </div>
                                     )}
 
-                                    {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
+                                    {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer' || maneuverType === 'auto_intercept') && (
                                         <div className="space-y-2">
                                             <div>
                                                 <label className="text-[10px] text-slate-500 block mb-1">Target Body (Destination)</label>
@@ -1258,6 +1263,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         onChange={(e) => setManeuverParam(e.target.value)}
                                                         placeholder="e.g. 0.5"
                                                         step="0.1"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                            )}
+                                            {maneuverType === 'auto_intercept' && (
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Time of Flight (s)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={maneuverParam}
+                                                        onChange={(e) => setManeuverParam(e.target.value)}
+                                                        placeholder="e.g. 30"
+                                                        step="1"
                                                         className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
                                                     />
                                                 </div>
@@ -1921,7 +1939,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             </div>
                                         )}
 
-                                        {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
+                                        {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer' || maneuverType === 'auto_intercept') && (
                                             <div className="space-y-2">
                                                 <div>
                                                     <label className="text-[10px] text-slate-500 block mb-1">Target Body (Destination)</label>
