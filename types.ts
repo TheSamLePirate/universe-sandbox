@@ -7,7 +7,7 @@ export interface Vector2D {
 
 export interface Maneuver {
     id: string;
-    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'auto_intercept' | 'wait_for_transfer' | 'wait_for_altitude' | 'burn_until_altitude' | 'change_simulation_speed'; // Type of action
+    type: 'burn' | 'wait' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'auto_intercept' | 'manual_node' | 'wait_for_transfer' | 'wait_for_altitude' | 'burn_until_altitude' | 'change_simulation_speed'; // Type of action
     param?: number | string; // Extra data (degrees for rotate, mode for SAS)
     targetBodyId?: string; // For auto maneuvers that require a reference
     parentBodyId?: string; // For transfers that require a central body reference
@@ -21,6 +21,12 @@ export interface Maneuver {
     targetDeltaV?: number; // Target deltaV to achieve (for auto maneuvers)
     appliedDeltaV?: number; // Actual deltaV applied so far
     initialDeltaV?: number; // Initial deltaV required (for progress bars in closed-loop maneuvers)
+    
+    // Manual Maneuver Node Data
+    deltaVPrograde?: number;
+    deltaVNormal?: number; // (Not used in 2D physics usually, but good for completeness)
+    deltaVRadial?: number;
+    timeFromNow?: number; // Scheduled time (seconds from creation)
 }
 
 export type SASMode = 'off' | 'prograde' | 'retrograde' | 'radial_out' | 'radial_in';

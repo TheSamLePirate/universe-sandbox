@@ -42,6 +42,30 @@ self.onmessage = (e: MessageEvent<PredictionWorkerRequest>) => {
   for(let k=0; k<steps; k++) {
       const forces = calculateForces(simBodies, gravitationalConstant);
 
+      // Apply Manual Maneuver Nodes
+      const simTime = k * timeStep;
+      simBodies.forEach(b => {
+          if (b.isRocket && b.maneuvers) {
+              b.maneuvers.forEach(m => {
+                  if (m.type === 'manual_node' && m.timeFromNow !== undefined) {
+                      if (simTime >= m.timeFromNow && simTime < m.timeFromNow + timeStep) {
+                           const vMag = Math.sqrt(b.velocity.x*b.velocity.x + b.velocity.y*b.velocity.y);
+                           if (vMag > 0.0001) {
+                               const prograde = { x: b.velocity.x/vMag, y: b.velocity.y/vMag };
+                               const radial = { x: -prograde.y, y: prograde.x };
+                               
+                               const dvP = m.deltaVPrograde || 0;
+                               const dvR = m.deltaVRadial || 0;
+                               
+                               b.velocity.x += prograde.x * dvP + radial.x * dvR;
+                               b.velocity.y += prograde.y * dvP + radial.y * dvR;
+                           }
+                      }
+                  }
+              });
+          }
+      });
+
       simBodies = simBodies.map((b, i) => {
           const ax = forces[i].x / b.mass;
           const ay = forces[i].y / b.mass;

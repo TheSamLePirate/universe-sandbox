@@ -82,6 +82,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [altitudeDirection, setAltitudeDirection] = useState<'ascending' | 'descending'>('ascending'); // Direction for altitude waits
     const [notification, setNotification] = useState<string | null>(null);
 
+    // Manual Node Params
+    const [nodeTime, setNodeTime] = useState<number>(60);
+    const [dvPrograde, setDvPrograde] = useState<number>(0);
+    const [dvRadial, setDvRadial] = useState<number>(0);
+
     // Quick Action Body Selections (independent from maneuver queue)
     const [sasReferenceBodyId, setSasReferenceBodyId] = useState<string>(''); // SAS reference
     const [circularizeBodyId, setCircularizeBodyId] = useState<string>(''); // Circularize reference
@@ -170,6 +175,12 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 break;
             case 'change_simulation_speed':
                 newManeuver.param = Number(maneuverParam) || 1.0;
+                break;
+            case 'manual_node':
+                newManeuver.timeFromNow = nodeTime;
+                newManeuver.deltaVPrograde = dvPrograde;
+                newManeuver.deltaVRadial = dvRadial;
+                if (maneuverParentId) newManeuver.parentBodyId = maneuverParentId;
                 break;
         }
 
@@ -742,9 +753,46 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 </div>
                                             </div>
                                         </div>
+                                            )}
+                                        </div>
                                     )}
-                                </div>
-                            )}
+
+                                    {maneuverType === 'manual_node' && (
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Time to Burn (s)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={nodeTime}
+                                                    onChange={(e) => setNodeTime(parseFloat(e.target.value))}
+                                                    step="10"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                 <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Prograde (m/s)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={dvPrograde}
+                                                        onChange={(e) => setDvPrograde(parseFloat(e.target.value))}
+                                                        step="1.0"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                 </div>
+                                                 <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Radial Out (m/s)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={dvRadial}
+                                                        onChange={(e) => setDvRadial(parseFloat(e.target.value))}
+                                                        step="1.0"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                 </div>
+                                            </div>
+                                        </div>
+                                    )}
                         </div>
                     </div>
                 )}
@@ -1088,6 +1136,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <option value="auto_circularize">Auto Circularize</option>
                                         <option value="auto_transfer">Auto Transfer</option>
                                         <option value="auto_intercept">Auto Intercept (Lambert)</option>
+                                        <option value="manual_node">Manual Node</option>
                                         <option value="wait_for_transfer">Wait for Transfer Window</option>
                                             <option value="wait_for_altitude">Wait for Altitude</option>
                                             <option value="burn_until_altitude">Burn Until Altitude</option>
@@ -1802,6 +1851,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <option value="auto_circularize">Auto Circularize</option>
                                             <option value="auto_transfer">Auto Transfer</option>
                                             <option value="auto_intercept">Auto Intercept (Lambert)</option>
+                                        <option value="manual_node">Manual Node</option>
                                             <option value="wait_for_transfer">Wait for Transfer Window</option>
                                             <option value="wait_for_altitude">Wait for Altitude</option>
                                             <option value="burn_until_altitude">Burn Until Altitude</option>
@@ -1994,6 +2044,43 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         />
                                                     </div>
                                                 )}
+                                            </div>
+                                        )}
+
+                                        {maneuverType === 'manual_node' && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Time to Burn (s)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={nodeTime}
+                                                        onChange={(e) => setNodeTime(parseFloat(e.target.value))}
+                                                        step="10"
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                     <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Prograde (m/s)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={dvPrograde}
+                                                            onChange={(e) => setDvPrograde(parseFloat(e.target.value))}
+                                                            step="1.0"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                     </div>
+                                                     <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Radial Out (m/s)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={dvRadial}
+                                                            onChange={(e) => setDvRadial(parseFloat(e.target.value))}
+                                                            step="1.0"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                     </div>
+                                                </div>
                                             </div>
                                         )}
 

@@ -503,6 +503,38 @@ export const updatePhysics = (
                               m.status = 'completed';
                           }
                       }
+                      // Handle manual_node
+                      else if (m.type === 'manual_node') {
+                          if (m.timeFromNow !== undefined) {
+                              m.timeFromNow -= dt;
+                              
+                              if (m.timeFromNow <= 0) {
+                                  // Convert to BURN
+                                  const dvP = m.deltaVPrograde || 0;
+                                  const dvR = m.deltaVRadial || 0;
+                                  const totalDV = Math.sqrt(dvP*dvP + dvR*dvR);
+                                  const angleFromPrograde = Math.atan2(dvR, dvP);
+                                  
+                                  m.type = 'burn';
+                                  m.thrust = MAX_ROCKET_THRUST;
+                                  m.duration = (updatedBody.mass * totalDV) / MAX_ROCKET_THRUST;
+                                  m.angleOffset = angleFromPrograde;
+                                  m.progress = 0;
+                                  
+                                  // Force SAS to Prograde so angleOffset works correctly
+                                  // (angleOffset is added to Heading, and SAS Prograde keeps Heading = Velocity Angle)
+                                  updatedBody.sasMode = 'prograde';
+                                  
+                                  // If we have a parent, use it for SAS reference
+                                  if (m.parentBodyId) {
+                                      updatedBody.orbitReferenceId = m.parentBodyId;
+                                  }
+                              }
+                          } else {
+                              // If no time set, execute immediately
+                              m.timeFromNow = 0;
+                          }
+                      }
                       // Handle burn_until_altitude
                       else if (m.type === 'burn_until_altitude') {
                           let refParent = currentBodies.find(b => b.id === m.parentBodyId);
@@ -884,6 +916,39 @@ export const predictSystemTrajectories = (
 
     for(let k=0; k<steps; k++) {
         const forces = calculateForces(simBodies, gConst);
+
+        // Apply Maneuver Node Delta-V for Prediction
+        const simTime = k * dt;
+        simBodies.forEach(b => {
+            if (b.isRocket && b.maneuvers) {
+                b.maneuvers.forEach(m => {
+                    if (m.type === 'manual_node' && m.timeFromNow !== undefined) {
+                        // Apply at the specific time step
+                        if (simTime >= m.timeFromNow && simTime < m.timeFromNow + dt) {
+                            const vMag = Math.sqrt(b.velocity.x*b.velocity.x + b.velocity.y*b.velocity.y);
+                            if (vMag > 0.0001) {
+                                // Prograde (Normalized Velocity)
+                                const prograde = { x: b.velocity.x/vMag, y: b.velocity.y/vMag };
+                                // Radial Out (Perpendicular, 90 deg clockwise? No, usually Away from focus)
+                                // In 2D without focus info, "Radial Out" relative to velocity is usually just Normal 2D (Standard Normal).
+                                // Let's define Radial Out as: Rotate Prograde by -90 degrees (Right hand rule z-up)?
+                                // Or typically: Radial Out is vector from Body to CoM.
+                                // If we don't know the body, we use the Velocity Perpendicular.
+                                // Let's use Velocity Normal (Perpendicular).
+                                // (x, y) -> (-y, x) is +90 deg.
+                                const radial = { x: -prograde.y, y: prograde.x }; 
+                                
+                                const dvP = m.deltaVPrograde || 0;
+                                const dvR = m.deltaVRadial || 0;
+                                
+                                b.velocity.x += prograde.x * dvP + radial.x * dvR;
+                                b.velocity.y += prograde.y * dvP + radial.y * dvR;
+                            }
+                        }
+                    }
+                });
+            }
+        });
 
         simBodies = simBodies.map((b, i) => {
             const ax = forces[i].x / b.mass;
