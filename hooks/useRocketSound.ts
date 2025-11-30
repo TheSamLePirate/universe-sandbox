@@ -123,29 +123,59 @@ export const useRocketSound = (bodies: Body[]) => {
         }
     };
 
-    // Landing sound - soft descending tone
+    // Landing sound - Pneumatic hiss + Mechanical thud
     const playLandingSound = () => {
         if (!audioContextRef.current) return;
         
         const ctx = audioContextRef.current;
         const now = ctx.currentTime;
         
+        // 1. Mechanical "Thud" (Low frequency impact)
         const osc = ctx.createOscillator();
-        const landingGain = ctx.createGain();
+        const thudGain = ctx.createGain();
         
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, now); // Start at 600Hz
-        osc.frequency.exponentialRampToValueAtTime(300, now + 0.3); // Drop to 300Hz
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.15); // Quick pitch drop
         
-        landingGain.gain.setValueAtTime(0, now);
-        landingGain.gain.linearRampToValueAtTime(0.25, now + 0.05);
-        landingGain.gain.linearRampToValueAtTime(0, now + 0.3);
+        thudGain.gain.setValueAtTime(0, now);
+        thudGain.gain.linearRampToValueAtTime(0.6, now + 0.02); // Fast attack
+        thudGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2); // Fast decay
         
-        osc.connect(landingGain);
-        landingGain.connect(ctx.destination);
+        osc.connect(thudGain);
+        thudGain.connect(ctx.destination);
         
         osc.start(now);
-        osc.stop(now + 0.3);
+        osc.stop(now + 0.25);
+
+        // 2. Pneumatic "Hiss" (Filtered Noise for landing gear/venting)
+        const bufferSize = ctx.sampleRate * 0.8; // 0.8 seconds
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(800, now);
+        noiseFilter.frequency.linearRampToValueAtTime(400, now + 0.6); // Filter sweep down
+        noiseFilter.Q.value = 0.7;
+        
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0, now);
+        noiseGain.gain.linearRampToValueAtTime(0.2, now + 0.05);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        
+        noise.start(now);
+        noise.stop(now + 0.8);
     };
 
     // Crash sound - harsh noise burst
@@ -254,7 +284,7 @@ export const useRocketSound = (bodies: Body[]) => {
             }
             prevSASModeRef.current.set(rocketId, currentSASMode);
             
-            // 5. Check for low altitude warning (altitude < 5 and descending)
+            // 5. Check for low altitude warning (altitude < 10 and descending)
             if (!rocket.landedOnBodyId) {
                 // Find parent body
                 const parent = bodies.find(b => b.id === rocket.orbitReferenceId);
@@ -270,7 +300,7 @@ export const useRocketSound = (bodies: Body[]) => {
                     const radialVelocity = (dx * relVx + dy * relVy) / distance;
                     const isDescending = radialVelocity < 0;
                     
-                    const shouldBeep = altitude < 5 && isDescending;
+                    const shouldBeep = altitude < 10 && isDescending;
                     const wasBeeping = lowAltitudeBeepingRef.current.get(rocketId);
                     
                     if (shouldBeep && !wasBeeping) {
@@ -278,9 +308,12 @@ export const useRocketSound = (bodies: Body[]) => {
                         playBeep(1);
                         lowAltitudeBeepingRef.current.set(rocketId, true);
                     } else if (shouldBeep && wasBeeping) {
-                        // Continue beeping every 0.5 seconds
+                        // Continue beeping from 1s for 10km to 0.1s for 2km based on altitude
                         const now = audioContextRef.current!.currentTime;
-                        if (now - lastBeepTimeRef.current > 0.5) {
+                        const timeSinceLastBeep = now - lastBeepTimeRef.current;
+                        const beepDuration = Math.max(0.1, Math.min(1, altitude / 2000));
+                        
+                        if (timeSinceLastBeep > beepDuration) {
                             playBeep(1);
                             lastBeepTimeRef.current = now;
                         }

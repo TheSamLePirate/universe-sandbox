@@ -8,7 +8,7 @@ const SOFTENING = 0.15;
 const LANDING_MAX_VELOCITY = 3.5;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
-const FUEL_CONSUMPTION_RATE = 0.5; 
+const FUEL_CONSUMPTION_RATE = 10000; 
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
@@ -178,7 +178,7 @@ export const updatePhysics = (
 ): PhysicsResult => {
   
   // Adaptive Sub-stepping
-  const TARGET_DT = 0.05;
+  const TARGET_DT = 0.008;
   const numSteps = Math.ceil(Math.abs(totalDt) / TARGET_DT);
   const steps = Math.min(numSteps, 100); 
   const dt = totalDt / steps;
