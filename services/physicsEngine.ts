@@ -271,33 +271,70 @@ export const updatePhysics = (
                           const refParentId = m.parentBodyId || (parent ? parent.id : undefined);
                           
                           if (target) {
-                                const res = calculateOrbitalManeuver(updatedBody, target, m.type as any, gConst, currentBodies, refParentId);
-                                if (res) {
-                                    // PRECISE BURN CALCULATION
-                                    // Use a fixed thrust that is high enough to be precise but low enough to be stable
-                                    // Or use max thrust.
-                                    let thrust = MAX_ROCKET_THRUST; 
+                                // CONTINUOUS CONTROL FOR CIRCULARIZE (Closed Loop)
+                                if (m.type === 'auto_circularize') {
+                                    const res = calculateOrbitalManeuver(updatedBody, target, 'auto_circularize', gConst, currentBodies, refParentId);
                                     
-                                    // Calculate burn duration
-                                    // Since fuel is weightless, Mass is CONSTANT.
-                                    // F = ma => a = F/m
-                                    // dv = a * t => t = dv / a = dv / (F/m) = (dv * m) / F
-                                    
-                                    const mass = updatedBody.mass;
-                                    const duration = (mass * res.deltaV) / thrust;
-                                    
-                                    // Store the absolute burn angle (not relative to heading)
-                                    m.type = 'burn';
-                                    m.thrust = thrust;
-                                    m.duration = duration;
-                                    m.angleOffset = res.angle; // Store absolute angle
-                                    m.param = 'absolute'; // Flag to indicate this is an absolute angle, not offset
-                                    m.progress = 0;
-                                    // NEW: Store target deltaV for accurate tracking
-                                    m.targetDeltaV = res.deltaV;
-                                    m.appliedDeltaV = 0;
-                                } else {
-                                    m.status = 'completed';
+                                    // Use a tight tolerance for "perfect" circularization
+                                    if (res && res.deltaV > 0.05) { 
+                                        let thrustMag = MAX_ROCKET_THRUST;
+                                        
+                                        // Proportional control for final approach to prevent overshoot/oscillation
+                                        // If deltaV is small, scale down thrust
+                                        if (res.deltaV < 0.5) {
+                                            thrustMag = MAX_ROCKET_THRUST * (res.deltaV / 0.5);
+                                        }
+
+                                        updatedBody.thrust = {
+                                            x: Math.cos(res.angle) * thrustMag,
+                                            y: Math.sin(res.angle) * thrustMag
+                                        };
+                                        
+                                        // Store initial DeltaV for progress bar
+                                        if (!(m as any).initialDeltaV) {
+                                            (m as any).initialDeltaV = res.deltaV;
+                                        }
+                                        const initialDV = (m as any).initialDeltaV || res.deltaV;
+                                        if (initialDV > 0) {
+                                            m.progress = Math.max(0, Math.min(1, 1 - (res.deltaV / initialDV)));
+                                        }
+                                    } else {
+                                        // Target reached
+                                        m.status = 'completed';
+                                        m.progress = 1;
+                                        updatedBody.thrust = { x: 0, y: 0 };
+                                    }
+                                } 
+                                // ONE-SHOT BURN CALCULATION FOR OTHERS (Transfer, Land)
+                                else {
+                                    const res = calculateOrbitalManeuver(updatedBody, target, m.type as any, gConst, currentBodies, refParentId);
+                                    if (res) {
+                                        // PRECISE BURN CALCULATION
+                                        // Use a fixed thrust that is high enough to be precise but low enough to be stable
+                                        // Or use max thrust.
+                                        let thrust = MAX_ROCKET_THRUST; 
+                                        
+                                        // Calculate burn duration
+                                        // Since fuel is weightless, Mass is CONSTANT.
+                                        // F = ma => a = F/m
+                                        // dv = a * t => t = dv / a = dv / (F/m) = (dv * m) / F
+                                        
+                                        const mass = updatedBody.mass;
+                                        const duration = (mass * res.deltaV) / thrust;
+                                        
+                                        // Store the absolute burn angle (not relative to heading)
+                                        m.type = 'burn';
+                                        m.thrust = thrust;
+                                        m.duration = duration;
+                                        m.angleOffset = res.angle; // Store absolute angle
+                                        m.param = 'absolute'; // Flag to indicate this is an absolute angle, not offset
+                                        m.progress = 0;
+                                        // NEW: Store target deltaV for accurate tracking
+                                        m.targetDeltaV = res.deltaV;
+                                        m.appliedDeltaV = 0;
+                                    } else {
+                                        m.status = 'completed';
+                                    }
                                 }
                           } else {
                               m.status = 'completed';

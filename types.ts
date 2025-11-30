@@ -20,6 +20,7 @@ export interface Maneuver {
     // Accurate deltaV tracking for auto maneuvers
     targetDeltaV?: number; // Target deltaV to achieve (for auto maneuvers)
     appliedDeltaV?: number; // Actual deltaV applied so far
+    initialDeltaV?: number; // Initial deltaV required (for progress bars in closed-loop maneuvers)
 }
 
 export type SASMode = 'off' | 'prograde' | 'retrograde' | 'radial_out' | 'radial_in';
