@@ -2,7 +2,19 @@
 
 import { GoogleGenAI, Type, FunctionDeclaration, Tool, Modality, ThinkingLevel } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Get API key from localStorage first, then fallback to environment variable
+const getApiKey = (): string => {
+    if (typeof window !== 'undefined') {
+        const storedKey = localStorage.getItem('gemini_api_key');
+        if (storedKey && storedKey.trim()) {
+            return storedKey.trim();
+        }
+    }
+    return process.env.API_KEY || '';
+};
+
+// Get AI instance with current API key (allows hot-reloading of API key changes)
+const getAI = () => new GoogleGenAI({ apiKey: getApiKey() });
 
 // --- Tool Definitions ---
 
@@ -381,12 +393,13 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     ]
     
     To execute: Use 'execute_maneuver_plan' after programming.
-    Note: Rocket mass is very small (0.001). Typical thrust values are 0.01 to 0.1 N.
+    Use 'execute_maneuver_plan' to only when asked to execute. When a user ask to plan a mission or a maneuvre, do not execute it unless asked to.
+    Note: Rocket mass is very small (0.001). Typical thrust values are 0.001 to 0.004 N.
     
     Be helpful, scientific, and concise. If you execute a tool, strictly confirm what you did in the text response.
     `;
 
-    return ai.chats.create({
+    return getAI().chats.create({
         model: 'gemini-3-pro-preview',
         config: { 
             systemInstruction,
@@ -405,7 +418,7 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
     try {
-        const response = await ai.models.generateContent({
+        const result = await getAI().models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text }] }],
             config: {
@@ -417,7 +430,7 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
                 },
             },
         });
-        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        return result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     } catch (error) {
         console.error("TTS Error:", error);
         return undefined;

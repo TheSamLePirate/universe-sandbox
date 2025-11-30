@@ -82,6 +82,13 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [altitudeDirection, setAltitudeDirection] = useState<'ascending' | 'descending'>('ascending'); // Direction for altitude waits
     const [notification, setNotification] = useState<string | null>(null);
 
+    // Quick Action Body Selections (independent from maneuver queue)
+    const [sasReferenceBodyId, setSasReferenceBodyId] = useState<string>(''); // SAS reference
+    const [circularizeBodyId, setCircularizeBodyId] = useState<string>(''); // Circularize reference
+    const [landBodyId, setLandBodyId] = useState<string>(''); // Land target
+    const [transferTargetBodyId, setTransferTargetBodyId] = useState<string>(''); // Transfer target
+    const [transferParentBodyId, setTransferParentBodyId] = useState<string>(''); // Transfer parent
+
     // Manual Control
     const [manualThrusting, setManualThrusting] = useState(false);
     const [manualThrustPower, setManualThrustPower] = useState(0.02);
@@ -134,6 +141,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 break;
             case 'sas':
                 newManeuver.param = maneuverParam as string; // SAS Mode
+                newManeuver.parentBodyId = maneuverParentId; // Reference body for orientation
                 break;
             case 'auto_land':
             case 'auto_transfer':
@@ -764,6 +772,21 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                     <div className="fixed top-24 right-2 pointer-events-auto">
                         <div className="bg-slate-900/10 backdrop-blur-sm border border-slate-700 rounded-xl p-2 shadow-lg">
                             <div className="text-[8px] text-slate-500 uppercase font-bold mb-1 text-center">SAS</div>
+                            <select 
+                                value={sasReferenceBodyId}
+                                onChange={(e) => {
+                                    setSasReferenceBodyId(e.target.value);
+                                    if (e.target.value && selectedRocket) {
+                                        onUpdateRocket(selectedRocket.id, { orbitReferenceId: e.target.value });
+                                    }
+                                }}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[9px] text-slate-200 mb-1"
+                            >
+                                <option value="">Ref (Auto)...</option>
+                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                    <option key={b.id} value={b.id}>{b.name.substring(0,8)}</option>
+                                ))}
+                            </select>
                             <div className="grid grid-cols-2 gap-1">
                                 <button 
                                     onClick={() => setSAS('off')} 
@@ -840,31 +863,82 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 {/* BOTTOM-RIGHT: Auto Maneuvers */}
                 {selectedRocket && !isSpawning && (
                     <div className="fixed bottom-24 right-2 pointer-events-auto">
-                        <div className="bg-slate-900/10 backdrop-blur-sm border border-slate-700 rounded-xl p-2 shadow-lg flex flex-col gap-1">
-                            <button 
-                                onClick={() => triggerAutoManeuver('auto_circularize', parentBodyId!)}
-                                disabled={!parentBodyId}
-                                className="w-12 h-12 rounded-lg bg-slate-800/80 hover:bg-indigo-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
-                                title="Circularize"
-                            >
-                                <RefreshCw size={18} />
-                            </button>
-                            <button 
-                                onClick={() => triggerAutoManeuver('auto_land', targetBodyId || parentBodyId!)}
-                                disabled={!targetBodyId && !parentBodyId}
-                                className="w-12 h-12 rounded-lg bg-slate-800/80 hover:bg-red-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
-                                title="Land/Stop"
-                            >
-                                <ArrowDownToLine size={18} />
-                            </button>
-                            <button 
-                                onClick={() => triggerAutoManeuver('auto_transfer', targetBodyId, parentBodyId!)}
-                                disabled={!targetBodyId || !parentBodyId}
-                                className="w-12 h-12 rounded-lg bg-slate-800/80 hover:bg-emerald-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
-                                title="Transfer"
-                            >
-                                <TrendingUp size={18} />
-                            </button>
+                        <div className="bg-slate-900/10 backdrop-blur-sm border border-slate-700 rounded-xl p-2 shadow-lg space-y-1">
+                            {/* Circularize */}
+                            <div className="flex gap-1">
+                                <select 
+                                    value={circularizeBodyId}
+                                    onChange={(e) => setCircularizeBodyId(e.target.value)}
+                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[9px] text-slate-200"
+                                >
+                                    <option value="">Body...</option>
+                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                        <option key={b.id} value={b.id}>{b.name.substring(0,6)}</option>
+                                    ))}
+                                </select>
+                                <button 
+                                    onClick={() => triggerAutoManeuver('auto_circularize', circularizeBodyId)}
+                                    disabled={!circularizeBodyId}
+                                    className="w-10 h-10 rounded-lg bg-slate-800/80 hover:bg-indigo-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
+                                    title="Circularize"
+                                >
+                                    <RefreshCw size={16} />
+                                </button>
+                            </div>
+                            {/* Land */}
+                            <div className="flex gap-1">
+                                <select 
+                                    value={landBodyId}
+                                    onChange={(e) => setLandBodyId(e.target.value)}
+                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[9px] text-slate-200"
+                                >
+                                    <option value="">Body...</option>
+                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                        <option key={b.id} value={b.id}>{b.name.substring(0,6)}</option>
+                                    ))}
+                                </select>
+                                <button 
+                                    onClick={() => triggerAutoManeuver('auto_land', landBodyId)}
+                                    disabled={!landBodyId}
+                                    className="w-10 h-10 rounded-lg bg-slate-800/80 hover:bg-red-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
+                                    title="Land/Stop"
+                                >
+                                    <ArrowDownToLine size={16} />
+                                </button>
+                            </div>
+                            {/* Transfer */}
+                            <div className="space-y-1">
+                                <div className="flex gap-1">
+                                    <select 
+                                        value={transferTargetBodyId}
+                                        onChange={(e) => setTransferTargetBodyId(e.target.value)}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[9px] text-slate-200"
+                                    >
+                                        <option value="">Tgt...</option>
+                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                            <option key={b.id} value={b.id}>{b.name.substring(0,4)}</option>
+                                        ))}
+                                    </select>
+                                    <select 
+                                        value={transferParentBodyId}
+                                        onChange={(e) => setTransferParentBodyId(e.target.value)}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[9px] text-slate-200"
+                                    >
+                                        <option value="">Par...</option>
+                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                            <option key={b.id} value={b.id}>{b.name.substring(0,4)}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button 
+                                    onClick={() => triggerAutoManeuver('auto_transfer', transferTargetBodyId, transferParentBodyId)}
+                                    disabled={!transferTargetBodyId || !transferParentBodyId}
+                                    className="w-full h-10 rounded-lg bg-slate-800/80 hover:bg-emerald-600 disabled:opacity-30 flex items-center justify-center text-white active:scale-95"
+                                    title="Transfer"
+                                >
+                                    <TrendingUp size={16} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1077,28 +1151,76 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         </div>
                                     )}
 
+
                                     {maneuverType === 'sas' && (
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                                <select 
+                                                    value={maneuverParam}
+                                                    onChange={(e) => setManeuverParam(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Select Mode...</option>
+                                                    <option value="off">Off (Hold)</option>
+                                                    <option value="prograde">Prograde</option>
+                                                    <option value="retrograde">Retrograde</option>
+                                                    <option value="radial_out">Radial Out</option>
+                                                    <option value="radial_in">Radial In</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Reference Body (for orientation)</label>
+                                                <select 
+                                                    value={maneuverParentId}
+                                                    onChange={(e) => setManeuverParentId(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Auto-detect</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {maneuverType === 'auto_circularize' && (
                                         <div>
-                                            <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                            <label className="text-[10px] text-slate-500 block mb-1">Reference Body (to circularize around)</label>
                                             <select 
-                                                value={maneuverParam}
-                                                onChange={(e) => setManeuverParam(e.target.value)}
+                                                value={maneuverTargetId}
+                                                onChange={(e) => setManeuverTargetId(e.target.value)}
                                                 className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
                                             >
-                                                <option value="">Select Mode...</option>
-                                                <option value="off">Off (Hold)</option>
-                                                <option value="prograde">Prograde</option>
-                                                <option value="retrograde">Retrograde</option>
-                                                <option value="radial_out">Radial Out</option>
-                                                <option value="radial_in">Radial In</option>
+                                                <option value="">Select Body...</option>
+                                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
                                             </select>
                                         </div>
                                     )}
 
-                                    {(maneuverType === 'auto_land' || maneuverType === 'auto_transfer' || maneuverType === 'auto_circularize' || maneuverType === 'wait_for_transfer') && (
+                                    {maneuverType === 'auto_land' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">Target Body (to land on)</label>
+                                            <select 
+                                                value={maneuverTargetId}
+                                                onChange={(e) => setManeuverTargetId(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            >
+                                                <option value="">Select Target...</option>
+                                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
                                         <div className="space-y-2">
                                             <div>
-                                                <label className="text-[10px] text-slate-500 block mb-1">Target Body</label>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Target Body (Destination)</label>
                                                 <select 
                                                     value={maneuverTargetId}
                                                     onChange={(e) => setManeuverTargetId(e.target.value)}
@@ -1110,21 +1232,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                     ))}
                                                 </select>
                                             </div>
-                                            {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
-                                                <div>
-                                                    <label className="text-[10px] text-slate-500 block mb-1">Parent Body (Optional)</label>
-                                                    <select 
-                                                        value={maneuverParentId}
-                                                        onChange={(e) => setManeuverParentId(e.target.value)}
-                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                                                    >
-                                                        <option value="">Auto-detect</option>
-                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
-                                                            <option key={b.id} value={b.id}>{b.name}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            )}
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Reference Body (Current Orbit Parent)</label>
+                                                <select 
+                                                    value={maneuverParentId}
+                                                    onChange={(e) => setManeuverParentId(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Auto-detect</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                             {maneuverType === 'wait_for_transfer' && (
                                                 <div>
                                                     <label className="text-[10px] text-slate-500 block mb-1">Phase Angle Error (deg)</label>
@@ -1447,11 +1567,26 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         SAS Autopilot
                                         {selectedRocket.sasMode && selectedRocket.sasMode !== 'off' && <span className="text-green-400 animate-pulse text-[10px]">ACTIVE</span>}
                                     </div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        <button onClick={() => setSAS('off')} className={`p-2 rounded text-[10px] font-bold ${(!selectedRocket.sasMode || selectedRocket.sasMode === 'off') ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400'}`}>OFF</button>
-                                        <button onClick={() => setSAS('prograde')} title="Prograde" className={`p-2 rounded flex justify-center ${selectedRocket.sasMode === 'prograde' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-500'}`}><CircleDot size={18} /></button>
-                                        <button onClick={() => setSAS('retrograde')} title="Retrograde" className={`p-2 rounded flex justify-center ${selectedRocket.sasMode === 'retrograde' ? 'bg-red-600 text-white' : 'bg-slate-800 text-red-500'}`}><X size={18} /></button>
-                                        <button onClick={() => setSAS('radial_out')} title="Radial Out" className={`p-2 rounded flex justify-center ${selectedRocket.sasMode === 'radial_out' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-blue-500'}`}><ArrowUp size={18} /></button>
+                                     <select 
+                                        value={sasReferenceBodyId}
+                                        onChange={(e) => {
+                                            setSasReferenceBodyId(e.target.value);
+                                            if (e.target.value && selectedRocket) {
+                                                onUpdateRocket(selectedRocket.id, { orbitReferenceId: e.target.value });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 mb-2"
+                                    >
+                                        <option value="">Reference Body (Auto)...</option>
+                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setSAS('off')} title="Off" className={`flex-1 p-2 rounded flex justify-center ${(!selectedRocket.sasMode || selectedRocket.sasMode === 'off') ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-500'}`}>OFF</button>
+                                        <button onClick={() => setSAS('prograde')} title="Prograde" className={`flex-1 p-2 rounded flex justify-center ${selectedRocket.sasMode === 'prograde' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-500'}`}><CircleDot size={18} /></button>
+                                        <button onClick={() => setSAS('retrograde')} title="Retrograde" className={`flex-1 p-2 rounded flex justify-center ${selectedRocket.sasMode === 'retrograde' ? 'bg-red-600 text-white' : 'bg-slate-800 text-red-500'}`}><X size={18} /></button>
+                                        <button onClick={() => setSAS('radial_out')} title="Radial Out" className={`flex-1 p-2 rounded flex justify-center ${selectedRocket.sasMode === 'radial_out' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-blue-500'}`}><ArrowUp size={18} /></button>
                                     </div>
                                 </div>
 
@@ -1488,33 +1623,86 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     </div>
                                 </div>
 
-                                {/* AUTO MANEUVERS */}
-                                <div>
-                                     <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Auto Maneuvers</div>
-                                     <div className="grid grid-cols-2 gap-2">
-                                        <button 
-                                            onClick={() => triggerAutoManeuver('auto_circularize', parentBodyId!)}
-                                            disabled={!parentBodyId}
-                                            className="p-3 bg-slate-800 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 border border-slate-700"
-                                        >
-                                            <RefreshCw size={16} /> CIRCULARIZE
-                                        </button>
-                                        <button 
-                                            onClick={() => triggerAutoManeuver('auto_land', targetBodyId || parentBodyId!)}
-                                            disabled={!targetBodyId && !parentBodyId}
-                                            className="p-3 bg-slate-800 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 border border-slate-700"
-                                        >
-                                            <ArrowDownToLine size={16} /> LAND / STOP
-                                        </button>
-                                        <button 
-                                            onClick={() => triggerAutoManeuver('auto_transfer', targetBodyId, parentBodyId!)}
-                                            disabled={!targetBodyId || !parentBodyId}
-                                            className="col-span-2 p-3 bg-slate-800 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center justify-center gap-2 border border-slate-700"
-                                        >
-                                            <TrendingUp size={16} /> TRANSFER INJECTION
-                                        </button>
+                                 {/* AUTO MANEUVERS */}
+                                 <div>
+                                      <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Auto Maneuvers</div>
+                                      <div className="space-y-2">
+                                        {/* Circularize */}
+                                        <div className="flex gap-2">
+                                            <select 
+                                                value={circularizeBodyId}
+                                                onChange={(e) => setCircularizeBodyId(e.target.value)}
+                                                className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                                            >
+                                                <option value="">Select Body...</option>
+                                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </select>
+                                            <button 
+                                                onClick={() => triggerAutoManeuver('auto_circularize', circularizeBodyId)}
+                                                disabled={!circularizeBodyId}
+                                                className="px-4 py-2 bg-slate-800 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 border border-slate-700"
+                                            >
+                                                <RefreshCw size={14} /> CIRCULARIZE
+                                            </button>
+                                        </div>
+
+                                        {/* Land */}
+                                        <div className="flex gap-2">
+                                            <select 
+                                                value={landBodyId}
+                                                onChange={(e) => setLandBodyId(e.target.value)}
+                                                className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                                            >
+                                                <option value="">Select Body...</option>
+                                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </select>
+                                            <button 
+                                                onClick={() => triggerAutoManeuver('auto_land', landBodyId)}
+                                                disabled={!landBodyId}
+                                                className="px-4 py-2 bg-slate-800 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-2 border border-slate-700"
+                                            >
+                                                <ArrowDownToLine size={14} /> LAND
+                                            </button>
+                                        </div>
+
+                                        {/* Transfer */}
+                                        <div className="space-y-1">
+                                            <div className="flex gap-2">
+                                                <select 
+                                                    value={transferTargetBodyId}
+                                                    onChange={(e) => setTransferTargetBodyId(e.target.value)}
+                                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                                                >
+                                                    <option value="">Target...</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                                <select 
+                                                    value={transferParentBodyId}
+                                                    onChange={(e) => setTransferParentBodyId(e.target.value)}
+                                                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                                                >
+                                                    <option value="">Parent...</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <button 
+                                                onClick={() => triggerAutoManeuver('auto_transfer', transferTargetBodyId, transferParentBodyId)}
+                                                disabled={!transferTargetBodyId || !transferParentBodyId}
+                                                className="w-full py-2 bg-slate-800 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-white transition-colors flex items-center justify-center gap-2 border border-slate-700"
+                                            >
+                                                <TrendingUp size={14} /> TRANSFER INJECTION
+                                            </button>
+                                        </div>
                                      </div>
-                                </div>
+                                 </div>
                             </div>
                         )}
 
@@ -1643,28 +1831,76 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             </div>
                                         )}
 
+
                                         {maneuverType === 'sas' && (
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                                    <select 
+                                                        value={maneuverParam}
+                                                        onChange={(e) => setManeuverParam(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Select Mode...</option>
+                                                        <option value="off">Off (Hold)</option>
+                                                        <option value="prograde">Prograde</option>
+                                                        <option value="retrograde">Retrograde</option>
+                                                        <option value="radial_out">Radial Out</option>
+                                                        <option value="radial_in">Radial In</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Reference Body (for orientation)</label>
+                                                    <select 
+                                                        value={maneuverParentId}
+                                                        onChange={(e) => setManeuverParentId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Auto-detect</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {maneuverType === 'auto_circularize' && (
                                             <div>
-                                                <label className="text-[10px] text-slate-500 block mb-1">SAS Mode</label>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Reference Body (to circularize around)</label>
                                                 <select 
-                                                    value={maneuverParam}
-                                                    onChange={(e) => setManeuverParam(e.target.value)}
+                                                    value={maneuverTargetId}
+                                                    onChange={(e) => setManeuverTargetId(e.target.value)}
                                                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
                                                 >
-                                                    <option value="">Select Mode...</option>
-                                                    <option value="off">Off (Hold)</option>
-                                                    <option value="prograde">Prograde</option>
-                                                    <option value="retrograde">Retrograde</option>
-                                                    <option value="radial_out">Radial Out</option>
-                                                    <option value="radial_in">Radial In</option>
+                                                    <option value="">Select Body...</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         )}
 
-                                        {(maneuverType === 'auto_land' || maneuverType === 'auto_transfer' || maneuverType === 'auto_circularize' || maneuverType === 'wait_for_transfer') && (
+                                        {maneuverType === 'auto_land' && (
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Target Body (to land on)</label>
+                                                <select 
+                                                    value={maneuverTargetId}
+                                                    onChange={(e) => setManeuverTargetId(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                >
+                                                    <option value="">Select Target...</option>
+                                                    {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
                                             <div className="space-y-2">
                                                 <div>
-                                                    <label className="text-[10px] text-slate-500 block mb-1">Target Body</label>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Target Body (Destination)</label>
                                                     <select 
                                                         value={maneuverTargetId}
                                                         onChange={(e) => setManeuverTargetId(e.target.value)}
@@ -1676,21 +1912,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         ))}
                                                     </select>
                                                 </div>
-                                                {(maneuverType === 'auto_transfer' || maneuverType === 'wait_for_transfer') && (
-                                                    <div>
-                                                        <label className="text-[10px] text-slate-500 block mb-1">Parent Body (Optional)</label>
-                                                        <select 
-                                                            value={maneuverParentId}
-                                                            onChange={(e) => setManeuverParentId(e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                                                        >
-                                                            <option value="">Auto-detect</option>
-                                                            {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
-                                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                )}
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block mb-1">Reference Body (Current Orbit Parent)</label>
+                                                    <select 
+                                                        value={maneuverParentId}
+                                                        onChange={(e) => setManeuverParentId(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                    >
+                                                        <option value="">Auto-detect</option>
+                                                        {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                                 {maneuverType === 'wait_for_transfer' && (
                                                     <div>
                                                         <label className="text-[10px] text-slate-500 block mb-1">Phase Angle Error (deg)</label>

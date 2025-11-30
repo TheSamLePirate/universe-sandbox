@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { X, Sliders, Activity, Eye, Layers, RotateCcw, Download, Upload } from 'lucide-react';
+import { X, Sliders, Activity, Eye, Layers, RotateCcw, Download, Upload, Sparkles } from 'lucide-react';
 import { VisualConfig, PhysicsConfig } from '../types';
 
 interface SettingsPanelProps {
@@ -29,7 +29,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     use3D,
     setUse3D
 }) => {
-    const [activeTab, setActiveTab] = useState<'visuals' | 'physics'>('visuals');
+    const [activeTab, setActiveTab] = useState<'visuals' | 'physics' | 'api'>('visuals');
+    const [apiKey, setApiKey] = useState<string>(() => {
+        return localStorage.getItem('gemini_api_key') || '';
+    });
+    const [apiKeyStatus, setApiKeyStatus] = useState<'saved' | 'unsaved' | ''>('');
+
+    const handleSaveApiKey = () => {
+        if (apiKey.trim()) {
+            localStorage.setItem('gemini_api_key', apiKey.trim());
+            setApiKeyStatus('saved');
+            setTimeout(() => setApiKeyStatus(''), 2000);
+        }
+    };
+
+    const handleClearApiKey = () => {
+        localStorage.removeItem('gemini_api_key');
+        setApiKey('');
+        setApiKeyStatus('unsaved');
+        setTimeout(() => setApiKeyStatus(''), 2000);
+    };
 
     const updateVisual = (key: keyof VisualConfig, value: any) => {
         setVisualConfig({ ...visualConfig, [key]: value });
@@ -78,6 +97,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             ${activeTab === 'physics' ? 'bg-slate-800 text-blue-300 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         <Activity size={16} /> Physics Engine
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('api')}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2
+                            ${activeTab === 'api' ? 'bg-slate-800 text-blue-300 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                        <Sparkles size={16} /> AI Assistant
                     </button>
                 </div>
 
@@ -274,6 +300,67 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 </div>
                             </div>
                          </div>
+                    )}
+
+                    {activeTab === 'api' && (
+                        <div className="space-y-6">
+                            <div className="bg-purple-900/20 border border-purple-700/50 p-4 rounded-lg text-sm text-purple-200">
+                                <Sparkles size={16} className="inline mr-2" />
+                                Configure your Gemini API key to enable the AI assistant. Get your key from{' '}
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                                    Google AI Studio
+                                </a>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Gemini API Key
+                                </label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="password" 
+                                        value={apiKey}
+                                        onChange={(e) => setApiKey(e.target.value)}
+                                        placeholder="Enter your Gemini API key..."
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-purple-500 focus:outline-none"
+                                    />
+                                </div>
+                                {apiKeyStatus === 'saved' && (
+                                    <div className="mt-2 text-sm text-green-400 flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-green-400 rounded-full" />
+                                        API key saved successfully!
+                                    </div>
+                                )}
+                                {apiKeyStatus === 'unsaved' && (
+                                    <div className="mt-2 text-sm text-orange-400 flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-orange-400 rounded-full" />
+                                        API key cleared
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={handleSaveApiKey}
+                                    disabled={!apiKey.trim()}
+                                    className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Save API Key
+                                </button>
+                                <button 
+                                    onClick={handleClearApiKey}
+                                    className="px-4 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+
+                            <div className="text-xs text-slate-400 space-y-2">
+                                <p>• Your API key is stored locally in your browser</p>
+                                <p>• It will be used for all AI assistant interactions</p>
+                                <p>• You can also set it via the .env.local file (API_KEY variable)</p>
+                            </div>
+                        </div>
                     )}
                 </div>
 

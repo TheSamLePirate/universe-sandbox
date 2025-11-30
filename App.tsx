@@ -114,7 +114,7 @@ const App: React.FC = () => {
   
   // Throttle prediction calculations to avoid memory leaks
   const lastPredictionTimeRef = useRef(0);
-  const PREDICTION_UPDATE_INTERVAL = 500; // Update predictions every 500ms to reduce memory pressure
+  const PREDICTION_UPDATE_INTERVAL = 100; // Update predictions every 500ms to reduce memory pressure
 
   // Refs for Prediction Logic (to access fresh state inside animate loop)
   // Refs for Prediction Logic (to access fresh state inside animate loop)

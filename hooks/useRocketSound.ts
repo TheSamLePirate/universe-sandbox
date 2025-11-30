@@ -7,6 +7,12 @@ export const useRocketSound = (bodies: Body[]) => {
     const noiseNodeRef = useRef<AudioBufferSourceNode | null>(null);
     const filterNodeRef = useRef<BiquadFilterNode | null>(null);
     const isInitializedRef = useRef(false);
+    
+    // Track previous states for beep detection
+    const prevManeuversRef = useRef<Map<string, string>>(new Map()); // rocketId -> active maneuver type
+    const prevSASModeRef = useRef<Map<string, string>>(new Map()); // rocketId -> SAS mode
+    const lowAltitudeBeepingRef = useRef<Map<string, boolean>>(new Map()); // rocketId -> is beeping
+    const lastBeepTimeRef = useRef<number>(0);
 
     // Initialize Audio Context
     useEffect(() => {
@@ -61,9 +67,6 @@ export const useRocketSound = (bodies: Body[]) => {
             console.log('Audio System Initialized via User Interaction');
         };
 
-        // REMOVED immediate initAudio() call to avoid browser warnings
-        // initAudio(); 
-
         // Initialize on first interaction
         const handleInteraction = () => {
             initAudio();
@@ -89,23 +92,122 @@ export const useRocketSound = (bodies: Body[]) => {
         };
     }, []);
 
-    // Update sound based on thrust
+    // Beep sound generator
+    const playBeep = (count: number = 1) => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const now = ctx.currentTime;
+        
+        for (let i = 0; i < count; i++) {
+            const osc = ctx.createOscillator();
+            const beepGain = ctx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.value = 800; // 800Hz beep
+            
+            const startTime = now + (i * 0.2); // 200ms between beeps
+            const endTime = startTime + 0.1; // 100ms beep duration
+            
+            beepGain.gain.setValueAtTime(0, startTime);
+            beepGain.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+            beepGain.gain.linearRampToValueAtTime(0, endTime);
+            
+            osc.connect(beepGain);
+            beepGain.connect(ctx.destination);
+            
+            osc.start(startTime);
+            osc.stop(endTime);
+        }
+    };
+
+    // Update sound based on thrust and detect events
     useEffect(() => {
         if (!gainNodeRef.current || !audioContextRef.current) return;
 
         // Check if ANY rocket is thrusting
-        const rocket = bodies.find(b => b.isRocket);
-        const isThrusting = rocket && rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001);
-        
-        if (isThrusting) {
-             // console.log('Thrust detected:', rocket.thrust); // Uncomment for debugging
-        }
+        const rockets = bodies.filter(b => b.isRocket);
+        const isThrusting = rockets.some(rocket => 
+            rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001)
+        );
 
         const targetGain = isThrusting ? 0.4 : 0; 
         const currentTime = audioContextRef.current.currentTime;
         
         // Smooth transition
         gainNodeRef.current.gain.setTargetAtTime(targetGain, currentTime, 0.1);
+
+        // Check each rocket for events
+        rockets.forEach(rocket => {
+            const rocketId = rocket.id;
+            
+            // 1. Check for new maneuvers starting
+            const activeManeuver = rocket.maneuvers?.find(m => m.status === 'active');
+            const prevManeuverType = prevManeuversRef.current.get(rocketId);
+            const currentManeuverType = activeManeuver?.type;
+            
+            if (currentManeuverType && currentManeuverType !== prevManeuverType) {
+                // New maneuver started!
+                if (currentManeuverType === 'auto_circularize') {
+                    playBeep(1);
+                } else if (currentManeuverType === 'auto_land') {
+                    playBeep(2);
+                } else if (currentManeuverType === 'auto_transfer') {
+                    playBeep(3);
+                }
+            }
+            prevManeuversRef.current.set(rocketId, currentManeuverType || '');
+            
+            // 2. Check for SAS mode changes
+            const prevSASMode = prevSASModeRef.current.get(rocketId);
+            const currentSASMode = rocket.sasMode || 'off';
+            
+            if (currentSASMode !== prevSASMode && prevSASMode !== undefined) {
+                // SAS mode changed!
+                playBeep(1);
+            }
+            prevSASModeRef.current.set(rocketId, currentSASMode);
+            
+            // 3. Check for low altitude warning (altitude < 5 and descending)
+            if (!rocket.landedOnBodyId) {
+                // Find parent body
+                const parent = bodies.find(b => b.id === rocket.orbitReferenceId);
+                if (parent) {
+                    const dx = rocket.position.x - parent.position.x;
+                    const dy = rocket.position.y - parent.position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const altitude = distance - parent.radius;
+                    
+                    // Calculate radial velocity (component toward/away from parent)
+                    const relVx = rocket.velocity.x - parent.velocity.x;
+                    const relVy = rocket.velocity.y - parent.velocity.y;
+                    const radialVelocity = (dx * relVx + dy * relVy) / distance;
+                    const isDescending = radialVelocity < 0;
+                    
+                    const shouldBeep = altitude < 5 && isDescending;
+                    const wasBeeping = lowAltitudeBeepingRef.current.get(rocketId);
+                    
+                    if (shouldBeep && !wasBeeping) {
+                        // Start beeping
+                        playBeep(1);
+                        lowAltitudeBeepingRef.current.set(rocketId, true);
+                    } else if (shouldBeep && wasBeeping) {
+                        // Continue beeping every 0.5 seconds
+                        const now = audioContextRef.current!.currentTime;
+                        if (now - lastBeepTimeRef.current > 0.5) {
+                            playBeep(1);
+                            lastBeepTimeRef.current = now;
+                        }
+                    } else if (!shouldBeep && wasBeeping) {
+                        // Stop beeping
+                        lowAltitudeBeepingRef.current.set(rocketId, false);
+                    }
+                }
+            } else {
+                // Landed, clear beeping flag
+                lowAltitudeBeepingRef.current.set(rocketId, false);
+            }
+        });
         
     }, [bodies]);
 };

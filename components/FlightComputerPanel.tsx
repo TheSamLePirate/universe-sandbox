@@ -95,6 +95,31 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         return { currentPhase, requiredPhase: normalizedRequired, error, ready: error < 5 };
     };
 
+    // Helper function to format time
+    const formatTime = (totalSeconds: number): string => {
+        if (totalSeconds <= 0) return '---';
+        
+        const seconds = Math.floor(totalSeconds);
+        const years = Math.floor(seconds / (365.25 * 24 * 3600));
+        const months = Math.floor((seconds % (365.25 * 24 * 3600)) / (30.44 * 24 * 3600));
+        const days = Math.floor((seconds % (30.44 * 24 * 3600)) / (24 * 3600));
+        const hours = Math.floor((seconds % (24 * 3600)) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        
+        const parts = [];
+        if (years > 0) parts.push(`${years}y`);
+        if (months > 0) parts.push(months < 10 ? `0${months}mo` : `${months}mo`);
+        if (days > 0) parts.push(days < 10 ? `0${days}d` : `${days}d`);
+        if (hours > 0) parts.push(hours < 10 ? `0${hours}h` : `${hours}h`);
+        if (minutes > 0) parts.push(minutes < 10 ? `0${minutes}m` : `${minutes}m`);
+        else if (parts.length > 0) parts.push('00m');
+        if (secs > 0) parts.push(secs < 10 ? `0${secs}s` : `${secs}s`);
+        else if (parts.length > 0) parts.push('00s');
+        
+        return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
+    };
+
     // --- Render Module Content ---
     const renderModuleContent = (module: FlightComputerModule) => {
         switch (module.type) {
@@ -110,7 +135,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         </div>
                         <div className="bg-slate-800/50 p-1.5 rounded">
                             <div className="text-[9px] text-slate-500 uppercase">Period</div>
-                            <div className="text-xs text-white font-mono">{orbitData.isBound ? `${orbitData.period.toFixed(1)}s` : 'N/A'}</div>
+                            <div className="text-xs text-white font-mono">{orbitData.isBound ? formatTime(orbitData.period) : 'N/A'}</div>
                         </div>
                         {orbitData.isBound && (
                             <>

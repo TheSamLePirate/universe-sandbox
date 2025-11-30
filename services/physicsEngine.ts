@@ -258,6 +258,10 @@ export const updatePhysics = (
                       } 
                       else if (m.type === 'sas') {
                           updatedBody.sasMode = m.param as any;
+                          // Store reference body for SAS if provided
+                          if (m.parentBodyId) {
+                              updatedBody.orbitReferenceId = m.parentBodyId;
+                          }
                           m.status = 'completed';
                           m.progress = 1;
                       }
@@ -548,7 +552,8 @@ export const updatePhysics = (
             if (isThrusting) {
                 return {
                     ...body,
-                    landedOnBodyId: undefined
+                    landedOnBodyId: undefined,
+                    landingAngle: undefined // Clear landing angle so it can be recalculated on next landing
                 };
             }
 
