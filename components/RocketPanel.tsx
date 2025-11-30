@@ -1801,6 +1801,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <option value="sas">SAS (Stabilizer)</option>
                                             <option value="auto_circularize">Auto Circularize</option>
                                             <option value="auto_transfer">Auto Transfer</option>
+                                            <option value="auto_intercept">Auto Intercept (Lambert)</option>
                                             <option value="wait_for_transfer">Wait for Transfer Window</option>
                                             <option value="wait_for_altitude">Wait for Altitude</option>
                                             <option value="burn_until_altitude">Burn Until Altitude</option>
