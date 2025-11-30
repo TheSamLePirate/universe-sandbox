@@ -229,6 +229,15 @@ const App: React.FC = () => {
       );
       const nextBodies = physicsResult.bodies;
       
+      // Handle System Events (e.g. Speed Change from Flight Computer)
+      if (physicsResult.systemEvents) {
+          physicsResult.systemEvents.forEach(event => {
+              if (event.type === 'set_speed') {
+                  setSpeed(event.value);
+              }
+          });
+      }
+      
       // Clean up references to destroyed bodies
       const bodyIds = new Set(nextBodies.map(b => b.id));
       
@@ -975,6 +984,8 @@ const App: React.FC = () => {
                  maneuver.param = `${m.targetAltitude}:${m.altitudeDirection || 'ascending'}`;
              } else if (m.type === 'burn_until_altitude') {
                  maneuver.param = m.targetAltitude;
+             } else if (m.type === 'change_simulation_speed') {
+                 maneuver.param = m.simulationSpeed;
              }
 
              // Map body references

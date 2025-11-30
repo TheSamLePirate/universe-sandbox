@@ -164,6 +164,9 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 newManeuver.thrust = thrustPower; // Thrust power
                 newManeuver.angleOffset = (burstAngle * Math.PI) / 180; // Angle in radians
                 break;
+            case 'change_simulation_speed':
+                newManeuver.param = Number(maneuverParam) || 1.0;
+                break;
         }
 
         const updatedManeuvers = selectedRocket.maneuvers ? [...selectedRocket.maneuvers, newManeuver] : [newManeuver];
@@ -188,7 +191,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     };
 
     const recordGapAndAction = (
-        type: 'burn' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer', 
+        type: 'burn' | 'rotate' | 'sas' | 'auto_circularize' | 'auto_land' | 'auto_transfer' | 'change_simulation_speed', 
         param: number | string | undefined, 
         thrust: number = 0, 
         duration: number = 0, 
@@ -1081,11 +1084,12 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <option value="auto_circularize">Auto Circularize</option>
                                         <option value="auto_transfer">Auto Transfer</option>
                                         <option value="wait_for_transfer">Wait for Transfer Window</option>
-                                        <option value="wait_for_altitude">Wait for Altitude</option>
-                                        <option value="burn_until_altitude">Burn Until Altitude</option>
-                                        <option value="auto_land">Auto Land</option>
-                                    </select>
-                                </div>
+                                            <option value="wait_for_altitude">Wait for Altitude</option>
+                                            <option value="burn_until_altitude">Burn Until Altitude</option>
+                                            <option value="change_simulation_speed">Change Sim Speed</option>
+                                            <option value="auto_land">Auto Land</option>
+                                        </select>
+                                    </div>
 
                                 {/* Dynamic Inputs based on Type */}
                                 <div className="space-y-2">
@@ -1322,10 +1326,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 <div key={m.id} className={`text-[10px] flex items-center gap-2 p-2 rounded border ${m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}>
                                                     <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
                                                     <div className="flex-1 text-slate-300 truncate">
-                                                        {m.type === 'wait' ? 'Wait' : m.type.startsWith('auto_') ? m.type.replace('auto_','Auto-').toUpperCase() : m.type.toUpperCase()} 
+                                                        {m.type === 'wait' ? 'Wait' : m.type.startsWith('auto_') ? m.type.replace('auto_','Auto-').toUpperCase() : m.type === 'change_simulation_speed' ? 'Sim Speed' : m.type.toUpperCase()} 
                                                         <span className="text-slate-500 ml-2 font-mono">
                                                             {m.type==='wait'||m.type==='burn' ? m.duration.toFixed(2)+'s' : ''}
                                                             {m.type==='rotate' ? m.param+'°' : ''}
+                                                            {m.type==='change_simulation_speed' ? m.param+'x' : ''}
                                                         </span>
                                                     </div>
                                                     {m.status==='pending' && <button onClick={()=>handleRemoveManeuver(m.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={12} /></button>}
@@ -1452,9 +1457,27 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                         <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
                             <Crosshair size={16} />
                         </button>
-                     </div>
-                )}
-            </div>
+                                        </div>
+                                    )}
+
+                                    {maneuverType === 'change_simulation_speed' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">New Speed Multiplier</label>
+                                            <select 
+                                                value={maneuverParam}
+                                                onChange={(e) => setManeuverParam(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            >
+                                                <option value="">Select Speed...</option>
+                                                <option value="0.1">0.1x</option>
+                                                <option value="1">1x</option>
+                                                <option value="10">10x</option>
+                                                <option value="100">100x</option>
+                                                <option value="1000">1000x</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
 
             {/* Notification (Overlay when collapsed) */}
             {notification && (
@@ -1763,6 +1786,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <option value="wait_for_transfer">Wait for Transfer Window</option>
                                             <option value="wait_for_altitude">Wait for Altitude</option>
                                             <option value="burn_until_altitude">Burn Until Altitude</option>
+                                            <option value="change_simulation_speed">Change Sim Speed</option>
                                             <option value="auto_land">Auto Land</option>
                                         </select>
                                     </div>
@@ -1981,7 +2005,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             </div>
                                         )}
 
-                                        {maneuverType === 'burn_until_altitude' && (
+                                    {maneuverType === 'burn_until_altitude' && (
                                             <div className="space-y-2">
                                                 <div>
                                                     <label className="text-[10px] text-slate-500 block mb-1">Target Altitude (km)</label>
@@ -2034,7 +2058,25 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
+
+                                    {maneuverType === 'change_simulation_speed' && (
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 block mb-1">New Speed Multiplier</label>
+                                            <select 
+                                                value={maneuverParam}
+                                                onChange={(e) => setManeuverParam(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            >
+                                                <option value="">Select Speed...</option>
+                                                <option value="0.1">0.1x</option>
+                                                <option value="1">1x</option>
+                                                <option value="10">10x</option>
+                                                <option value="100">100x</option>
+                                                <option value="1000">1000x</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
 
                                     <button 
                                         onClick={handleAddManeuver}
@@ -2062,6 +2104,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                          m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : 
                                                          m.type === 'wait_for_altitude' ? 'WAIT ALT' :
                                                          m.type === 'burn_until_altitude' ? 'BURN TO ALT' :
+                                                         m.type === 'change_simulation_speed' ? 'SET SPEED' :
                                                          m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
                                                     </span>
                                                     <span className="text-slate-500 font-mono">
@@ -2069,6 +2112,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         {m.type==='burn' ? ` @ ${(m.thrust*100).toFixed(0)}%` : ''}
                                                         {m.type==='rotate' ? `${m.param}°` : ''}
                                                         {m.type==='sas' ? `${m.param}` : ''}
+                                                        {m.type==='change_simulation_speed' ? `${m.param}x` : ''}
                                                         {m.type==='wait_for_transfer' ? `Err < ${m.param}°` : ''}
                                                         {(m.type==='wait_for_altitude' || m.type==='burn_until_altitude') ? `${m.param}km` : ''}
                                                         {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}

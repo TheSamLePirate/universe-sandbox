@@ -1,6 +1,6 @@
 
 
-import { Body, Vector2D, Particle, PhysicsResult, SASMode } from '../types';
+import { Body, Vector2D, Particle, PhysicsResult, SASMode, SystemEvent } from '../types';
 
 // Reduced softening for better accuracy at close range (allows tighter slingshots)
 const SOFTENING = 0.15; 
@@ -8,7 +8,7 @@ const SOFTENING = 0.15;
 const LANDING_MAX_VELOCITY = 3.5;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
-const FUEL_CONSUMPTION_RATE = 10000; 
+const FUEL_CONSUMPTION_RATE = 100; 
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
@@ -185,6 +185,7 @@ export const updatePhysics = (
 
   let currentBodies = bodies;
   let allNewParticles: Particle[] = [];
+  let systemEvents: SystemEvent[] = [];
 
   for (let s = 0; s < steps; s++) {
       // 1. Calculate Forces (Gravity)
@@ -262,6 +263,14 @@ export const updatePhysics = (
                           if (m.parentBodyId) {
                               updatedBody.orbitReferenceId = m.parentBodyId;
                           }
+                          m.status = 'completed';
+                          m.progress = 1;
+                      }
+                      else if (m.type === 'change_simulation_speed') {
+                          systemEvents.push({
+                              type: 'set_speed',
+                              value: Number(m.param) || 1.0
+                          });
                           m.status = 'completed';
                           m.progress = 1;
                       }
@@ -802,7 +811,7 @@ export const updatePhysics = (
       }
   }
 
-  return { bodies: currentBodies, newParticles: allNewParticles };
+  return { bodies: currentBodies, newParticles: allNewParticles, systemEvents };
 };
 
 export const predictSystemTrajectories = (

@@ -215,7 +215,10 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
     try {
         // 1. Send User Message
         const bodyNames = bodies.map(b => b.name).join(', ');
-        const contextMsg = `${textToSend} \n[System Context: Current bodies are: ${bodyNames}. Selected: ${selectedBodyName || 'None'}]`;
+        // provide also bodies ids
+        const bodyIds = bodies.map(b => b.id).join(', ');
+        const bodiesDescription = bodies.map(b => `Name: ${b.name}, ID: ${b.id}`).join(', ');
+        const contextMsg = `${textToSend} \n[System Context: Current bodies are: ${bodiesDescription}. Selected: ${selectedBodyName || 'None'}]`;
         
         let response: GenerateContentResponse = await chatSession.current.sendMessage({ message: contextMsg });
 

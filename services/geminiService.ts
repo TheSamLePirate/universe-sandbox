@@ -208,7 +208,8 @@ const programAdvancedFlightPlanTool: FunctionDeclaration = {
     - 'auto_circularize': Circularize orbit around target
     - 'wait_for_transfer': Wait for optimal transfer window
     - 'wait_for_altitude': Wait until reaching target altitude (ascending/descending)
-    - 'burn_until_altitude': Burn continuously until reaching target altitude`,
+    - 'burn_until_altitude': Burn continuously until reaching target altitude
+    - 'change_simulation_speed': Change simulation speed multiplier (e.g. 100x)`,
     parameters: {
         type: Type.OBJECT,
         properties: {
@@ -221,7 +222,7 @@ const programAdvancedFlightPlanTool: FunctionDeclaration = {
                     properties: {
                         type: { 
                             type: Type.STRING, 
-                            description: "Maneuver type: 'burn', 'wait', 'rotate', 'sas', 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer', 'wait_for_altitude', 'burn_until_altitude'" 
+                            description: "Maneuver type: 'burn', 'wait', 'rotate', 'sas', 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer', 'wait_for_altitude', 'burn_until_altitude', 'change_simulation_speed'" 
                         },
                         // For 'burn' and 'burn_until_altitude'
                         thrust: { type: Type.NUMBER, description: "Thrust power (0.001-0.1). Required for 'burn' and 'burn_until_altitude'." },
@@ -237,6 +238,12 @@ const programAdvancedFlightPlanTool: FunctionDeclaration = {
                             description: "SAS mode: 'off', 'prograde', 'retrograde', 'radial_out', 'radial_in'. Required for 'sas'." 
                         },
                         
+                        // For 'change_simulation_speed'
+                        simulationSpeed: { 
+                            type: Type.NUMBER, 
+                            description: "New simulation speed multiplier (e.g., 0.1, 1, 10, 100, 1000). Required for 'change_simulation_speed'." 
+                        },
+
                         // For auto maneuvers and altitude maneuvers
                         targetBodyName: { 
                             type: Type.STRING, 
@@ -370,19 +377,22 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
        - Example: {type: "wait_for_altitude", targetAltitude: 200, altitudeDirection: "ascending"}
        - Use "ascending" to wait for apoapsis, "descending" for periapsis
     
-    10. BURN_UNTIL_ALTITUDE: Burn continuously until altitude reached
-        - Parameters: targetAltitude (km), thrust, angleOffset (degrees), parentBodyName (optional)
-        - Example: {type: "burn_until_altitude", targetAltitude: 300, thrust: 0.01, angleOffset: 0}
-    
+    11. CHANGE_SIMULATION_SPEED: Change simulation speed multiplier
+        - Parameters: simulationSpeed (e.g., 0.1, 1, 10, 100, 1000)
+        - Example: {type: "change_simulation_speed", simulationSpeed: 100}
+
     EXAMPLE MISSION PLANS:
     
     Earth to Moon Transfer:
     [
       {type: "burn_until_altitude", targetAltitude: 200, thrust: 0.01, angleOffset: 0},
       {type: "wait_for_altitude", targetAltitude: 190, altitudeDirection: "ascending"},
+      {type: "change_simulation_speed", simulationSpeed: 10},
       {type: "sas", sasMode: "prograde"},
       {type: "wait_for_transfer", targetBodyName: "Moon", phaseAngleError: 1.0},
+      {type: "change_simulation_speed", simulationSpeed: 100},
       {type: "auto_transfer", targetBodyName: "Moon"},
+      {type: "change_simulation_speed", simulationSpeed: 1},
       {type: "auto_land", targetBodyName: "Moon"}
     ]
     
