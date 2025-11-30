@@ -114,7 +114,11 @@ const App: React.FC = () => {
   
   // Throttle prediction calculations to avoid memory leaks
   const lastPredictionTimeRef = useRef(0);
-  const PREDICTION_UPDATE_INTERVAL = 100; // Update predictions every 500ms to reduce memory pressure
+  const PREDICTION_UPDATE_INTERVAL = 20; // Update predictions every 500ms to reduce memory pressure
+
+  // Prediction Worker
+  const predictionWorkerRef = useRef<Worker | null>(null);
+  const isWorkerBusyRef = useRef(false);
 
   // Refs for Prediction Logic (to access fresh state inside animate loop)
   // Refs for Prediction Logic (to access fresh state inside animate loop)
@@ -163,6 +167,20 @@ const App: React.FC = () => {
 
   useEffect(() => { physicsConfigRef.current = physicsConfig; }, [physicsConfig]);
   useEffect(() => { visualConfigRef.current = visualConfig; }, [visualConfig]);
+
+  // Initialize Prediction Worker
+  useEffect(() => {
+    predictionWorkerRef.current = new Worker(new URL('./services/predictionWorker.ts', import.meta.url), { type: 'module' });
+    
+    predictionWorkerRef.current.onmessage = (e: MessageEvent<{ paths: { id: string, color: string, points: Vector2D[] }[] }>) => {
+        setPredictionPaths(e.data.paths);
+        isWorkerBusyRef.current = false;
+    };
+
+    return () => {
+        predictionWorkerRef.current?.terminate();
+    };
+  }, []);
 
   // Sync Prediction Refs
   // Sync Prediction Refs
@@ -297,31 +315,29 @@ const App: React.FC = () => {
       // --- PREDICTION TRAILS (Throttled to prevent memory leaks) ---
       const shouldUpdatePredictions = time - lastPredictionTimeRef.current >= PREDICTION_UPDATE_INTERVAL;
       
-      if (shouldUpdatePredictions) {
+      if (shouldUpdatePredictions && !isWorkerBusyRef.current && predictionWorkerRef.current) {
           lastPredictionTimeRef.current = time;
-          let newPaths: { id: string, color: string, points: Vector2D[] }[] = [];
           
           if (isCreationModeRef.current && creationCandidateRef.current) {
               const allBodies = [...nextBodies, creationCandidateRef.current];
-              newPaths = predictSystemTrajectories(
-                  allBodies, 
-                  predictionStepsRef.current, 
-                  physicsConfigRef.current.timeStep,
-                  physicsConfigRef.current.gravitationalConstant,
-                  [creationCandidateRef.current.id]
-              );
+              isWorkerBusyRef.current = true;
+              predictionWorkerRef.current.postMessage({
+                  bodies: allBodies,
+                  steps: predictionStepsRef.current,
+                  timeStep: physicsConfigRef.current.timeStep,
+                  gravitationalConstant: physicsConfigRef.current.gravitationalConstant,
+                  predictionBodyIds: [creationCandidateRef.current.id]
+              });
           } else if (isPredictionEnabledRef.current && predictionBodyIdsRef.current.length > 0) {
-              // Pass ALL bodies for simulation, but only return paths for selected ones
-              newPaths = predictSystemTrajectories(
-                  nextBodies,
-                  predictionStepsRef.current,
-                  physicsConfigRef.current.timeStep,
-                  physicsConfigRef.current.gravitationalConstant,
-                  predictionBodyIdsRef.current
-              );
+              isWorkerBusyRef.current = true;
+              predictionWorkerRef.current.postMessage({
+                  bodies: nextBodies,
+                  steps: predictionStepsRef.current,
+                  timeStep: physicsConfigRef.current.timeStep,
+                  gravitationalConstant: physicsConfigRef.current.gravitationalConstant,
+                  predictionBodyIds: predictionBodyIdsRef.current
+              });
           }
-          
-          setPredictionPaths(newPaths);
       }
 
       const calcCoM = followingCoMRef.current || visualConfigRef.current.showCenterOfMass;
