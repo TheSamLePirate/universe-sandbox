@@ -1980,6 +1980,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         />
                                                     </div>
                                                 )}
+                                                {maneuverType === 'auto_intercept' && (
+                                                    <div>
+                                                        <label className="text-[10px] text-slate-500 block mb-1">Time of Flight (s)</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={maneuverParam}
+                                                            onChange={(e) => setManeuverParam(e.target.value)}
+                                                            placeholder="e.g. 30"
+                                                            step="1"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
