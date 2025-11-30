@@ -1100,34 +1100,79 @@ export const solveLambert = (
     };
 
     let z = 0;
-    let ratio = 1;
     let iter = 0;
-    const MAX_ITER = 50;
-    const TOLERANCE = 1e-5;
+    const MAX_ITER = 60;
+    
+    // Secant Method State
+    let z_prev = 0;
+    let t_prev = -1; // Flag to indicate first pass
+    let initialized = false;
 
-    while (Math.abs(ratio) > TOLERANCE && iter < MAX_ITER) {
+    while (iter < MAX_ITER) {
         const C = stumpffC(z);
         const S = stumpffS(z);
         
         const y = r1Mag + r2Mag + A * (z * S - 1) / Math.sqrt(C);
         
-        if (isNaN(y) || y < 0) { z += 0.1; iter++; continue; }
+        // If y becomes negative, we are out of physical bounds (complex x).
+        // This often happens if z is too negative (hyperbola too fast) or A is large.
+        if (isNaN(y) || y < 0) {
+             // Retreat towards z=0 or previous safe value
+             if (initialized) {
+                 z = z_prev + (0 - z_prev) * 0.5; // Try to recover
+                 z_prev = 0; // Reset
+                 t_prev = -1;
+                 initialized = false;
+             } else {
+                 z += 0.1; // Just bump it
+             }
+             iter++;
+             continue;
+        }
 
         const x = Math.sqrt(y / C);
-        const t = (x * x * x * S + A * Math.sqrt(y)) / Math.sqrt(mu);
+        const t = (Math.pow(x, 3) * S + A * Math.sqrt(y)) / Math.sqrt(mu);
         
-        if (Math.abs(t - dt) < 1e-4) break;
+        if (Math.abs(t - dt) < 1e-5) break;
         
-        // Simple adaptive step for robustness
-        // (Newton-Raphson is faster but can be unstable if initial guess is poor)
-        if (t < dt) {
-             z -= 0.1; 
+        if (!initialized) {
+            // First iteration: we have result for z=0 (or initial z)
+            // Need a second point to start Secant
+            z_prev = z;
+            t_prev = t;
+            
+            // Heuristic slope
+            if (t < dt) {
+                // Actual time is too short. We need longer path? No.
+                // Lambert: 
+                // z > 0 (Ellipse) -> Slower, Longer time
+                // z < 0 (Hyperbola) -> Faster, Shorter time
+                // If t(calculated) < dt(target), we are TOO FAST.
+                // We need to SLOW DOWN -> Increase z.
+                z = 1.0;
+            } else {
+                // t > dt. We are too slow.
+                // We need to SPEED UP -> Decrease z.
+                z = -1.0;
+            }
+            initialized = true;
         } else {
-             z += 0.1;
+            // Secant Step
+            // Avoid division by zero
+            if (Math.abs(t - t_prev) < 1e-9) {
+                z += 0.1; // Nudge
+            } else {
+                const next_z = z - (t - dt) * (z - z_prev) / (t - t_prev);
+                z_prev = z;
+                t_prev = t;
+                z = next_z;
+            }
         }
         
         iter++;
     }
+
+
 
     const C = stumpffC(z);
     const S = stumpffS(z);
