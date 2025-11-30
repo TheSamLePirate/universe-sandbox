@@ -17,6 +17,9 @@ export interface Maneuver {
     startTime?: number; // timestamp
     progress: number; // 0 to 1
     status: 'pending' | 'active' | 'completed';
+    // Accurate deltaV tracking for auto maneuvers
+    targetDeltaV?: number; // Target deltaV to achieve (for auto maneuvers)
+    appliedDeltaV?: number; // Actual deltaV applied so far
 }
 
 export type SASMode = 'off' | 'prograde' | 'retrograde' | 'radial_out' | 'radial_in';

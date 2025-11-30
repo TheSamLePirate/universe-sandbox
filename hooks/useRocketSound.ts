@@ -13,6 +13,8 @@ export const useRocketSound = (bodies: Body[]) => {
     const prevSASModeRef = useRef<Map<string, string>>(new Map()); // rocketId -> SAS mode
     const lowAltitudeBeepingRef = useRef<Map<string, boolean>>(new Map()); // rocketId -> is beeping
     const lastBeepTimeRef = useRef<number>(0);
+    const prevRocketIdsRef = useRef<Set<string>>(new Set()); // Track which rockets existed last frame
+    const prevLandedStatusRef = useRef<Map<string, boolean>>(new Map()); // rocketId -> was landed
 
     // Initialize Audio Context
     useEffect(() => {
@@ -121,6 +123,66 @@ export const useRocketSound = (bodies: Body[]) => {
         }
     };
 
+    // Landing sound - soft descending tone
+    const playLandingSound = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const now = ctx.currentTime;
+        
+        const osc = ctx.createOscillator();
+        const landingGain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now); // Start at 600Hz
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.3); // Drop to 300Hz
+        
+        landingGain.gain.setValueAtTime(0, now);
+        landingGain.gain.linearRampToValueAtTime(0.25, now + 0.05);
+        landingGain.gain.linearRampToValueAtTime(0, now + 0.3);
+        
+        osc.connect(landingGain);
+        landingGain.connect(ctx.destination);
+        
+        osc.start(now);
+        osc.stop(now + 0.3);
+    };
+
+    // Crash sound - harsh noise burst
+    const playCrashSound = () => {
+        if (!audioContextRef.current) return;
+        
+        const ctx = audioContextRef.current;
+        const now = ctx.currentTime;
+        
+        // Create noise buffer for crash
+        const bufferSize = ctx.sampleRate * 0.5; // 0.5 second crash
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3)); // Decaying noise
+        }
+        
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const crashFilter = ctx.createBiquadFilter();
+        crashFilter.type = 'lowpass';
+        crashFilter.frequency.value = 1200;
+        crashFilter.Q.value = 0.5;
+        
+        const crashGain = ctx.createGain();
+        crashGain.gain.setValueAtTime(0.5, now);
+        crashGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        
+        noise.connect(crashFilter);
+        crashFilter.connect(crashGain);
+        crashGain.connect(ctx.destination);
+        
+        noise.start(now);
+        noise.stop(now + 0.5);
+    };
+
     // Update sound based on thrust and detect events
     useEffect(() => {
         if (!gainNodeRef.current || !audioContextRef.current) return;
@@ -137,11 +199,35 @@ export const useRocketSound = (bodies: Body[]) => {
         // Smooth transition
         gainNodeRef.current.gain.setTargetAtTime(targetGain, currentTime, 0.1);
 
+        // Track current rocket IDs
+        const currentRocketIds = new Set(rockets.map(r => r.id));
+        
+        // 1. Detect rocket crashes (rocket that existed before but is now gone)
+        prevRocketIdsRef.current.forEach(prevId => {
+            if (!currentRocketIds.has(prevId)) {
+                // Rocket was destroyed!
+                playCrashSound();
+            }
+        });
+        
+        // Update previous rocket IDs
+        prevRocketIdsRef.current = currentRocketIds;
+        
         // Check each rocket for events
         rockets.forEach(rocket => {
             const rocketId = rocket.id;
             
-            // 1. Check for new maneuvers starting
+            // 2. Detect landings (transitioned from flying to landed)
+            const wasLanded = prevLandedStatusRef.current.get(rocketId);
+            const isLanded = !!rocket.landedOnBodyId;
+            
+            if (!wasLanded && isLanded) {
+                // Just landed!
+                playLandingSound();
+            }
+            prevLandedStatusRef.current.set(rocketId, isLanded);
+            
+            // 3. Check for new maneuvers starting
             const activeManeuver = rocket.maneuvers?.find(m => m.status === 'active');
             const prevManeuverType = prevManeuversRef.current.get(rocketId);
             const currentManeuverType = activeManeuver?.type;
@@ -158,7 +244,7 @@ export const useRocketSound = (bodies: Body[]) => {
             }
             prevManeuversRef.current.set(rocketId, currentManeuverType || '');
             
-            // 2. Check for SAS mode changes
+            // 4. Check for SAS mode changes
             const prevSASMode = prevSASModeRef.current.get(rocketId);
             const currentSASMode = rocket.sasMode || 'off';
             
@@ -168,7 +254,7 @@ export const useRocketSound = (bodies: Body[]) => {
             }
             prevSASModeRef.current.set(rocketId, currentSASMode);
             
-            // 3. Check for low altitude warning (altitude < 5 and descending)
+            // 5. Check for low altitude warning (altitude < 5 and descending)
             if (!rocket.landedOnBodyId) {
                 // Find parent body
                 const parent = bodies.find(b => b.id === rocket.orbitReferenceId);

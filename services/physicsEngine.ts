@@ -43,7 +43,7 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
 
 const createExplosion = (x: number, y: number, color: string, intensity: number): Particle[] => {
     const particles: Particle[] = [];
-    const count = Math.min(200, Math.floor(intensity * 10)); // Cap particles for performance
+    const count = Math.min(300, Math.floor(intensity * 100)); // Increased multiplier from 10 to 100, cap at 5000
     
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
@@ -54,8 +54,8 @@ const createExplosion = (x: number, y: number, color: string, intensity: number)
             y: y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: 1.0,
-            decay: 0.01 + Math.random() * 0.03,
+            life: 2.0,
+            decay: 0.01 + Math.random() * 0.01,
             color: color,
             size: Math.random() * 2 + 1
         });
@@ -293,6 +293,9 @@ export const updatePhysics = (
                                     m.angleOffset = res.angle; // Store absolute angle
                                     m.param = 'absolute'; // Flag to indicate this is an absolute angle, not offset
                                     m.progress = 0;
+                                    // NEW: Store target deltaV for accurate tracking
+                                    m.targetDeltaV = res.deltaV;
+                                    m.appliedDeltaV = 0;
                                 } else {
                                     m.status = 'completed';
                                 }
@@ -449,6 +452,17 @@ export const updatePhysics = (
                       // Handle Time-Based (Burn/Wait)
                       if (m.status === 'active' && (m.type === 'burn' || m.type === 'wait')) {
                           if (m.type === 'burn') {
+                              // Check if this burn uses accurate deltaV tracking
+                              const useAccurateDV = m.targetDeltaV !== undefined && m.targetDeltaV > 0;
+                              
+                              // Store initial velocity if not already stored (first frame of burn)
+                              if (useAccurateDV && !(m as any).initialVelocity) {
+                                  (m as any).initialVelocity = { 
+                                      x: updatedBody.velocity.x, 
+                                      y: updatedBody.velocity.y 
+                                  };
+                              }
+                              
                               // Check if this is an absolute angle (from auto-maneuvers) or relative offset
                               let thrustAngle;
                               if (m.param === 'absolute') {
@@ -460,37 +474,61 @@ export const updatePhysics = (
                                   thrustAngle = heading + m.angleOffset;
                               }
                               
-                              // TIME-STEP INDEPENDENT BURN LOGIC
-                              // Check how much time is remaining in the burn
-                              const remainingTime = m.duration * (1 - m.progress);
-                              
-                              // If remaining time is less than dt, we only burn for remainingTime
-                              const burnDt = Math.min(dt, remainingTime);
-                              
-                              if (burnDt > 0) {
-                                  // Apply thrust for this partial step
-                                  // We apply the force scaled by the fraction of the step we are burning
-                                  // F_effective = F_actual * (burnDt / dt)
-                                  const scale = burnDt / dt;
+                              // Check if we've achieved target deltaV (for accurate burns)
+                              if (useAccurateDV && (m as any).initialVelocity) {
+                                  const dvX = updatedBody.velocity.x - (m as any).initialVelocity.x;
+                                  const dvY = updatedBody.velocity.y - (m as any).initialVelocity.y;
+                                  const currentDV = Math.sqrt(dvX * dvX + dvY * dvY);
+                                  m.appliedDeltaV = currentDV;
                                   
-                                  updatedBody.thrust = {
-                                      x: Math.cos(thrustAngle) * m.thrust * scale,
-                                      y: Math.sin(thrustAngle) * m.thrust * scale
-                                  };
-                              } else {
-                                  updatedBody.thrust = { x: 0, y: 0 };
-                              }
-
-                              if (m.duration > 0) {
-                                  const progressInc = dt / m.duration;
-                                  m.progress += progressInc;
-                                  if (m.progress >= 1) {
+                                  // Complete if we've reached or exceeded target deltaV
+                                  if (currentDV >= m.targetDeltaV) {
                                       m.progress = 1;
                                       m.status = 'completed';
                                       updatedBody.thrust = { x: 0, y: 0 };
+                                  } else {
+                                      // Continue burning - update progress based on deltaV
+                                      m.progress = currentDV / m.targetDeltaV;
                                   }
-                              } else {
-                                  m.status = 'completed';
+                              }
+                              
+                              // Only apply thrust if not completed
+                              if (m.status === 'active') {
+                                  // TIME-STEP INDEPENDENT BURN LOGIC
+                                  // Check how much time is remaining in the burn
+                                  const remainingTime = m.duration * (1 - m.progress);
+                                  
+                                  // If remaining time is less than dt, we only burn for remainingTime
+                                  const burnDt = Math.min(dt, remainingTime);
+                                  
+                                  if (burnDt > 0) {
+                                      // Apply thrust for this partial step
+                                      // We apply the force scaled by the fraction of the step we are burning
+                                      // F_effective = F_actual * (burnDt / dt)
+                                      const scale = burnDt / dt;
+                                      
+                                      updatedBody.thrust = {
+                                          x: Math.cos(thrustAngle) * m.thrust * scale,
+                                          y: Math.sin(thrustAngle) * m.thrust * scale
+                                      };
+                                  } else {
+                                      updatedBody.thrust = { x: 0, y: 0 };
+                                  }
+
+                                  // For non-accurate burns, use time-based completion
+                                  if (!useAccurateDV) {
+                                      if (m.duration > 0) {
+                                          const progressInc = dt / m.duration;
+                                          m.progress += progressInc;
+                                          if (m.progress >= 1) {
+                                              m.progress = 1;
+                                              m.status = 'completed';
+                                              updatedBody.thrust = { x: 0, y: 0 };
+                                          }
+                                      } else {
+                                          m.status = 'completed';
+                                      }
+                                  }
                               }
                           } else {
                               // Wait maneuver
@@ -693,8 +731,17 @@ export const updatePhysics = (
                       const collisionPointY = currentBody.position.y + (otherBody.position.y - currentBody.position.y) * (currentBody.radius / (currentBody.radius + otherBody.radius)); 
 
 
-                      
-                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, currentBody.mass > otherBody.mass ? otherBody.color : currentBody.color, Math.sqrt(otherBody.mass)));
+                      // Calculate intensity on the collision based on masses and speeds
+                      const intensity = Math.sqrt(lightBody.mass) + Math.sqrt(heavyBody.mass) + Math.sqrt(lightBody.velocity.x*lightBody.velocity.x + lightBody.velocity.y*lightBody.velocity.y) + Math.sqrt(heavyBody.velocity.x*heavyBody.velocity.x + heavyBody.velocity.y*heavyBody.velocity.y);
+
+                      // Create explosion particles
+                      // For rockets, use minimum intensity to ensure visible explosion
+                      const isRocketCollision = isRocketA || isRocketB;
+                      let explosionIntensity = intensity;
+                      if (isRocketCollision) {
+                          explosionIntensity = Math.max(explosionIntensity, 1000); // Minimum intensity of 1000 for rockets (10,000 particles)
+                      }
+                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity));
 
 
                       
