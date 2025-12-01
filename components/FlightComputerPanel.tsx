@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge } from 'lucide-react';
+import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput } from '../types';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
+import { calculateOrbitInfo, resolveInput, calculateTransferInfo } from '../services/orbitalMath';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
     bodies: Body[];
     physicsConfig: PhysicsConfig;
-    onAddModule: (type: FlightComputerModuleType) => void;
+    onAddModule: (type: FlightComputerModuleType, inputs?: Record<string, FlightComputerInput>) => void;
     onRemoveModule: (id: string) => void;
     onUpdateModule: (id: string, updates: Partial<FlightComputerModule>) => void;
     onToggleModule: (id: string) => void;
@@ -24,6 +25,85 @@ interface FlightComputerPanelProps {
     }>;
 }
 
+const InputSelector: React.FC<{
+    label: string;
+    value: FlightComputerInput | undefined;
+    onChange: (input: FlightComputerInput) => void;
+    bodies: Body[];
+    modules: FlightComputerModule[];
+    currentModuleId: string;
+}> = ({ label, value, onChange, bodies, modules, currentModuleId }) => {
+    const [mode, setMode] = useState<'body' | 'module'>('body');
+
+    // Initialize mode based on current value
+    useEffect(() => {
+        if (value?.type === 'module_output') {
+            setMode('module');
+        } else {
+            setMode('body');
+        }
+    }, [value]);
+
+    const availableModules = modules.filter(m => m.id !== currentModuleId && m.type === 'orbit_info');
+
+    return (
+        <div className="space-y-1">
+            <div className="flex justify-between items-center">
+                <label className="text-[9px] text-slate-500 uppercase">{label}</label>
+                <div className="flex bg-slate-800 rounded p-0.5">
+                    <button 
+                        onClick={() => setMode('body')}
+                        className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'body' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        BODY
+                    </button>
+                    <button 
+                        onClick={() => setMode('module')}
+                        className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'module' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        MODULE
+                    </button>
+                </div>
+            </div>
+            
+            {mode === 'body' ? (
+                <select 
+                    value={value?.type === 'body' ? value.value : ''}
+                    onChange={(e) => onChange({ type: 'body', value: e.target.value, label: bodies.find(b => b.id === e.target.value)?.name })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
+                >
+                    <option value="">Select Body...</option>
+                    {bodies.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                </select>
+            ) : (
+                <select 
+                    value={value?.type === 'module_output' ? value.value : ''}
+                    onChange={(e) => {
+                        const [modId, key] = e.target.value.split(':');
+                        const mod = modules.find(m => m.id === modId);
+                        onChange({ 
+                            type: 'module_output', 
+                            value: e.target.value, 
+                            label: `${mod?.name || 'Module'} (${key === 'pe_point' ? 'Pe' : 'Pa'})` 
+                        });
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
+                >
+                    <option value="">Select Output...</option>
+                    {availableModules.map(m => (
+                        <React.Fragment key={m.id}>
+                            <option value={`${m.id}:pe_point`}>{m.name || 'Orbit Info'} - Periapsis Point</option>
+                            <option value={`${m.id}:pa_point`}>{m.name || 'Orbit Info'} - Apoapsis Point</option>
+                        </React.Fragment>
+                    ))}
+                </select>
+            )}
+        </div>
+    );
+};
+
 const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     modules,
     bodies,
@@ -38,73 +118,35 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const [isAdding, setIsAdding] = useState(false);
     const isMobile = useIsMobile();
 
-    // --- Calculation Helpers ---
-    const calculateOrbitInfo = (primaryId: string, referenceId: string) => {
-        const primary = bodies.find(b => b.id === primaryId);
-        const reference = bodies.find(b => b.id === referenceId);
-        
-        if (!primary || !reference) return null;
-
-        const dx = primary.position.x - reference.position.x;
-        const dy = primary.position.y - reference.position.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const dvx = primary.velocity.x - reference.velocity.x;
-        const dvy = primary.velocity.y - reference.velocity.y;
-        const vSq = dvx*dvx + dvy*dvy;
-        
-        const mu = physicsConfig.gravitationalConstant * reference.mass;
-        const E = (vSq / 2) - (mu / dist);
-        const altitude = dist - reference.radius;
-
-        let periapsis = -1;
-        let apoapsis = -1;
-        let period = 0;
-
-        if (E < 0) {
-            const a = -mu / (2 * E);
-            const h = (dx * dvy) - (dy * dvx);
-            const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
-            periapsis = (a * (1 - eccentricity)) - reference.radius;
-            apoapsis = (a * (1 + eccentricity)) - reference.radius;
-            period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
+    // Helper to get input or fallback to legacy fields
+    const getInput = (module: FlightComputerModule, key: string): FlightComputerInput | undefined => {
+        if (module.inputs && module.inputs[key]) {
+            return module.inputs[key];
         }
-
-        return { altitude, periapsis, apoapsis, period, isBound: E < 0 };
+        // Fallback to legacy fields
+        if (key === 'primary' && module.primaryBodyId) return { type: 'body', value: module.primaryBodyId };
+        if (key === 'reference' && module.referenceBodyId) return { type: 'body', value: module.referenceBodyId };
+        if (key === 'target' && module.targetBodyId) return { type: 'body', value: module.targetBodyId };
+        return undefined;
     };
 
-    const calculateTransferInfo = (primaryId: string, referenceId: string, targetId?: string) => {
-        if (!targetId) return null;
-        const primary = bodies.find(b => b.id === primaryId);
-        const reference = bodies.find(b => b.id === referenceId);
-        const target = bodies.find(b => b.id === targetId);
-
-        if (!primary || !reference || !target) return null;
-
-        // Phase Angle Calculation
-        const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-        const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
+    // Helper to update input
+    const updateInput = (moduleId: string, key: string, input: FlightComputerInput) => {
+        const module = modules.find(m => m.id === moduleId);
+        if (!module) return;
         
-        let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
-        while (currentPhase > 180) currentPhase -= 360;
-        while (currentPhase < -180) currentPhase += 360;
+        const newInputs = { ...(module.inputs || {}) };
+        newInputs[key] = input;
+        
+        // Also update legacy fields for backward compatibility where possible
+        const legacyUpdates: any = {};
+        if (input.type === 'body') {
+            if (key === 'primary') legacyUpdates.primaryBodyId = input.value;
+            if (key === 'reference') legacyUpdates.referenceBodyId = input.value;
+            if (key === 'target') legacyUpdates.targetBodyId = input.value;
+        }
 
-        const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-        const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-        const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-        const a_transfer = (r1 + r2) / 2;
-        const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-        
-        const travelTime = period_transfer / 2;
-        const targetMotion = (360 / period_target) * travelTime;
-        const requiredPhase = 180 - targetMotion;
-        
-        let normalizedRequired = requiredPhase;
-        while (normalizedRequired > 180) normalizedRequired -= 360;
-        while (normalizedRequired < -180) normalizedRequired += 360;
-
-        const error = Math.abs(currentPhase - normalizedRequired);
-        
-        return { currentPhase, requiredPhase: normalizedRequired, error, ready: error < 5 };
+        onUpdateModule(moduleId, { inputs: newInputs, ...legacyUpdates });
     };
 
     // Helper function to format time
@@ -136,40 +178,86 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const renderModuleContent = (module: FlightComputerModule) => {
         switch (module.type) {
             case 'orbit_info':
-                const orbitData = calculateOrbitInfo(module.primaryBodyId, module.referenceBodyId);
-                if (!orbitData) return <div className="text-xs text-slate-500 italic">Invalid Body Selection</div>;
+                const primaryInput = getInput(module, 'primary');
+                const referenceInput = getInput(module, 'reference');
+                
+                const primary = resolveInput(primaryInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const reference = resolveInput(referenceInput, bodies, modules, physicsConfig.gravitationalConstant);
+                
+                // For orbit info, reference MUST be a body (need mass)
+                if (!primary || !reference || !('mass' in reference)) return <div className="text-xs text-slate-500 italic">Invalid Selection</div>;
+                
+                const orbitData = calculateOrbitInfo(primary, reference as Body, physicsConfig.gravitationalConstant);
+                if (!orbitData) return <div className="text-xs text-slate-500 italic">Calculation Failed</div>;
                 
                 return (
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div className="bg-slate-800/50 p-1.5 rounded">
-                            <div className="text-[9px] text-slate-500 uppercase">Altitude</div>
-                            <div className="text-xs text-cyan-300 font-mono">{orbitData.altitude.toFixed(1)} u</div>
+                    <div className="space-y-2 mt-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-800/50 p-1.5 rounded">
+                                <div className="text-[9px] text-slate-500 uppercase">Altitude</div>
+                                <div className="text-xs text-cyan-300 font-mono">{orbitData.altitude.toFixed(1)} u</div>
+                            </div>
+                            <div className="bg-slate-800/50 p-1.5 rounded">
+                                <div className="text-[9px] text-slate-500 uppercase">Period</div>
+                                <div className="text-xs text-white font-mono">{orbitData.isBound ? formatTime(orbitData.period) : 'N/A'}</div>
+                            </div>
+                            {orbitData.isBound && (
+                                <>
+                                    <div className="bg-slate-800/50 p-1.5 rounded group relative">
+                                        <div className="text-[9px] text-slate-500 uppercase flex justify-between">
+                                            Apoapsis
+                                            <button 
+                                                onClick={() => onAddModule('rendezvous_tracker', {
+                                                    primary: { type: 'body', value: bodies.find(b => b.isRocket)?.id || '' },
+                                                    target: { type: 'module_output', value: `${module.id}:pa_point`, label: `${module.name || 'Orbit'} Pa` }
+                                                })}
+                                                className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 transition-opacity"
+                                                title="Track Rendezvous to Apoapsis"
+                                            >
+                                                <Navigation size={10} />
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-orange-300 font-mono">{orbitData.apoapsis.toFixed(1)} u</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-1.5 rounded group relative">
+                                        <div className="text-[9px] text-slate-500 uppercase flex justify-between">
+                                            Periapsis
+                                            <button 
+                                                onClick={() => onAddModule('rendezvous_tracker', {
+                                                    primary: { type: 'body', value: bodies.find(b => b.isRocket)?.id || '' },
+                                                    target: { type: 'module_output', value: `${module.id}:pe_point`, label: `${module.name || 'Orbit'} Pe` }
+                                                })}
+                                                className="opacity-0 group-hover:opacity-100 text-purple-400 hover:text-purple-300 transition-opacity"
+                                                title="Track Rendezvous to Periapsis"
+                                            >
+                                                <Navigation size={10} />
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-blue-300 font-mono">{orbitData.periapsis.toFixed(1)} u</div>
+                                    </div>
+                                </>
+                            )}
+                            {!orbitData.isBound && (
+                                 <div className="col-span-2 text-[10px] text-slate-400 italic text-center">Unbound Trajectory</div>
+                            )}
                         </div>
-                        <div className="bg-slate-800/50 p-1.5 rounded">
-                            <div className="text-[9px] text-slate-500 uppercase">Period</div>
-                            <div className="text-xs text-white font-mono">{orbitData.isBound ? formatTime(orbitData.period) : 'N/A'}</div>
-                        </div>
-                        {orbitData.isBound && (
-                            <>
-                                <div className="bg-slate-800/50 p-1.5 rounded">
-                                    <div className="text-[9px] text-slate-500 uppercase">Apoapsis</div>
-                                    <div className="text-xs text-orange-300 font-mono">{orbitData.apoapsis.toFixed(1)} u</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-1.5 rounded">
-                                    <div className="text-[9px] text-slate-500 uppercase">Periapsis</div>
-                                    <div className="text-xs text-blue-300 font-mono">{orbitData.periapsis.toFixed(1)} u</div>
-                                </div>
-                            </>
-                        )}
-                        {!orbitData.isBound && (
-                             <div className="col-span-2 text-[10px] text-slate-400 italic text-center">Unbound Trajectory</div>
-                        )}
                     </div>
                 );
             
             case 'transfer_window':
-                const transferData = calculateTransferInfo(module.primaryBodyId, module.referenceBodyId, module.targetBodyId);
-                if (!transferData) return <div className="text-xs text-slate-500 italic">Select Target Body</div>;
+                const tPrimaryInput = getInput(module, 'primary');
+                const tReferenceInput = getInput(module, 'reference');
+                const tTargetInput = getInput(module, 'target');
+
+                const tPrimary = resolveInput(tPrimaryInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const tReference = resolveInput(tReferenceInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const tTarget = resolveInput(tTargetInput, bodies, modules, physicsConfig.gravitationalConstant);
+
+                if (!tPrimary || !tReference || !tTarget || !('mass' in tPrimary) || !('mass' in tReference) || !('mass' in tTarget)) {
+                     return <div className="text-xs text-slate-500 italic">Select Bodies for Transfer</div>;
+                }
+
+                const transferData = calculateTransferInfo(tPrimary as Body, tReference as Body, tTarget as Body, physicsConfig.gravitationalConstant);
 
                 return (
                     <div className="mt-2">
@@ -200,12 +288,11 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                  );
 
             case 'rendezvous_tracker':
-                // Find rendezvous data for this module
-                const rocketBody = bodies.find(b => b.id === module.primaryBodyId);
-                const targetBody = bodies.find(b => b.id === module.targetBodyId);
+                const rocketInput = getInput(module, 'primary');
+                const targetInput = getInput(module, 'target');
                 const rendezvousData = rendezvousPoints?.find(rdv => rdv.moduleId === module.id);
                 
-                if (!rocketBody || !targetBody) {
+                if (!rocketInput || !targetInput) {
                     return <div className="text-xs text-slate-500 italic">Select Rocket & Target</div>;
                 }
                 
@@ -312,8 +399,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             <div className="bg-slate-800/30 border border-slate-700/30 rounded p-2">
                                 <div className="text-[9px] text-slate-400 uppercase font-bold mb-1">Tracking...</div>
                                 <div className="text-[10px] text-slate-400">
-                                    <div>Rocket: <span className="text-white font-mono">{rocketBody.name}</span></div>
-                                    <div>Target: <span className="text-white font-mono">{targetBody.name}</span></div>
+                                    <div>Rocket: <span className="text-white font-mono">{rocketInput.label || 'Unknown'}</span></div>
+                                    <div>Target: <span className="text-white font-mono">{targetInput.label || 'Unknown'}</span></div>
                                     <div className="text-[9px] text-orange-400 italic mt-1">No rendezvous within prediction window</div>
                                 </div>
                             </div>
@@ -419,42 +506,35 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 {/* Body Selectors */}
                                 <div className="grid grid-cols-2 gap-2 mb-2">
                                     <div className="space-y-1">
-                                        <label className="text-[9px] text-slate-500 uppercase block">Subject</label>
-                                        <select 
-                                            value={module.primaryBodyId}
-                                            onChange={(e) => onUpdateModule(module.id, { primaryBodyId: e.target.value })}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
-                                        >
-                                            {bodies.map(b => (
-                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                        </select>
+                                        <InputSelector 
+                                            label="Subject"
+                                            value={getInput(module, 'primary')}
+                                            onChange={(input) => updateInput(module.id, 'primary', input)}
+                                            bodies={bodies}
+                                            modules={modules}
+                                            currentModuleId={module.id}
+                                        />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-[9px] text-slate-500 uppercase block">Reference</label>
-                                        <select 
-                                            value={module.referenceBodyId}
-                                            onChange={(e) => onUpdateModule(module.id, { referenceBodyId: e.target.value })}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
-                                        >
-                                            {bodies.map(b => (
-                                                <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                        </select>
+                                        <InputSelector 
+                                            label="Reference"
+                                            value={getInput(module, 'reference')}
+                                            onChange={(input) => updateInput(module.id, 'reference', input)}
+                                            bodies={bodies}
+                                            modules={modules}
+                                            currentModuleId={module.id}
+                                        />
                                     </div>
                                     {(module.type === 'transfer_window' || module.type === 'rendezvous_tracker') && (
                                         <div className="col-span-2 space-y-1">
-                                            <label className="text-[9px] text-slate-500 uppercase block">Target</label>
-                                            <select 
-                                                value={module.targetBodyId || ''}
-                                                onChange={(e) => onUpdateModule(module.id, { targetBodyId: e.target.value })}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
-                                            >
-                                                <option value="">Select Target...</option>
-                                                {bodies.map(b => (
-                                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                                ))}
-                                            </select>
+                                            <InputSelector 
+                                                label="Target"
+                                                value={getInput(module, 'target')}
+                                                onChange={(input) => updateInput(module.id, 'target', input)}
+                                                bodies={bodies}
+                                                modules={modules}
+                                                currentModuleId={module.id}
+                                            />
                                         </div>
                                     )}
                                 </div>

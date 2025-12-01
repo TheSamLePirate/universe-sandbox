@@ -198,14 +198,28 @@ export interface RocketSpawnConfig {
 
 export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker';
 
+export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
+
+export interface FlightComputerInput {
+    type: FlightComputerInputType;
+    value: string; // ID for body, "moduleId:outputKey" for module output, or JSON string for vector
+    label?: string; // Display name
+}
+
 export interface FlightComputerModule {
     id: string;
     type: FlightComputerModuleType;
     isEnabled: boolean;
-    primaryBodyId: string; // The subject (e.g., Rocket)
-    referenceBodyId: string; // The parent/center (e.g., Earth)
-    targetBodyId?: string; // The target (e.g., Moon) - Optional depending on type
-    color: string; // For visualization lines
-    name?: string; // Custom name for the module (e.g., "Apollo 11 Rendezvous")
-    maxDistance?: number; // For rendezvous tracker - max distance threshold
+    
+    // New Generic Input System
+    inputs?: Record<string, FlightComputerInput>;
+    
+    // Legacy fields (kept for backward compatibility during migration)
+    primaryBodyId?: string; 
+    referenceBodyId?: string; 
+    targetBodyId?: string; 
+    
+    color: string; 
+    name?: string; 
+    maxDistance?: number; 
 }

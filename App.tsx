@@ -15,7 +15,8 @@ import Assistant from './components/Assistant';
 import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
-import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType } from './types';
+import { resolveInput } from './services/orbitalMath';
+import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -157,7 +158,8 @@ const App: React.FC = () => {
           isEnabled: true,
           primaryBodyId: selectedBodyId || bodies[0]?.id || '',
           referenceBodyId: bodies.find(b => b.mass > (bodies.find(s => s.id === (selectedBodyId || bodies[0]?.id))?.mass || 0))?.id || bodies[0]?.id || '',
-          color: '#a855f7' // Default purple
+          color: '#a855f7', // Default purple
+          inputs: {} // Initialize empty inputs
       };
       setFlightComputerModules(prev => [...prev, newModule]);
   };
@@ -211,8 +213,9 @@ const App: React.FC = () => {
 
   // Calculate rendezvous points from Flight Computer modules
   useEffect(() => {
+    // Filter for active rendezvous modules (checking both new inputs and legacy targetBodyId)
     const activeRendezvousModules = flightComputerModules.filter(
-      m => m.type === 'rendezvous_tracker' && m.isEnabled && m.targetBodyId
+      m => m.type === 'rendezvous_tracker' && m.isEnabled && (m.inputs?.target || m.targetBodyId)
     );
     
     if (activeRendezvousModules.length === 0 || !predictionPaths || predictionPaths.length === 0) {
@@ -233,14 +236,40 @@ const App: React.FC = () => {
     }> = [];
     
     for (const module of activeRendezvousModules) {
-      const rocketPath = predictionPaths.find(p => p.id === module.primaryBodyId);
-      const targetPath = isPredictionEnabled 
-        ? predictionPaths.find(p => p.id === module.targetBodyId) 
-        : null;
-      const rocketBody = bodies.find(b => b.id === module.primaryBodyId);
-      const targetBody = bodies.find(b => b.id === module.targetBodyId);
+      // Resolve Inputs
+      const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+      const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
       
-      if (!rocketPath || rocketPath.points.length === 0 || !rocketBody || !targetBody) continue;
+      const rocketEntity = resolveInput(rocketInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
+      const targetEntity = resolveInput(targetInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
+      
+      if (!rocketEntity || !targetEntity) continue;
+
+      // Determine Rocket Path
+      let rocketPath = null;
+      let rocketBody = null;
+      
+      if ('mass' in rocketEntity) { // It's a Body
+          rocketBody = rocketEntity;
+          rocketPath = predictionPaths.find(p => p.id === rocketEntity.id);
+      } else {
+          // Rocket must be a body for now to have a path (unless we support point-to-point which is trivial)
+          continue; 
+      }
+
+      if (!rocketPath || rocketPath.points.length === 0) continue;
+
+      // Determine Target Path or Point
+      let targetPath = null;
+      let targetStaticPoint: Vector2D | null = null;
+      let targetBody: Body | null = null;
+
+      if ('mass' in targetEntity) { // Target is a Body
+          targetBody = targetEntity;
+          targetPath = isPredictionEnabled ? predictionPaths.find(p => p.id === targetEntity.id) : null;
+      } else { // Target is a Point (Vector2D)
+          targetStaticPoint = targetEntity;
+      }
       
       const maxDist = module.maxDistance || 10;
       const totalDuration = predictionSteps * physicsConfig.timeStep;
@@ -249,9 +278,22 @@ const App: React.FC = () => {
       // Find first rendezvous point
       for (let i = 0; i < rocketPath.points.length; i++) {
         const rocketPos = rocketPath.points[i];
-        const targetPos = targetPath && targetPath.points[i] 
-          ? targetPath.points[i] 
-          : (targetBody?.position || {x:0, y:0});
+        
+        let targetPos = { x: 0, y: 0 };
+        let targetVel = { x: 0, y: 0 };
+
+        if (targetStaticPoint) {
+            targetPos = targetStaticPoint;
+            targetVel = { x: 0, y: 0 }; // Static point has 0 velocity
+        } else if (targetPath && targetPath.points[i]) {
+            targetPos = targetPath.points[i];
+            // Velocity will be calculated later
+        } else if (targetBody) {
+            // Fallback to current position if no path (or path shorter)
+            // Ideally we should project it, but for now use current
+            targetPos = targetBody.position; 
+            targetVel = targetBody.velocity;
+        }
         
         const dx = rocketPos.x - targetPos.x;
         const dy = rocketPos.y - targetPos.y;
@@ -260,7 +302,6 @@ const App: React.FC = () => {
         if (distance <= maxDist) {
           // Calculate velocities at rendezvous point (numerical derivative)
           let rocketVel = { x: 0, y: 0 };
-          let targetVel = { x: 0, y: 0 };
           
           if (i > 0 && i < rocketPath.points.length - 1) {
             // Central difference for velocity
@@ -272,21 +313,22 @@ const App: React.FC = () => {
               y: (nextRocket.y - prevRocket.y) / (2 * dt)
             };
             
-            if (targetPath && targetPath.points[i - 1] && targetPath.points[i + 1]) {
-              const prevTarget = targetPath.points[i - 1];
-              const nextTarget = targetPath.points[i + 1];
-              targetVel = {
-                x: (nextTarget.x - prevTarget.x) / (2 * dt),
-                y: (nextTarget.y - prevTarget.y) / (2 * dt)
-              };
-            } else {
-              // Use current body velocity if no prediction path
-              targetVel = targetBody.velocity;
+            if (!targetStaticPoint) {
+                if (targetPath && targetPath.points[i - 1] && targetPath.points[i + 1]) {
+                    const prevTarget = targetPath.points[i - 1];
+                    const nextTarget = targetPath.points[i + 1];
+                    targetVel = {
+                        x: (nextTarget.x - prevTarget.x) / (2 * dt),
+                        y: (nextTarget.y - prevTarget.y) / (2 * dt)
+                    };
+                } else if (targetBody) {
+                    targetVel = targetBody.velocity;
+                }
             }
-          } else {
+          } else if (rocketBody) {
             // Use current velocities for edge cases
             rocketVel = rocketBody.velocity;
-            targetVel = targetBody.velocity;
+            if (targetBody) targetVel = targetBody.velocity;
           }
           
           // Relative velocity (ship to target)
@@ -294,26 +336,20 @@ const App: React.FC = () => {
           const dvy = targetVel.y - rocketVel.y;
           
           // Calculate prograde and radial components from rocket's perspective
-          // Prograde is along velocity direction, radial is perpendicular
           const rocketSpeed = Math.sqrt(rocketVel.x * rocketVel.x + rocketVel.y * rocketVel.y);
           
           let deltaVPrograde = 0;
           let deltaVRadial = 0;
           
           if (rocketSpeed > 0.001) {
-            // Rocket velocity unit vector (prograde direction)
             const progX = rocketVel.x / rocketSpeed;
             const progY = rocketVel.y / rocketSpeed;
-            
-            // Radial unit vector (perpendicular to prograde, 90° counterclockwise)
             const radX = -progY;
             const radY = progX;
             
-            // Project relative velocity onto prograde and radial
             deltaVPrograde = dvx * progX + dvy * progY;
             deltaVRadial = dvx * radX + dvy * radY;
           } else {
-            // If rocket is nearly stationary, just use relative velocity magnitude
             deltaVPrograde = Math.sqrt(dvx * dvx + dvy * dvy);
             deltaVRadial = 0;
           }
@@ -336,7 +372,7 @@ const App: React.FC = () => {
       }
     }
     
-    setRendezvousPoints(newRendezvousPoints);
+    setRendezvousPoints(newRendezvousPoints); 
   }, [flightComputerModules, predictionPaths, predictionSteps, physicsConfig.timeStep, isPredictionEnabled, bodies]);
 
   useEffect(() => {
