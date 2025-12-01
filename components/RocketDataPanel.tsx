@@ -178,6 +178,40 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
 
     }, [rocket, targetBodyId, predictionPaths, predictionSteps, physicsConfig.timeStep, bodies, predictSystem]);
 
+    // Orbital Prediction Analysis (for parent body orbit)
+    const orbitalPredictionAnalysis = useMemo(() => {
+        if (!parentBodyId || !predictionPaths) return null;
+        
+        const rocketPath = predictionPaths.find(p => p.id === rocket.id);
+        const parentBody = bodies.find(b => b.id === parentBodyId);
+        
+        if (!rocketPath || !rocketPath.points.length || !parentBody) return null;
+
+        const totalDuration = predictionSteps * physicsConfig.timeStep;
+        const dtPerPoint = totalDuration / rocketPath.points.length;
+
+        let minDist = Infinity;
+        let timeToPe = -1;
+        let timeToAp = -1;
+        let maxDist = 0;
+
+        rocketPath.points.forEach((p, idx) => {
+            const d = Math.sqrt(Math.pow(p.x - parentBody.position.x, 2) + Math.pow(p.y - parentBody.position.y, 2));
+            
+            if (d < minDist) {
+                minDist = d;
+                timeToPe = idx * dtPerPoint;
+            }
+            if (d > maxDist) {
+                maxDist = d;
+                timeToAp = idx * dtPerPoint;
+            }
+        });
+
+        return { timeToPe, timeToAp };
+
+    }, [rocket, parentBodyId, predictionPaths, predictionSteps, physicsConfig.timeStep, bodies]);
+
     // Mission control handlers
     const handleStopMission = () => {
         if (!onUpdateRocket || !rocket.maneuvers) return;
@@ -371,18 +405,18 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
                             <>
                                 <div className="relative">
                                      <div className="text-[9px] text-slate-500 uppercase flex items-center gap-1">
-                                        Ap Apoapsis
-                                        {predictionAnalysis && predictionAnalysis.timeToAp >= 0 && (
-                                            <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{predictionAnalysis.timeToAp.toFixed(0)}s</span>
+                                         Ap Apoapsis
+                                         {orbitalPredictionAnalysis && orbitalPredictionAnalysis.timeToAp >= 0 && (
+                                             <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{orbitalPredictionAnalysis.timeToAp.toFixed(0)}s</span>
                                         )}
                                      </div>
                                      <div className="text-sm text-orange-300">{orbitalParams.apoapsis.toFixed(1)} u</div>
                                 </div>
                                 <div className="relative">
                                      <div className="text-[9px] text-slate-500 uppercase flex items-center gap-1">
-                                        Pe Periapsis
-                                        {predictionAnalysis && predictionAnalysis.timeToPe >= 0 && (
-                                            <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{predictionAnalysis.timeToPe.toFixed(0)}s</span>
+                                         Pe Periapsis
+                                         {orbitalPredictionAnalysis && orbitalPredictionAnalysis.timeToPe >= 0 && (
+                                             <span className="text-[8px] bg-slate-800 text-slate-300 px-1 rounded ml-auto">T-{orbitalPredictionAnalysis.timeToPe.toFixed(0)}s</span>
                                         )}
                                      </div>
                                      <div className="text-sm text-blue-300">{orbitalParams.periapsis.toFixed(1)} u</div>
