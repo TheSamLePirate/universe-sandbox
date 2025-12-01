@@ -478,10 +478,26 @@ export const updatePhysics = (
                                   (m as any).previousAltitude = altitude;
                               }
                               
+                              // Capture initial altitude for progress bar (idempotent)
+                              if (m.initialAltitude === undefined) {
+                                  m.initialAltitude = altitude;
+                              }
+                              
                               const previousAltitude = (m as any).previousAltitude || altitude;
                               const isAscending = altitude > previousAltitude;
                               const isDescending = altitude < previousAltitude;
                               
+                              // Calculate Progress
+                              if (m.initialAltitude !== undefined) {
+                                  const totalChange = Math.abs(targetAltitude - m.initialAltitude);
+                                  const currentChange = Math.abs(altitude - m.initialAltitude);
+
+                                  const percentageOfTravel = 1-Math.abs((targetAltitude-altitude)/m.initialAltitude);
+                                  if (totalChange > 0.001) {
+                                      m.progress = Math.min(1, Math.max(0, percentageOfTravel));
+                                  }
+                              }
+
                               // Check if we've reached the target altitude in the correct direction
                               if (direction === 'ascending') {
                                   // Wait for altitude to be rising and reach target
@@ -566,7 +582,24 @@ export const updatePhysics = (
                                       x: Math.cos(thrustAngle) * thrust,
                                       y: Math.sin(thrustAngle) * thrust
                                   };
-                                  m.progress = altitude / targetAltitude; // Progress based on altitude
+                                  
+                                  // Capture initial altitude if not set
+                                  if (m.initialAltitude === undefined) {
+                                      m.initialAltitude = altitude;
+                                  }
+                                  
+                                  // Calculate progress based on distance covered towards target
+                                  if (m.initialAltitude !== undefined) {
+                                      const totalDist = Math.abs(targetAltitude - m.initialAltitude);
+                                      const currentDist = Math.abs(altitude - m.initialAltitude);
+                                      if (totalDist > 0.001) {
+                                          m.progress = Math.min(1, Math.max(0, currentDist / totalDist));
+                                      } else {
+                                          m.progress = 0;
+                                      }
+                                  } else {
+                                      m.progress = 0;
+                                  }
                               }
                           } else {
                               m.status = 'completed';

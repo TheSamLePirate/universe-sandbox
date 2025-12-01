@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useMemo ,useEffect} from 'react';
 import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio, ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
@@ -1585,7 +1583,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
                                                                     className="h-full bg-green-500 transition-all duration-100"
-                                                                    style={{ width: `${progressPercent}%` }}
+                                                                    style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                 />
                                                             </div>
                                                         );
@@ -1597,7 +1595,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
                                                                     className="h-full bg-cyan-500 transition-all duration-100"
-                                                                    style={{ width: `${progressPercent}%` }}
+                                                                    style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                 />
                                                             </div>
                                                         );
@@ -1611,13 +1609,15 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             const dist = Math.sqrt(dx * dx + dy * dy);
                                                             const currentAlt = dist - parentBody.radius;
                                                             const targetAlt = parseFloat(String(m.param).split(':')[0]) || 100;
-                                                            progressPercent = Math.min(100, (currentAlt / targetAlt) * 100);
+                                                            
+                                                            // Use progress calculated by physics engine
+                                                            progressPercent = m.progress * 100;
                                                             progressInfo = `${currentAlt.toFixed(1)}/${targetAlt.toFixed(1)}km`;
                                                             progressBar = (
                                                                 <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                     <div 
                                                                         className="h-full bg-yellow-500 transition-all duration-100"
-                                                                        style={{ width: `${progressPercent}%` }}
+                                                                        style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                     />
                                                                 </div>
                                                             );
@@ -1657,14 +1657,14 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             const targetError = parseFloat(String(m.param)) || 0.5;
                                                             
                                                             // Progress bar: inverse of error (closer to 0 error = more progress)
-                                                            // Cap at 10 degrees for visual purposes
-                                                            progressPercent = Math.max(0, 100 - (diffDeg / 10) * 100);
-                                                            progressInfo = `${diffDeg.toFixed(2)}° error`;
+                                                            // From 100deg to 0deg
+                                                            progressPercent =100 - Math.min(100,diffDeg);
+                                                            progressInfo = `${diffDeg.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
                                                             progressBar = (
                                                                 <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                     <div 
                                                                         className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
-                                                                        style={{ width: `${progressPercent}%` }}
+                                                                        style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                     />
                                                                 </div>
                                                             );
@@ -1677,7 +1677,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
                                                                     className="h-full bg-purple-500 transition-all duration-100"
-                                                                    style={{ width: `${progressPercent}%` }}
+                                                                    style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                 />
                                                             </div>
                                                         );
@@ -2601,7 +2601,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                             <div 
                                                                 className="h-full bg-green-500 transition-all duration-100"
-                                                                style={{ width: `${progressPercent}%` }}
+                                                                style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                             />
                                                         </div>
                                                     );
@@ -2613,7 +2613,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                             <div 
                                                                 className="h-full bg-cyan-500 transition-all duration-100"
-                                                                style={{ width: `${progressPercent}%` }}
+                                                                style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                             />
                                                         </div>
                                                     );
@@ -2633,7 +2633,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
                                                                     className="h-full bg-yellow-500 transition-all duration-100"
-                                                                    style={{ width: `${progressPercent}%` }}
+                                                                    style={{ width: `${(m.progress * 100).toFixed(0)}%` }}
                                                                 />
                                                             </div>
                                                         );
@@ -2680,7 +2680,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
                                                                     className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
-                                                                    style={{ width: `${progressPercent}%` }}
+                                                                    style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                 />
                                                             </div>
                                                         );
@@ -2693,7 +2693,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                             <div 
                                                                 className="h-full bg-purple-500 transition-all duration-100"
-                                                                style={{ width: `${progressPercent}%` }}
+                                                                style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                             />
                                                         </div>
                                                     );

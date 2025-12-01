@@ -407,13 +407,98 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
                 </div>
             )}
 
-            {/* FLIGHT COMPUTER STATUS */}
+            {/* FLIGHT COMPUTER STATUS Details on maneuver*/}
             {rocket.maneuvers && rocket.maneuvers.some(m => m.status === 'active') && (
-                <div className="mt-2 bg-slate-900/90 border border-green-500/50 p-2 rounded-r-xl shadow-lg flex items-center gap-2 text-green-400 animate-pulse">
+                <div className="mt-2 bg-slate-900/90 border border-green-500/50 p-3 rounded-r-xl shadow-lg animate-pulse-slow">
+                     <div className="flex items-center gap-2 text-green-400 mb-2">
                      <Activity size={14} />
-                     <span className="text-xs font-bold uppercase">Maneuver Executing...</span>
+                     <span className="text-xs font-bold uppercase">Maneuver Executing</span>
+                </div>
+                     
+                     {/* Takes only the first active maneuver */}
+                     {rocket.maneuvers.filter(m => m.status === 'active').slice(0, 1).map(m => {
+                        let progressInfo = '';
+                        let progressBar = null;
+                        let progressPercent = m.progress * 100;
+
+                        // TIME-BASED: wait, burn
+                        if (m.type === 'wait' || m.type === 'burn') {
+                            const remainingTime = m.duration * (1 - m.progress);
+                            const elapsed = m.duration * m.progress;
+                            const progressPct = 100 * (m.duration - elapsed) / m.duration; // Logic from RocketPanel
+                            progressInfo = `${(m.progress * 100).toFixed(0)}% (${elapsed.toFixed(1)}/${m.duration.toFixed(1)}s)`;
+                            progressBar = (
+                                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-green-500 transition-all duration-100"
+                                        style={{ width: `${(m.progress * 100).toFixed(0)}%` }}
+                                    />
+                                </div>
+                            );
+                        } 
+                        // DELTA-V BASED: transfers, intercepts
+                        else if (m.targetDeltaV && m.appliedDeltaV !== undefined) {
+                            progressInfo = `${(m.progress * 100).toFixed(0)}% (${m.appliedDeltaV.toFixed(1)}/${m.targetDeltaV.toFixed(1)} m/s)`;
+                            progressBar = (
+                                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-cyan-500 transition-all duration-100"
+                                        style={{ width: `${(m.progress * 100).toFixed(0)}%` }}
+                                    />
+                                </div>
+                            );
+                        } 
+                        // ALTITUDE-BASED: wait_for_altitude, burn_until_altitude
+                        else if (m.type === 'wait_for_altitude' || m.type === 'burn_until_altitude') {
+                            const parentBody = bodies.find(b => b.id === m.parentBodyId);
+                            if (parentBody) {
+                                const dx = rocket.position.x - parentBody.position.x;
+                                const dy = rocket.position.y - parentBody.position.y;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                const currentAlt = dist - parentBody.radius;
+                                const targetAlt = parseFloat(String(m.param).split(':')[0]) || 100;
+                                
+                                progressInfo = `${currentAlt.toFixed(1)}/${targetAlt.toFixed(1)}km (${(m.progress * 100).toFixed(1)}%)`;
+                                progressBar = (
+                                    <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                        <div 
+                                            className="h-full bg-yellow-500 transition-all duration-100"
+                                            style={{ width: `${(m.progress * 100).toFixed(0)}%` }}
+                                        />
+                                    </div>
+                                );
+                            }
+                        }
+                        // GENERIC
+                        else {
+                            progressInfo = `${(m.progress * 100).toFixed(0)}%`;
+                            progressBar = (
+                                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-purple-500 transition-all duration-100"
+                                        style={{ width: `${(m.progress * 100).toFixed(0)}%` }}
+                                    />
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={m.id} className="text-xs">
+                                <div className="flex justify-between text-slate-300 mb-1">
+                                    <span className="uppercase font-bold text-[10px]">{m.type.replace(/_/g, ' ')}</span>
+                                    <span className="font-mono">{progressInfo}</span>
+                                </div>
+                                {progressBar}
+                            </div>
+                        );
+                     })}
                 </div>
             )}
+        
+
+            
+
+
         </div>
     );
 };

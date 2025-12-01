@@ -21,6 +21,7 @@ export interface Maneuver {
     targetDeltaV?: number; // Target deltaV to achieve (for auto maneuvers)
     appliedDeltaV?: number; // Actual deltaV applied so far
     initialDeltaV?: number; // Initial deltaV required (for progress bars in closed-loop maneuvers)
+    initialAltitude?: number; // Initial altitude when maneuver started (for progress bars)
     
     // Manual Maneuver Node Data
     deltaVPrograde?: number;
