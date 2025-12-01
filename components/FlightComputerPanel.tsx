@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2 } from 'lucide-react';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
+import EasySpeech from 'easy-speech';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
@@ -180,6 +181,10 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         };
         
         window.addEventListener('click', initAudio);
+        
+        // Init EasySpeech
+        EasySpeech.init({ maxTimeout: 5000, interval: 250 }).catch(e => console.error('EasySpeech init failed', e));
+
         return () => window.removeEventListener('click', initAudio);
     }, []);
 
@@ -232,7 +237,17 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     }
                     
                     if (shouldBeep) {
-                        playBeep(pitch);
+                        if (module.beepSoundType === 'speak' && module.beepSpeakText && mode !== 'continuous') {
+                            EasySpeech.speak({
+                                text: module.beepSpeakText,
+                                pitch: 1,
+                                rate: 1,
+                                volume: 1,
+                                boundary: e => console.debug('boundary reached')
+                            }).catch(e => console.error(e));
+                        } else {
+                            playBeep(pitch);
+                        }
                     }
                 }
                 
@@ -699,39 +714,78 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             </select>
                         </div>
 
-                        {/* Config: Pitch & Rate */}
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
-                                <div className="text-[9px] text-slate-500 uppercase mb-1">Pitch (Hz)</div>
-                                <div className="flex items-center gap-1">
-                                    <input 
-                                        type="range" 
-                                        min="200" 
-                                        max="2000" 
-                                        step="50"
-                                        value={beepPitch}
-                                        onChange={(e) => onUpdateModule(module.id, { beepPitch: parseInt(e.target.value) })}
-                                        className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                    <span className="text-[10px] font-mono text-slate-300 w-8 text-right">{beepPitch}</span>
-                                </div>
-                            </div>
-                            
-                            {beepMode === 'continuous' && (
-                                <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
-                                    <div className="text-[9px] text-slate-500 uppercase mb-1">Rate (/s)</div>
-                                    <div className="flex items-center gap-1">
-                                        <input 
-                                            type="range" 
-                                            min="0.5" 
-                                            max="10" 
-                                            step="0.5"
-                                            value={beepRate}
-                                            onChange={(e) => onUpdateModule(module.id, { beepRate: parseFloat(e.target.value) })}
-                                            className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                                        />
-                                        <span className="text-[10px] font-mono text-slate-300 w-6 text-right">{beepRate}</span>
+                        {/* Config: Pitch & Rate OR Speak */}
+                        <div className="grid grid-cols-1 gap-2">
+                            {/* Sound Type Selection (Only for Rising/Falling) */}
+                            {beepMode !== 'continuous' && (
+                                <div className="flex justify-center mb-1">
+                                    <div className="flex bg-slate-900/50 rounded p-0.5 border border-slate-700/50">
+                                        <button
+                                            onClick={() => onUpdateModule(module.id, { beepSoundType: 'beep' })}
+                                            className={`px-3 py-1 text-[10px] font-bold uppercase rounded transition-colors ${(!module.beepSoundType || module.beepSoundType === 'beep') ? 'bg-yellow-500/20 text-yellow-300' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Beep
+                                        </button>
+                                        <button
+                                            onClick={() => onUpdateModule(module.id, { beepSoundType: 'speak' })}
+                                            className={`px-3 py-1 text-[10px] font-bold uppercase rounded transition-colors ${module.beepSoundType === 'speak' ? 'bg-blue-500/20 text-blue-300' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Speak
+                                        </button>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Beep Config */}
+                            {(!module.beepSoundType || module.beepSoundType === 'beep' || beepMode === 'continuous') && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
+                                        <div className="text-[9px] text-slate-500 uppercase mb-1">Pitch (Hz)</div>
+                                        <div className="flex items-center gap-1">
+                                            <input 
+                                                type="range" 
+                                                min="200" 
+                                                max="2000" 
+                                                step="50"
+                                                value={beepPitch}
+                                                onChange={(e) => onUpdateModule(module.id, { beepPitch: parseInt(e.target.value) })}
+                                                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <span className="text-[10px] font-mono text-slate-300 w-8 text-right">{beepPitch}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {beepMode === 'continuous' && (
+                                        <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
+                                            <div className="text-[9px] text-slate-500 uppercase mb-1">Rate (/s)</div>
+                                            <div className="flex items-center gap-1">
+                                                <input 
+                                                    type="range" 
+                                                    min="0.5" 
+                                                    max="10" 
+                                                    step="0.5"
+                                                    value={beepRate}
+                                                    onChange={(e) => onUpdateModule(module.id, { beepRate: parseFloat(e.target.value) })}
+                                                    className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                                                />
+                                                <span className="text-[10px] font-mono text-slate-300 w-6 text-right">{beepRate}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Speak Config */}
+                            {module.beepSoundType === 'speak' && beepMode !== 'continuous' && (
+                                <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
+                                    <div className="text-[9px] text-slate-500 uppercase mb-1">Text to Speak</div>
+                                    <input 
+                                        type="text"
+                                        value={module.beepSpeakText || ''}
+                                        onChange={(e) => onUpdateModule(module.id, { beepSpeakText: e.target.value })}
+                                        placeholder="Alert Message"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none focus:border-blue-500"
+                                    />
                                 </div>
                             )}
                         </div>

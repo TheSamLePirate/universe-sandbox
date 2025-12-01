@@ -239,4 +239,6 @@ export interface FlightComputerModule {
     beepTriggerMode?: BeepTriggerMode;
     beepPitch?: number; // Hz (default 800)
     beepRate?: number; // Beeps per second (default 2)
+    beepSoundType?: 'beep' | 'speak'; // Default 'beep'
+    beepSpeakText?: string; // Text to speak
 }
