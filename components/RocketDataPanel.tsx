@@ -469,6 +469,52 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
                                 );
                             }
                         }
+                        else if (m.type === 'wait_for_transfer') {
+                                                    const target = bodies.find(b => b.id === m.targetBodyId);
+                                                    let refParent = bodies.find(b => b.id === m.parentBodyId);
+                                                    if (!refParent && target) {
+                                                        refParent = bodies.filter(b => !b.isRocket && b.id !== target.id).sort((a,b) => b.mass - a.mass)[0];
+                                                    }
+                                                    
+                                                    if (target && refParent) {
+                                                        const rPos = { x: rocket.position.x - refParent.position.x, y: rocket.position.y - refParent.position.y };
+                                                        const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
+                                                        const angle1 = Math.atan2(rPos.y, rPos.x);
+                                                        const angle2 = Math.atan2(tPos.y, tPos.x);
+                                                        let currentPhase = angle2 - angle1;
+                                                        while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
+                                                        while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
+                                                        
+                                                        const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
+                                                        const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
+                                                        const mu = physicsConfig.gravitationalConstant * refParent.mass;
+                                                        const a_transfer = (r1 + r2) / 2;
+                                                        const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+                                                        const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
+                                                        const angle_change = omega_target * t_transfer;
+                                                        let requiredPhase = Math.PI - angle_change;
+                                                        while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
+                                                        while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+                                                        
+                                                        let diff = Math.abs(currentPhase - requiredPhase);
+                                                        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                                                        const diffDeg = diff * 180 / Math.PI;
+                                                        const targetError = parseFloat(String(m.param)) || 5;
+                                                        
+                                                        // Progress bar: inverse of error (closer to 0 error = more progress)
+                                                        // Cap at 10 degrees for visual purposes
+                                                        progressPercent = 100-Math.min(100, diffDeg);
+                                                        progressInfo = `${diffDeg.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
+                                                                    style={{ width: `${progressPercent.toFixed(0)}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                }
                         // GENERIC
                         else {
                             progressInfo = `${(m.progress * 100).toFixed(0)}%`;

@@ -2674,8 +2674,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         
                                                         // Progress bar: inverse of error (closer to 0 error = more progress)
                                                         // Cap at 10 degrees for visual purposes
-                                                        progressPercent = Math.max(0, 100 - (diffDeg / 10) * 100);
-                                                        progressInfo = `${diffDeg.toFixed(2)}° error`;
+                                                        progressPercent = 100-Math.min(100, diffDeg);
+                                                        progressInfo = `${diffDeg.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
                                                         progressBar = (
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
