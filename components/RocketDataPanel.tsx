@@ -14,6 +14,8 @@ interface RocketDataPanelProps {
     predictionSteps: number;
     predictSystem: boolean;
     onUpdateRocket?: (id: string, updates: Partial<Body>) => void;
+    onSelectRocket?: (rocketId: string) => void; // Callback to select this rocket
+    index?: number; // For stacking multiple panels
 }
 
 const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
@@ -25,7 +27,9 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
     predictionPaths,
     predictionSteps,
     predictSystem,
-    onUpdateRocket
+    onUpdateRocket,
+    onSelectRocket,
+    index = 0
 }) => {
     
     // Helper function to format time in human-readable format
@@ -286,17 +290,27 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
         );
     }
 
+    // Calculate vertical offset based on index (each panel is roughly 400px tall)
+    const topOffset = 20 + (index * 420);
+    
     return (
         <div 
-            className="fixed top-20 left-4 w-80 pointer-events-none z-40 font-mono"
+            className="fixed left-4 w-80 pointer-events-none z-40 font-mono"
+            style={{ top: `${topOffset}px` }}
         >
             {/* MAIN HEADER HUD */}
             <div className="bg-slate-900/80 border-l-4 border-orange-500 backdrop-blur-md p-4 rounded-r-xl shadow-2xl mb-2">
                 <div className="flex justify-between items-start mb-2">
                     <div>
-                        <div className="text-[10px] text-orange-400 font-bold tracking-widest uppercase">Telemetry Data</div>
-                        <div className="text-xl font-bold text-white leading-none">{rocket.name}</div>
+                    <div className="text-[10px] text-orange-400 font-bold tracking-widest uppercase">Telemetry Data</div>
+                    <div 
+                        className={`text-xl font-bold text-white leading-none ${onSelectRocket ? 'cursor-pointer hover:text-orange-400 transition-colors pointer-events-auto' : ''}`}
+                        onClick={() => onSelectRocket?.(rocket.id)}
+                        title={onSelectRocket ? 'Click to select this rocket' : ''}
+                    >
+                        {rocket.name}
                     </div>
+                </div>
                     {rocket.landedOnBodyId ? (
                         <div className="flex items-center gap-1 bg-green-900/50 text-green-400 px-2 py-1 rounded text-[10px] font-bold border border-green-500/30">
                             <Anchor size={12} /> LANDED

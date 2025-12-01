@@ -327,7 +327,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     };
 
     return (
-        <div className={`fixed ${isMobile ? 'top-16 right-4' : 'top-20 right-4'} z-40 flex flex-col items-end pointer-events-none`}>
+        <div className={`fixed ${isMobile ? 'top-16 right-4' : 'top-0 right-0'} z-40 flex flex-col items-end pointer-events-none`}>
             {/* Main Toggle Button */}
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}

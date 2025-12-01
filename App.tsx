@@ -1555,10 +1555,10 @@ const App: React.FC = () => {
       )}
 
       {/* DEBUG PANEL */}
-      <div className={`fixed ${isMobile ? 'top-0 right-0' : 'top-4 right-4'} z-10 pointer-events-auto font-mono text-xs`}>
+      <div className={`fixed ${isMobile ? 'top-0 right-0' : 'bottom-0 left-0'} z-[60] pointer-events-auto font-mono text-xs`}>
           <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
               {/* Time and FPS Row */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 ">
                   <Terminal size={12} />
                   <div className="font-bold">
                       {(() => {
@@ -1583,21 +1583,17 @@ const App: React.FC = () => {
                           return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
                       })()}
                   </div>
-                  <div className="w-px h-3 bg-slate-700 mx-1" />
+                  <div className="w-px h-3 bg-slate-700 mx-1 " />
                   <div className={fps < 30 ? "text-red-400" : "text-green-400"}>{fps.toFixed(0)} FPS</div>
               </div>
 
               {/* Extended Debug Info (Desktop Only) */}
-              {!isMobile && (
+              {!isMobile  && (
                   <>
-                    <div className="h-px bg-slate-700/50" />
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-400">
-                        <div>Bodies: <span className="text-slate-200">{bodies.length}</span></div>
-                        <div>Particles: <span className="text-slate-200">{particles.length}</span></div>
-                        <div>Scale: <span className="text-slate-200">{scale.toExponential(2)}</span></div>
-                        <div>Physics: <span className="text-slate-200">{physicsConfig.timeStep * 1000}ms</span></div>
+                
                         {memoryUsage && (
-                             <div className="col-span-2 flex items-center gap-1 mt-1 pt-1 border-t border-slate-700/30">
+                             <div className="col-span-2 flex items-center gap-1 mt-0 pt-0 border-t border-slate-700/30">
                                 <MemoryStick size={10} />
                                 <span>{memoryUsage.used.toFixed(0)}MB / {memoryUsage.total.toFixed(0)}MB ({memoryUsage.percent.toFixed(0)}%)</span>
                              </div>
@@ -1629,20 +1625,53 @@ const App: React.FC = () => {
           />
       )}
       
+      
       {/* NEW ROCKET HUD */}
-      {!isMobile && showRocketPanel && selectedBodyId && bodies.find(b => b.id === selectedBodyId)?.isRocket && (
-          <RocketDataPanel 
-             rocket={bodies.find(b => b.id === selectedBodyId)!}
-             bodies={bodies}
-             physicsConfig={physicsConfig}
-             parentBodyId={rocketParentBodyId}
-             targetBodyId={rocketTargetBodyId}
-             predictionPaths={predictionPaths}
-             predictionSteps={predictionSteps}
-             predictSystem={isPredictionEnabled}
-             onUpdateRocket={updateRocket}
-          />
-      )}
+      {!isMobile && showRocketPanel && (() => {
+          const allRockets = bodies.filter(b => b.isRocket);
+          const selectedRocket = selectedBodyId ? bodies.find(b => b.id === selectedBodyId && b.isRocket) : null;
+          
+          // If a rocket is selected, show only that one
+          if (selectedRocket) {
+              return (
+                  <RocketDataPanel 
+                     rocket={selectedRocket}
+                     bodies={bodies}
+                     physicsConfig={physicsConfig}
+                     parentBodyId={rocketParentBodyId}
+                     targetBodyId={rocketTargetBodyId}
+                     predictionPaths={predictionPaths}
+                     predictionSteps={predictionSteps}
+                     predictSystem={isPredictionEnabled}
+                     onUpdateRocket={updateRocket}
+                     onSelectRocket={setSelectedBodyId}
+                     index={0}
+                  />
+              );
+          }
+          
+          // Otherwise, show all rockets
+          return (
+              <>
+                  {allRockets.map((rocket, index) => (
+                      <RocketDataPanel 
+                          key={rocket.id}
+                          rocket={rocket}
+                          bodies={bodies}
+                          physicsConfig={physicsConfig}
+                          parentBodyId={rocket.orbitReferenceId}
+                          targetBodyId={rocketTargetBodyId}
+                          predictionPaths={predictionPaths}
+                          predictionSteps={predictionSteps}
+                          predictSystem={isPredictionEnabled}
+                          onUpdateRocket={updateRocket}
+                          onSelectRocket={setSelectedBodyId}
+                          index={index}
+                      />
+                  ))}
+              </>
+          );
+      })()}
 
       {/* Global Prediction Panel */}
       <PredictionPanel 

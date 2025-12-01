@@ -479,6 +479,12 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
     const [showTelemetry, setShowTelemetry] = useState(true);
 
+    useEffect(() => {
+        if (!isMobile) {
+            setIsCollapsed(true);
+        }
+    }, [isMobile]);
+
     // Helper function to format time
     const formatTime = (totalSeconds: number): string => {
         if (totalSeconds <= 0) return '---';
@@ -1790,7 +1796,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     // Desktop UI (unchanged)
     return (
         <div 
-            className={`fixed ${isMobile ? `bottom-20 left-0 right-0 ${isCollapsed ? 'h-auto' : 'h-[50vh]'}` : 'top-16 bottom-16 right-0 w-96'} bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${!isMobile && isCollapsed ? 'w-12' : ''}`}
+            className={`fixed ${isMobile ? `bottom-20 left-0 right-0 ${isCollapsed ? 'h-auto' : 'h-[50vh]'}` : 'top-0 bottom-16 right-0 w-96'} bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${!isMobile && isCollapsed ? 'w-12 h-2 top-8' : ''}`}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -1894,6 +1900,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                 ) : !selectedRocket ? (
                     <div className="text-center text-slate-500 text-sm py-10 italic">
                         Select a rocket to begin control.
+
+                        TODO Make a list of available rockets.... ;D
                     </div>
                 ) : (
                     <>
