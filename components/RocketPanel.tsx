@@ -1,6 +1,6 @@
 
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo ,useEffect} from 'react';
 import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio, ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
 import useIsMobile from '../hooks/useIsMobile';
@@ -2309,6 +2309,56 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Manual Node Editor (appears when a manual node is selected) */}
+                                {editingManeuverId && selectedRocket.maneuvers?.find(m => m.id === editingManeuverId && m.type === 'manual_node') && (
+                                    <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-lg p-3 space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-xs font-bold text-indigo-300 uppercase">Editing Manual Node</h4>
+                                            <button 
+                                                onClick={() => setEditingManeuverId(null)}
+                                                className="text-slate-400 hover:text-white"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 block mb-1">Time to Burn (s)</label>
+                                            <input 
+                                                type="number" 
+                                                value={nodeTime}
+                                                onChange={(e) => setNodeTime(parseFloat(e.target.value))}
+                                                step="0.1"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-1">Prograde (m/s)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={dvPrograde}
+                                                    onChange={(e) => setDvPrograde(parseFloat(e.target.value))}
+                                                    step="0.1"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-1">Radial Out (m/s)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={dvRadial}
+                                                    onChange={(e) => setDvRadial(parseFloat(e.target.value))}
+                                                    step="0.1"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 italic">
+                                            Total ΔV: {Math.sqrt((dvPrograde)**2+(dvRadial)**2).toFixed(2)} m/s
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

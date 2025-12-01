@@ -78,7 +78,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                         <input 
                             type="range" 
                             min="100" 
-                            max="200000" 
+                            max="400000" 
                             step="100"
                             value={predictionSteps}
                             onChange={(e) => onStepsChange(Number(e.target.value))}
