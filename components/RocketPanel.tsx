@@ -35,6 +35,9 @@ interface RocketPanelProps {
     predictionPaths?: { id: string, color: string, points: Vector2D[] }[];
     predictionSteps?: number;
     predictSystem?: boolean;
+    
+    // Rendezvous Visualization
+    onRendezvousPointChange?: (point: Vector2D | null) => void;
 }
 
 const ROCKET_COLORS = ['#f97316', '#22d3ee', '#ffffff', '#ef4444', '#94a3b8', '#a855f7', '#eab308'];
@@ -67,7 +70,9 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     
     predictionPaths,
     predictionSteps,
-    predictSystem
+    predictSystem,
+    
+    onRendezvousPointChange
 }) => {
     const [activeTab, setActiveTab] = useState<'flight' | 'mission' | 'config'>('flight');
 
@@ -100,6 +105,10 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [manualThrusting, setManualThrusting] = useState(false);
     const [manualThrustPower, setManualThrustPower] = useState(0.02);
 
+    // Rendezvous Calculator
+    const [rendezvousTargetId, setRendezvousTargetId] = useState<string>('');
+    const [rendezvousDistance, setRendezvousDistance] = useState<number>(10);
+
     // Recorder
     const [isRecording, setIsRecording] = useState(false);
     const [recordedManeuvers, setRecordedManeuvers] = useState<Maneuver[]>([]);
@@ -111,44 +120,48 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     useEffect(() => {
         if (editingManeuverId && selectedRocket?.maneuvers) {
             const m = selectedRocket.maneuvers.find(x => x.id === editingManeuverId);
-            if (m) {
+            if (m && m.type === 'manual_node') {
+                // Only set initial values when starting to edit
+                setNodeTime(m.timeFromNow || 0);
+                setDvPrograde(m.deltaVPrograde || 0);
+                setDvRadial(m.deltaVRadial || 0);
                 setManeuverType(m.type);
-                if (m.type === 'manual_node') {
-                    // Only update local state if it differs significantly to avoid fighting inputs
-                    setNodeTime(prev => Math.abs(prev - (m.timeFromNow||0)) > 0.01 ? (m.timeFromNow||0) : prev);
-                    setDvPrograde(prev => Math.abs(prev - (m.deltaVPrograde||0)) > 0.01 ? (m.deltaVPrograde||0) : prev);
-                    setDvRadial(prev => Math.abs(prev - (m.deltaVRadial||0)) > 0.01 ? (m.deltaVRadial||0) : prev);
-                }
             }
         }
     }, [editingManeuverId]); 
 
-    // Live Update from Local to Rocket (Realtime Editing)
+    // Live Update from Local to Rocket (Realtime Editing) - debounced
     useEffect(() => {
-        if (editingManeuverId && selectedRocket?.maneuvers) {
-             const m = selectedRocket.maneuvers.find(x => x.id === editingManeuverId);
-             if (m && m.type === 'manual_node') {
-                 // Check if changed
-                 if (Math.abs((m.timeFromNow||0) - nodeTime) > 0.01 || 
-                     Math.abs((m.deltaVPrograde||0) - dvPrograde) > 0.01 || 
-                     Math.abs((m.deltaVRadial||0) - dvRadial) > 0.01) {
-                     
-                     const updatedManeuvers = selectedRocket.maneuvers.map(x => {
-                        if (x.id === editingManeuverId) {
-                            return { 
-                                ...x, 
-                                timeFromNow: nodeTime, 
-                                deltaVPrograde: dvPrograde, 
-                                deltaVRadial: dvRadial 
-                            };
-                        }
-                        return x;
-                     });
-                     onUpdateRocket(selectedRocket.id, { maneuvers: updatedManeuvers });
-                 }
-             }
+        if (!editingManeuverId || !selectedRocket?.maneuvers) return;
+        
+        const m = selectedRocket.maneuvers.find(x => x.id === editingManeuverId);
+        if (!m || m.type !== 'manual_node') return;
+        
+        // Check if values actually changed
+        if (Math.abs((m.timeFromNow||0) - nodeTime) < 0.01 && 
+            Math.abs((m.deltaVPrograde||0) - dvPrograde) < 0.01 && 
+            Math.abs((m.deltaVRadial||0) - dvRadial) < 0.01) {
+            return;
         }
-    }, [nodeTime, dvPrograde, dvRadial, editingManeuverId]);
+        
+        // Debounce updates to prevent flickering
+        const timer = setTimeout(() => {
+            const updatedManeuvers = selectedRocket.maneuvers!.map(x => {
+                if (x.id === editingManeuverId) {
+                    return { 
+                        ...x, 
+                        timeFromNow: nodeTime, 
+                        deltaVPrograde: dvPrograde, 
+                        deltaVRadial: dvRadial 
+                    };
+                }
+                return x;
+            });
+            onUpdateRocket(selectedRocket.id, { maneuvers: updatedManeuvers });
+        }, 50); // 50ms debounce
+        
+        return () => clearTimeout(timer);
+    }, [nodeTime, dvPrograde, dvRadial]);
 
     const showNotification = (msg: string) => {
         setNotification(msg);
@@ -668,6 +681,50 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
         };
     }, [selectedRocket, bodies, parentBodyId, targetBodyId, physicsConfig, predictionPaths, predictionSteps, predictSystem]);
 
+    // Rendezvous Calculator - finds intercept point based on predictions
+    const rendezvousData = useMemo(() => {
+        if (!selectedRocket || !rendezvousTargetId || !predictionPaths || !predictionSteps) {
+            return null;
+        }
+
+        const rocketPath = predictionPaths.find(p => p.id === selectedRocket.id);
+        const targetPath = predictSystem ? predictionPaths.find(p => p.id === rendezvousTargetId) : null;
+        const targetBody = bodies.find(b => b.id === rendezvousTargetId);
+
+        if (!rocketPath || rocketPath.points.length === 0) return null;
+
+        const totalDuration = predictionSteps * physicsConfig.timeStep;
+        const dtPerPoint = totalDuration / rocketPath.points.length;
+
+        // Find first point where distance is less than threshold
+        for (let i = 0; i < rocketPath.points.length; i++) {
+            const rocketPos = rocketPath.points[i];
+            const targetPos = targetPath && targetPath.points[i] ? targetPath.points[i] : (targetBody?.position || {x:0, y:0});
+            
+            const dx = rocketPos.x - targetPos.x;
+            const dy = rocketPos.y - targetPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= rendezvousDistance) {
+                return {
+                    timeToRendezvous: i * dtPerPoint,
+                    meetingPoint: rocketPos,
+                    distance: distance,
+                    targetName: targetBody?.name || 'Unknown'
+                };
+            }
+        }
+
+        return null; // No rendezvous found within prediction window
+    }, [selectedRocket, rendezvousTargetId, rendezvousDistance, predictionPaths, predictionSteps, physicsConfig, predictSystem, bodies]);
+
+    // Notify parent component about rendezvous point changes
+    useEffect(() => {
+        if (onRendezvousPointChange) {
+            onRendezvousPointChange(rendezvousData?.meetingPoint || null);
+        }
+    }, [rendezvousData, onRendezvousPointChange]);
+
     // Mobile UI - Transparent Overlay Design
     if (isMobile) {
         return (
@@ -1139,6 +1196,52 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             {isFollowing ? <Ban size={16} /> : <Crosshair size={16} />} {isFollowing ? "Unlock Camera" : "Follow Rocket"}
                                         </button>
                                     </div>
+
+                                    {/* Rendezvous Calculator */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Rendezvous Calculator</label>
+                                        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 space-y-3">
+                                            <select 
+                                                value={rendezvousTargetId}
+                                                onChange={(e) => setRendezvousTargetId(e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-slate-200"
+                                            >
+                                                <option value="">Select Target...</option>
+                                                {bodies.filter(b => !b.isRocket && b.id !== selectedRocket.id).map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </select>
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-1">Max Distance (units)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={rendezvousDistance}
+                                                    onChange={(e) => setRendezvousDistance(parseFloat(e.target.value))}
+                                                    step="1"
+                                                    min="1"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs text-slate-200"
+                                                />
+                                            </div>
+                                            {rendezvousData ? (
+                                                <div className="bg-green-900/20 border border-green-500/30 rounded p-2 space-y-1">
+                                                    <div className="text-[10px] text-green-400 font-bold uppercase">Rendezvous Found!</div>
+                                                    <div className="text-[10px] text-slate-300">
+                                                        Target: <span className="text-white font-bold">{rendezvousData.targetName}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-300">
+                                                        Time: <span className="text-cyan-400 font-mono">{rendezvousData.timeToRendezvous.toFixed(1)}s</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-300">
+                                                        Distance: <span className="text-emerald-400 font-mono">{rendezvousData.distance.toFixed(2)} units</span>
+                                                    </div>
+                                                </div>
+                                            ) : rendezvousTargetId ? (
+                                                <div className="bg-orange-900/20 border border-orange-500/30 rounded p-2">
+                                                    <div className="text-[10px] text-orange-400">No rendezvous within prediction window</div>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -1448,22 +1551,162 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <span>Sequence Queue</span>
                                             {recordedManeuvers.length > 0 && <button onClick={loadRecordedToFlightPlan} className="text-indigo-400 flex gap-1 items-center"><Save size={12} /> Load Rec</button>}
                                         </div>
-                                        <div className="bg-slate-900/50 rounded-lg p-2 max-h-[150px] overflow-y-auto space-y-1 border border-slate-800">
-                                            {(!selectedRocket.maneuvers || selectedRocket.maneuvers.length === 0) && <div className="text-[10px] text-slate-600 text-center italic py-2">Queue Empty</div>}
-                                            {selectedRocket.maneuvers?.map((m, i) => (
-                                                <div key={m.id} className={`text-[10px] flex items-center gap-2 p-2 rounded border ${m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}>
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
-                                                    <div className="flex-1 text-slate-300 truncate">
-                                                        {m.type === 'wait' ? 'Wait' : m.type.startsWith('auto_') ? m.type.replace('auto_','Auto-').toUpperCase() : m.type === 'change_simulation_speed' ? 'Sim Speed' : m.type.toUpperCase()} 
-                                                        <span className="text-slate-500 ml-2 font-mono">
-                                                            {m.type==='wait'||m.type==='burn' ? m.duration.toFixed(2)+'s' : ''}
-                                                            {m.type==='rotate' ? m.param+'°' : ''}
-                                                            {m.type==='change_simulation_speed' ? m.param+'x' : ''}
-                                                        </span>
-                                                    </div>
-                                                    {m.status==='pending' && <button onClick={()=>handleRemoveManeuver(m.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={12} /></button>}
+                                        
+                                        {/* Mission Timer */}
+                                        {selectedRocket.maneuvers && selectedRocket.maneuvers.some(m => m.status === 'active') && (
+                                            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-2">
+                                                <div className="text-[9px] text-green-400 font-bold uppercase mb-1 flex items-center gap-1">
+                                                    <Play size={10} /> Mission Executing
                                                 </div>
-                                            ))}
+                                                <div className="text-xs text-white font-mono">
+                                                    {(() => {
+                                                        const completedCount = selectedRocket.maneuvers.filter(m => m.status === 'completed').length;
+                                                        const totalCount = selectedRocket.maneuvers.length;
+                                                        return `Step ${completedCount + 1}/${totalCount}`;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="bg-slate-900/50 rounded-lg p-2 max-h-[280px] overflow-y-auto space-y-1 border border-slate-800">
+                                            {(!selectedRocket.maneuvers || selectedRocket.maneuvers.length === 0) && <div className="text-[10px] text-slate-600 text-center italic py-2">Queue Empty</div>}
+                                            {selectedRocket.maneuvers?.map((m, i) => {
+                                                // Calculate real-time progress info
+                                                let progressInfo = '';
+                                                let progressBar = null;
+                                                let progressPercent = m.progress * 100;
+                                                
+                                                if (m.status === 'active') {
+                                                    // TIME-BASED: wait, burn
+                                                    if (m.type === 'wait' || m.type === 'burn') {
+                                                        const remainingTime = m.duration * (1 - m.progress);
+                                                        progressInfo = `${remainingTime.toFixed(1)}s left`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-green-500 transition-all duration-100"
+                                                                    style={{ width: `${progressPercent}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    } 
+                                                    // DELTA-V BASED: transfers, intercepts
+                                                    else if (m.targetDeltaV && m.appliedDeltaV !== undefined) {
+                                                        progressInfo = `${m.appliedDeltaV.toFixed(1)}/${m.targetDeltaV.toFixed(1)} m/s`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-cyan-500 transition-all duration-100"
+                                                                    style={{ width: `${progressPercent}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    } 
+                                                    // ALTITUDE-BASED: wait_for_altitude, burn_until_altitude
+                                                    else if (m.type === 'wait_for_altitude' || m.type === 'burn_until_altitude') {
+                                                        const parentBody = bodies.find(b => b.id === m.parentBodyId);
+                                                        if (parentBody) {
+                                                            const dx = selectedRocket.position.x - parentBody.position.x;
+                                                            const dy = selectedRocket.position.y - parentBody.position.y;
+                                                            const dist = Math.sqrt(dx * dx + dy * dy);
+                                                            const currentAlt = dist - parentBody.radius;
+                                                            const targetAlt = parseFloat(String(m.param).split(':')[0]) || 100;
+                                                            progressPercent = Math.min(100, (currentAlt / targetAlt) * 100);
+                                                            progressInfo = `${currentAlt.toFixed(1)}/${targetAlt.toFixed(1)}km`;
+                                                            progressBar = (
+                                                                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                    <div 
+                                                                        className="h-full bg-yellow-500 transition-all duration-100"
+                                                                        style={{ width: `${progressPercent}%` }}
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        }
+                                                    } 
+                                                    // ERROR-BASED: wait_for_transfer (phase angle alignment)
+                                                    else if (m.type === 'wait_for_transfer') {
+                                                        const target = bodies.find(b => b.id === m.targetBodyId);
+                                                        let refParent = bodies.find(b => b.id === m.parentBodyId);
+                                                        if (!refParent && target) {
+                                                            refParent = bodies.filter(b => !b.isRocket && b.id !== target.id).sort((a,b) => b.mass - a.mass)[0];
+                                                        }
+                                                        
+                                                        if (target && refParent) {
+                                                            const rPos = { x: selectedRocket.position.x - refParent.position.x, y: selectedRocket.position.y - refParent.position.y };
+                                                            const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
+                                                            const angle1 = Math.atan2(rPos.y, rPos.x);
+                                                            const angle2 = Math.atan2(tPos.y, tPos.x);
+                                                            let currentPhase = angle2 - angle1;
+                                                            while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
+                                                            while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
+                                                            
+                                                            const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
+                                                            const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
+                                                            const mu = physicsConfig.gravitationalConstant * refParent.mass;
+                                                            const a_transfer = (r1 + r2) / 2;
+                                                            const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+                                                            const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
+                                                            const angle_change = omega_target * t_transfer;
+                                                            let requiredPhase = Math.PI - angle_change;
+                                                            while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
+                                                            while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+                                                            
+                                                            let diff = Math.abs(currentPhase - requiredPhase);
+                                                            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                                                            const diffDeg = diff * 180 / Math.PI;
+                                                            const targetError = parseFloat(String(m.param)) || 0.5;
+                                                            
+                                                            // Progress bar: inverse of error (closer to 0 error = more progress)
+                                                            // Cap at 10 degrees for visual purposes
+                                                            progressPercent = Math.max(0, 100 - (diffDeg / 10) * 100);
+                                                            progressInfo = `${diffDeg.toFixed(2)}° error`;
+                                                            progressBar = (
+                                                                <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                    <div 
+                                                                        className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
+                                                                        style={{ width: `${progressPercent}%` }}
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        }
+                                                    }
+                                                    // GENERIC: Use m.progress for everything else
+                                                    else {
+                                                        progressInfo = `${progressPercent.toFixed(0)}%`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-purple-500 transition-all duration-100"
+                                                                    style={{ width: `${progressPercent}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                }
+                                                
+                                                return (
+                                                    <div key={m.id} className={`text-[10px] flex flex-col gap-1 p-2 rounded border ${m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
+                                                            <div className="flex-1 text-slate-300 min-w-0">
+                                                                <span className="font-bold text-slate-200 mr-1">
+                                                                    {m.type === 'wait' ? 'WAIT' : m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO-').toUpperCase() : m.type === 'change_simulation_speed' ? 'SPEED' : m.type.toUpperCase()}
+                                                                </span>
+                                                                <span className="text-slate-500 font-mono text-[9px]">
+                                                                    {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
+                                                                    {m.type==='rotate' ? `${m.param}°` : ''}
+                                                                    {m.type==='change_simulation_speed' ? `${m.param}x` : ''}
+                                                                </span>
+                                                            </div>
+                                                            {m.status==='pending' && <button onClick={()=>handleRemoveManeuver(m.id)} className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0"><Trash2 size={12} /></button>}
+                                                            {m.status==='active' && (
+                                                                <span className="text-green-400 font-mono text-[9px] flex-shrink-0">{progressInfo}</span>
+                                                            )}
+                                                        </div>
+                                                        {progressBar}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
@@ -1852,6 +2095,57 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                 <TrendingUp size={14} /> TRANSFER INJECTION
                                             </button>
                                         </div>
+                                     </div>
+                                 </div>
+
+                                 {/* Rendezvous Calculator */}
+                                 <div>
+                                     <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Rendezvous Calculator</div>
+                                     <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 space-y-2">
+                                         <div className="flex gap-2">
+                                             <select 
+                                                 value={rendezvousTargetId}
+                                                 onChange={(e) => setRendezvousTargetId(e.target.value)}
+                                                 className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                                             >
+                                                 <option value="">Select Target...</option>
+                                                 {bodies.filter(b => !b.isRocket && b.id !== selectedRocket?.id).map(b => (
+                                                     <option key={b.id} value={b.id}>{b.name}</option>
+                                                 ))}
+                                             </select>
+                                         </div>
+                                         <div>
+                                             <label className="text-[10px] text-slate-400 block mb-1">Max Distance (units)</label>
+                                             <input 
+                                                 type="number" 
+                                                 value={rendezvousDistance}
+                                                 onChange={(e) => setRendezvousDistance(parseFloat(e.target.value))}
+                                                 step="1"
+                                                 min="1"
+                                                 className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                             />
+                                         </div>
+                                         {rendezvousData ? (
+                                             <div className="bg-green-900/20 border border-green-500/30 rounded p-2 space-y-1">
+                                                 <div className="text-[10px] text-green-400 font-bold uppercase">Rendezvous Found!</div>
+                                                 <div className="text-[10px] text-slate-300">
+                                                     Target: <span className="text-white font-bold">{rendezvousData.targetName}</span>
+                                                 </div>
+                                                 <div className="text-[10px] text-slate-300">
+                                                     Time: <span className="text-cyan-400 font-mono">{rendezvousData.timeToRendezvous.toFixed(1)}s</span>
+                                                 </div>
+                                                 <div className="text-[10px] text-slate-300">
+                                                     Distance: <span className="text-emerald-400 font-mono">{rendezvousData.distance.toFixed(2)} units</span>
+                                                 </div>
+                                                 <div className="text-[10px] text-slate-300">
+                                                     Position: <span className="text-purple-400 font-mono">({rendezvousData.meetingPoint.x.toFixed(1)}, {rendezvousData.meetingPoint.y.toFixed(1)})</span>
+                                                 </div>
+                                             </div>
+                                         ) : rendezvousTargetId ? (
+                                             <div className="bg-orange-900/20 border border-orange-500/30 rounded p-2">
+                                                 <div className="text-[10px] text-orange-400">No rendezvous within prediction window</div>
+                                             </div>
+                                         ) : null}
                                      </div>
                                  </div>
                             </div>
@@ -2273,40 +2567,178 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <span>Sequence Queue</span>
                                         {recordedManeuvers.length > 0 && <button onClick={loadRecordedToFlightPlan} className="text-indigo-400 hover:text-white flex gap-1 items-center"><Save size={10} /> Load Rec</button>}
                                     </div>
-                                    <div className="bg-slate-900/50 rounded-lg p-2 max-h-[200px] overflow-y-auto space-y-1 border border-slate-800">
-                                        {(!selectedRocket.maneuvers || selectedRocket.maneuvers.length === 0) && <div className="text-[10px] text-slate-600 text-center italic py-2">Queue Empty</div>}
-                                        {selectedRocket.maneuvers?.map((m, i) => (
-                                            <div 
-                                                key={m.id} 
-                                                onClick={() => m.status === 'pending' && setEditingManeuverId(m.id)}
-                                                className={`text-[10px] flex items-center gap-2 p-1.5 rounded border transition-colors ${m.status==='pending' ? 'cursor-pointer hover:border-slate-500' : ''} ${editingManeuverId===m.id ? 'bg-indigo-900/40 border-indigo-500' : m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}
-                                            >
-                                                <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
-                                                <div className="flex-1 text-slate-300">
-                                                    <span className="font-bold text-slate-200 mr-1">
-                                                        {m.type === 'wait' ? 'WAIT' : 
-                                                         m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : 
-                                                         m.type === 'wait_for_altitude' ? 'WAIT ALT' :
-                                                         m.type === 'burn_until_altitude' ? 'BURN TO ALT' :
-                                                         m.type === 'change_simulation_speed' ? 'SET SPEED' :
-                                                         m.type === 'manual_node' ? 'NODE' :
-                                                         m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
-                                                    </span>
-                                                    <span className="text-slate-500 font-mono">
-                                                        {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
-                                                        {m.type==='burn' ? ` @ ${(m.thrust*100).toFixed(0)}%` : ''}
-                                                        {m.type==='manual_node' ? `T+${(m.timeFromNow||0).toFixed(0)}s dV:${Math.sqrt((m.deltaVPrograde||0)**2+(m.deltaVRadial||0)**2).toFixed(1)}` : ''}
-                                                        {m.type==='rotate' ? `${m.param}°` : ''}
-                                                        {m.type==='sas' ? `${m.param}` : ''}
-                                                        {m.type==='change_simulation_speed' ? `${m.param}x` : ''}
-                                                        {m.type==='wait_for_transfer' ? `Err < ${m.param}°` : ''}
-                                                        {(m.type==='wait_for_altitude' || m.type==='burn_until_altitude') ? `${m.param}km` : ''}
-                                                        {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}
-                                                    </span>
-                                                </div>
-                                                {m.status==='pending' && <button onClick={(e)=>{ e.stopPropagation(); handleRemoveManeuver(m.id); }} className="text-slate-500 hover:text-red-400"><Trash2 size={10} /></button>}
+                                    
+                                    {/* Mission Timer */}
+                                    {selectedRocket.maneuvers && selectedRocket.maneuvers.some(m => m.status === 'active') && (
+                                        <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-2">
+                                            <div className="text-[9px] text-green-400 font-bold uppercase mb-1 flex items-center gap-1">
+                                                <Play size={10} /> Mission Executing
                                             </div>
-                                        ))}
+                                            <div className="text-xs text-white font-mono">
+                                                {(() => {
+                                                    const completedCount = selectedRocket.maneuvers.filter(m => m.status === 'completed').length;
+                                                    const totalCount = selectedRocket.maneuvers.length;
+                                                    return `Step ${completedCount + 1}/${totalCount}`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="bg-slate-900/50 rounded-lg p-2 max-h-[280px] overflow-y-auto space-y-1 border border-slate-800">
+                                        {(!selectedRocket.maneuvers || selectedRocket.maneuvers.length === 0) && <div className="text-[10px] text-slate-600 text-center italic py-2">Queue Empty</div>}
+                                        {selectedRocket.maneuvers?.map((m, i) => {
+                                            // Calculate real-time progress info
+                                            let progressInfo = '';
+                                            let progressBar = null;
+                                            let progressPercent = m.progress * 100;
+                                            
+                                            if (m.status === 'active') {
+                                                // TIME-BASED: wait, burn
+                                                if (m.type === 'wait' || m.type === 'burn') {
+                                                    const remainingTime = m.duration * (1 - m.progress);
+                                                    progressInfo = `${remainingTime.toFixed(1)}s left`;
+                                                    progressBar = (
+                                                        <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                            <div 
+                                                                className="h-full bg-green-500 transition-all duration-100"
+                                                                style={{ width: `${progressPercent}%` }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                } 
+                                                // DELTA-V BASED: transfers, intercepts
+                                                else if (m.targetDeltaV && m.appliedDeltaV !== undefined) {
+                                                    progressInfo = `${m.appliedDeltaV.toFixed(1)}/${m.targetDeltaV.toFixed(1)} m/s`;
+                                                    progressBar = (
+                                                        <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                            <div 
+                                                                className="h-full bg-cyan-500 transition-all duration-100"
+                                                                style={{ width: `${progressPercent}%` }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                } 
+                                                // ALTITUDE-BASED: wait_for_altitude, burn_until_altitude
+                                                else if (m.type === 'wait_for_altitude' || m.type === 'burn_until_altitude') {
+                                                    const parentBody = bodies.find(b => b.id === m.parentBodyId);
+                                                    if (parentBody) {
+                                                        const dx = selectedRocket.position.x - parentBody.position.x;
+                                                        const dy = selectedRocket.position.y - parentBody.position.y;
+                                                        const dist = Math.sqrt(dx * dx + dy * dy);
+                                                        const currentAlt = dist - parentBody.radius;
+                                                        const targetAlt = parseFloat(String(m.param).split(':')[0]) || 100;
+                                                        progressPercent = Math.min(100, (currentAlt / targetAlt) * 100);
+                                                        progressInfo = `${currentAlt.toFixed(1)}/${targetAlt.toFixed(1)}km`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-yellow-500 transition-all duration-100"
+                                                                    style={{ width: `${progressPercent}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                } 
+                                                // ERROR-BASED: wait_for_transfer (phase angle alignment)
+                                                else if (m.type === 'wait_for_transfer') {
+                                                    const target = bodies.find(b => b.id === m.targetBodyId);
+                                                    let refParent = bodies.find(b => b.id === m.parentBodyId);
+                                                    if (!refParent && target) {
+                                                        refParent = bodies.filter(b => !b.isRocket && b.id !== target.id).sort((a,b) => b.mass - a.mass)[0];
+                                                    }
+                                                    
+                                                    if (target && refParent) {
+                                                        const rPos = { x: selectedRocket.position.x - refParent.position.x, y: selectedRocket.position.y - refParent.position.y };
+                                                        const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
+                                                        const angle1 = Math.atan2(rPos.y, rPos.x);
+                                                        const angle2 = Math.atan2(tPos.y, tPos.x);
+                                                        let currentPhase = angle2 - angle1;
+                                                        while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
+                                                        while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
+                                                        
+                                                        const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
+                                                        const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
+                                                        const mu = physicsConfig.gravitationalConstant * refParent.mass;
+                                                        const a_transfer = (r1 + r2) / 2;
+                                                        const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+                                                        const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
+                                                        const angle_change = omega_target * t_transfer;
+                                                        let requiredPhase = Math.PI - angle_change;
+                                                        while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
+                                                        while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+                                                        
+                                                        let diff = Math.abs(currentPhase - requiredPhase);
+                                                        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                                                        const diffDeg = diff * 180 / Math.PI;
+                                                        const targetError = parseFloat(String(m.param)) || 0.5;
+                                                        
+                                                        // Progress bar: inverse of error (closer to 0 error = more progress)
+                                                        // Cap at 10 degrees for visual purposes
+                                                        progressPercent = Math.max(0, 100 - (diffDeg / 10) * 100);
+                                                        progressInfo = `${diffDeg.toFixed(2)}° error`;
+                                                        progressBar = (
+                                                            <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                                <div 
+                                                                    className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
+                                                                    style={{ width: `${progressPercent}%` }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    }
+                                                }
+                                                // GENERIC: Use m.progress for everything else
+                                                else {
+                                                    progressInfo = `${progressPercent.toFixed(0)}%`;
+                                                    progressBar = (
+                                                        <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                                            <div 
+                                                                className="h-full bg-purple-500 transition-all duration-100"
+                                                                style={{ width: `${progressPercent}%` }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                }
+                                            }
+                                            
+                                            return (
+                                                <div 
+                                                    key={m.id} 
+                                                    onClick={() => m.status === 'pending' && setEditingManeuverId(m.id)}
+                                                    className={`text-[10px] flex flex-col gap-1 p-1.5 rounded border transition-colors ${m.status==='pending' ? 'cursor-pointer hover:border-slate-500' : ''} ${editingManeuverId===m.id ? 'bg-indigo-900/40 border-indigo-500' : m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
+                                                        <div className="flex-1 text-slate-300 min-w-0">
+                                                            <span className="font-bold text-slate-200 mr-1">
+                                                                {m.type === 'wait' ? 'WAIT' : 
+                                                                 m.type === 'wait_for_transfer' ? 'WAIT TRANSFER' : 
+                                                                 m.type === 'wait_for_altitude' ? 'WAIT ALT' :
+                                                                 m.type === 'burn_until_altitude' ? 'BURN TO ALT' :
+                                                                 m.type === 'change_simulation_speed' ? 'SET SPEED' :
+                                                                 m.type === 'manual_node' ? 'NODE' :
+                                                                 m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
+                                                            </span>
+                                                            <span className="text-slate-500 font-mono text-[9px]">
+                                                                {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
+                                                                {m.type==='burn' ? ` @ ${(m.thrust*100).toFixed(0)}%` : ''}
+                                                                {m.type==='manual_node' ? `T+${(m.timeFromNow||0).toFixed(0)}s dV:${Math.sqrt((m.deltaVPrograde||0)**2+(m.deltaVRadial||0)**2).toFixed(1)}` : ''}
+                                                                {m.type==='rotate' ? `${m.param}°` : ''}
+                                                                {m.type==='sas' ? `${m.param}` : ''}
+                                                                {m.type==='change_simulation_speed' ? `${m.param}x` : ''}
+                                                                {m.type==='wait_for_transfer' ? `Err < ${m.param}°` : ''}
+                                                                {(m.type==='wait_for_altitude' || m.type==='burn_until_altitude') ? `${m.param}km` : ''}
+                                                                {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}
+                                                            </span>
+                                                        </div>
+                                                        {m.status==='pending' && <button onClick={(e)=>{ e.stopPropagation(); handleRemoveManeuver(m.id); }} className="text-slate-500 hover:text-red-400 flex-shrink-0"><Trash2 size={10} /></button>}
+                                                        {m.status==='active' && (
+                                                            <span className="text-green-400 font-mono text-[9px] flex-shrink-0">{progressInfo}</span>
+                                                        )}
+                                                    </div>
+                                                    {progressBar}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

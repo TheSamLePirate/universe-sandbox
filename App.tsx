@@ -75,6 +75,22 @@ const App: React.FC = () => {
   // Visualization toggles for performance
   const [showTransferWindow, setShowTransferWindow] = useState(true);
   const [showTheoreticalOrbit, setShowTheoreticalOrbit] = useState(true);
+  
+  // Rendezvous point visualization (legacy from RocketPanel)
+  const [rendezvousPoint, setRendezvousPoint] = useState<Vector2D | null>(null);
+  
+  // Rendezvous points from Flight Computer modules
+  const [rendezvousPoints, setRendezvousPoints] = useState<Array<{
+    point: Vector2D;
+    name: string;
+    color: string;
+    moduleId: string;
+    timeToRendezvous: number; // in seconds
+    distance: number; // actual distance at rendezvous
+    deltaVPrograde: number; // delta-V in prograde direction
+    deltaVRadial: number; // delta-V in radial direction
+    totalDeltaV: number; // total delta-V magnitude
+  }>>([]);
 
   // Manual Creation Mode State
   const [isCreationMode, setIsCreationMode] = useState(false);
@@ -192,6 +208,136 @@ const App: React.FC = () => {
   useEffect(() => { predictionBodyIdsRef.current = predictionBodyIds; }, [predictionBodyIds]);
   useEffect(() => { rocketTargetBodyIdRef.current = rocketTargetBodyId; }, [rocketTargetBodyId]);
   useEffect(() => { rocketParentBodyIdRef.current = rocketParentBodyId; }, [rocketParentBodyId]);
+
+  // Calculate rendezvous points from Flight Computer modules
+  useEffect(() => {
+    const activeRendezvousModules = flightComputerModules.filter(
+      m => m.type === 'rendezvous_tracker' && m.isEnabled && m.targetBodyId
+    );
+    
+    if (activeRendezvousModules.length === 0 || !predictionPaths || predictionPaths.length === 0) {
+      setRendezvousPoints([]);
+      return;
+    }
+    
+    const newRendezvousPoints: Array<{
+      point: Vector2D;
+      name: string;
+      color: string;
+      moduleId: string;
+      timeToRendezvous: number;
+      distance: number;
+      deltaVPrograde: number;
+      deltaVRadial: number;
+      totalDeltaV: number;
+    }> = [];
+    
+    for (const module of activeRendezvousModules) {
+      const rocketPath = predictionPaths.find(p => p.id === module.primaryBodyId);
+      const targetPath = isPredictionEnabled 
+        ? predictionPaths.find(p => p.id === module.targetBodyId) 
+        : null;
+      const rocketBody = bodies.find(b => b.id === module.primaryBodyId);
+      const targetBody = bodies.find(b => b.id === module.targetBodyId);
+      
+      if (!rocketPath || rocketPath.points.length === 0 || !rocketBody || !targetBody) continue;
+      
+      const maxDist = module.maxDistance || 10;
+      const totalDuration = predictionSteps * physicsConfig.timeStep;
+      const dtPerPoint = totalDuration / rocketPath.points.length;
+      
+      // Find first rendezvous point
+      for (let i = 0; i < rocketPath.points.length; i++) {
+        const rocketPos = rocketPath.points[i];
+        const targetPos = targetPath && targetPath.points[i] 
+          ? targetPath.points[i] 
+          : (targetBody?.position || {x:0, y:0});
+        
+        const dx = rocketPos.x - targetPos.x;
+        const dy = rocketPos.y - targetPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= maxDist) {
+          // Calculate velocities at rendezvous point (numerical derivative)
+          let rocketVel = { x: 0, y: 0 };
+          let targetVel = { x: 0, y: 0 };
+          
+          if (i > 0 && i < rocketPath.points.length - 1) {
+            // Central difference for velocity
+            const dt = dtPerPoint;
+            const prevRocket = rocketPath.points[i - 1];
+            const nextRocket = rocketPath.points[i + 1];
+            rocketVel = {
+              x: (nextRocket.x - prevRocket.x) / (2 * dt),
+              y: (nextRocket.y - prevRocket.y) / (2 * dt)
+            };
+            
+            if (targetPath && targetPath.points[i - 1] && targetPath.points[i + 1]) {
+              const prevTarget = targetPath.points[i - 1];
+              const nextTarget = targetPath.points[i + 1];
+              targetVel = {
+                x: (nextTarget.x - prevTarget.x) / (2 * dt),
+                y: (nextTarget.y - prevTarget.y) / (2 * dt)
+              };
+            } else {
+              // Use current body velocity if no prediction path
+              targetVel = targetBody.velocity;
+            }
+          } else {
+            // Use current velocities for edge cases
+            rocketVel = rocketBody.velocity;
+            targetVel = targetBody.velocity;
+          }
+          
+          // Relative velocity (ship to target)
+          const dvx = targetVel.x - rocketVel.x;
+          const dvy = targetVel.y - rocketVel.y;
+          
+          // Calculate prograde and radial components from rocket's perspective
+          // Prograde is along velocity direction, radial is perpendicular
+          const rocketSpeed = Math.sqrt(rocketVel.x * rocketVel.x + rocketVel.y * rocketVel.y);
+          
+          let deltaVPrograde = 0;
+          let deltaVRadial = 0;
+          
+          if (rocketSpeed > 0.001) {
+            // Rocket velocity unit vector (prograde direction)
+            const progX = rocketVel.x / rocketSpeed;
+            const progY = rocketVel.y / rocketSpeed;
+            
+            // Radial unit vector (perpendicular to prograde, 90° counterclockwise)
+            const radX = -progY;
+            const radY = progX;
+            
+            // Project relative velocity onto prograde and radial
+            deltaVPrograde = dvx * progX + dvy * progY;
+            deltaVRadial = dvx * radX + dvy * radY;
+          } else {
+            // If rocket is nearly stationary, just use relative velocity magnitude
+            deltaVPrograde = Math.sqrt(dvx * dvx + dvy * dvy);
+            deltaVRadial = 0;
+          }
+          
+          const totalDeltaV = Math.sqrt(deltaVPrograde * deltaVPrograde + deltaVRadial * deltaVRadial);
+          
+          newRendezvousPoints.push({
+            point: rocketPos,
+            name: module.name || 'Rendezvous',
+            color: module.color,
+            moduleId: module.id,
+            timeToRendezvous: i * dtPerPoint,
+            distance: distance,
+            deltaVPrograde: deltaVPrograde,
+            deltaVRadial: deltaVRadial,
+            totalDeltaV: totalDeltaV
+          });
+          break; // Only show first rendezvous per module
+        }
+      }
+    }
+    
+    setRendezvousPoints(newRendezvousPoints);
+  }, [flightComputerModules, predictionPaths, predictionSteps, physicsConfig.timeStep, isPredictionEnabled, bodies]);
 
   useEffect(() => {
       if (bodies.length === 0) {
@@ -1057,7 +1203,290 @@ const App: React.FC = () => {
                   result += `\nTarget body '${targetBodyName}' not found.`;
               }
           }
+          
           return result;
+      },
+      addManualNode: (rocketName, timeFromNow, deltaVPrograde, deltaVRadial) => {
+          const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
+          if (!rocket) return `Rocket '${rocketName}' not found.`;
+          
+          const newNode: Maneuver = {
+              id: `node_${Date.now()}`,
+              type: 'manual_node',
+              thrust: 0,
+              duration: 0,
+              angleOffset: 0,
+              progress: 0,
+              status: 'pending',
+              deltaVPrograde: deltaVPrograde,
+              deltaVRadial: deltaVRadial,
+              timeFromNow: timeFromNow
+          };
+          
+          const updatedManeuvers = [...(rocket.maneuvers || []), newNode];
+          updateRocket(rocket.id, { maneuvers: updatedManeuvers });
+          
+          const totalDeltaV = Math.sqrt(deltaVPrograde**2 + deltaVRadial**2).toFixed(1);
+          return `Manual node added to ${rocket.name}: T+${timeFromNow}s, ΔV=${totalDeltaV}m/s (P:${deltaVPrograde.toFixed(1)}, R:${deltaVRadial.toFixed(1)})`;
+      },
+      getRocketFlightPlan: (rocketName) => {
+          const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
+          if (!rocket) return `Rocket '${rocketName}' not found.`;
+          
+          if (!rocket.maneuvers || rocket.maneuvers.length === 0) {
+              return JSON.stringify({
+                  rocket: rocket.name,
+                  missionStatus: "NO_FLIGHT_PLAN",
+                  totalManeuvers: 0,
+                  maneuvers: []
+              }, null, 2);
+          }
+          
+          const pendingCount = rocket.maneuvers.filter(m => m.status === 'pending').length;
+          const activeCount = rocket.maneuvers.filter(m => m.status === 'active').length;
+          const completedCount = rocket.maneuvers.filter(m => m.status === 'completed').length;
+          
+          let missionStatus = "PLANNED"; // All pending
+          if (activeCount > 0) missionStatus = "EXECUTING";
+          else if (completedCount === rocket.maneuvers.length) missionStatus = "COMPLETED";
+          else if (completedCount > 0 && pendingCount > 0) missionStatus = "IN_PROGRESS";
+          
+          const maneuversData = rocket.maneuvers.map((m, index) => {
+              const maneuverData: any = {
+                  step: index + 1,
+                  id: m.id,
+                  type: m.type,
+                  status: m.status,
+                  progress: m.progress
+              };
+              
+              // Add type-specific parameters
+              if (m.type === 'burn' || m.type === 'wait') {
+                  maneuverData.duration = m.duration;
+                  if (m.type === 'burn') {
+                      maneuverData.thrust = m.thrust;
+                      maneuverData.angleOffset = (m.angleOffset * 180 / Math.PI).toFixed(1) + '°';
+                  }
+              }
+              
+              if (m.type === 'rotate') {
+                  maneuverData.rotationAngle = m.param + '°';
+              }
+              
+              if (m.type === 'sas') {
+                  maneuverData.sasMode = m.param;
+              }
+              
+              if (m.type === 'manual_node') {
+                  maneuverData.timeFromNow = m.timeFromNow;
+                  maneuverData.deltaVPrograde = m.deltaVPrograde;
+                  maneuverData.deltaVRadial = m.deltaVRadial;
+                  maneuverData.totalDeltaV = Math.sqrt((m.deltaVPrograde||0)**2 + (m.deltaVRadial||0)**2);
+              }
+              
+              if (m.type === 'change_simulation_speed') {
+                  maneuverData.simulationSpeed = m.param + 'x';
+              }
+              
+              if (m.type === 'wait_for_transfer' || m.type === 'wait_for_altitude' || m.type === 'burn_until_altitude') {
+                  maneuverData.targetParameter = m.param;
+                  if (m.type === 'wait_for_altitude') {
+                      maneuverData.altitudeDirection = m.param;
+                  }
+              }
+              
+              if (m.targetBodyId) {
+                  const targetBody = bodiesRef.current.find(b => b.id === m.targetBodyId);
+                  maneuverData.targetBody = targetBody?.name || 'Unknown';
+              }
+              
+              if (m.parentBodyId) {
+                  const parentBody = bodiesRef.current.find(b => b.id === m.parentBodyId);
+                  maneuverData.referenceBody = parentBody?.name || 'Unknown';
+              }
+              
+              // Add progress info for active maneuvers
+              if (m.status === 'active') {
+                  maneuverData.percentComplete = (m.progress * 100).toFixed(1) + '%';
+                  if (m.targetDeltaV && m.appliedDeltaV) {
+                      maneuverData.deltaVApplied = m.appliedDeltaV.toFixed(1) + '/' + m.targetDeltaV.toFixed(1) + ' m/s';
+                  }
+              }
+              
+              return maneuverData;
+          });
+          
+          return JSON.stringify({
+              rocket: rocket.name,
+              missionStatus: missionStatus,
+              totalManeuvers: rocket.maneuvers.length,
+              pending: pendingCount,
+              active: activeCount,
+              completed: completedCount,
+              currentFuel: rocket.fuel?.toFixed(1),
+              maxFuel: rocket.maxFuel,
+              maneuvers: maneuversData
+          }, null, 2);
+      },
+      addFlightComputerModule: (moduleType, rocketName, referenceBodyName, targetBodyName, customName, color, maxDistance) => {
+          const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
+          if (!rocket) return `Rocket '${rocketName}' not found.`;
+          
+          const refBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(referenceBodyName.toLowerCase()));
+          if (!refBody) return `Reference body '${referenceBodyName}' not found.`;
+          
+          let targetBody = null;
+          if (targetBodyName) {
+              targetBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(targetBodyName.toLowerCase()));
+              if (!targetBody) return `Target body '${targetBodyName}' not found.`;
+          }
+          
+          const newModule: FlightComputerModule = {
+              id: `fc_${Date.now()}`,
+              type: moduleType as FlightComputerModuleType,
+              isEnabled: true,
+              primaryBodyId: rocket.id,
+              referenceBodyId: refBody.id,
+              targetBodyId: targetBody?.id,
+              color: color || '#a855f7',
+              name: customName || `${moduleType.replace('_', ' ')}`,
+              maxDistance: maxDistance
+          };
+          
+          setFlightComputerModules(prev => [...prev, newModule]);
+          return `Flight Computer module '${newModule.name}' added (${moduleType}) for ${rocket.name}`;
+      },
+      removeFlightComputerModule: (moduleName) => {
+          const module = flightComputerModules.find(m => m.name?.toLowerCase().includes(moduleName.toLowerCase()));
+          if (!module) return `Flight Computer module '${moduleName}' not found.`;
+          
+          setFlightComputerModules(prev => prev.filter(m => m.id !== module.id));
+          return `Removed Flight Computer module '${module.name}'.`;
+      },
+      getFlightComputerData: () => {
+          if (flightComputerModules.length === 0) {
+              return "No active Flight Computer modules.";
+          }
+          
+          const modulesData = [];
+          
+          for (const module of flightComputerModules) {
+              const rocket = bodiesRef.current.find(b => b.id === module.primaryBodyId);
+              const ref = bodiesRef.current.find(b => b.id === module.referenceBodyId);
+              const target = module.targetBodyId ? bodiesRef.current.find(b => b.id === module.targetBodyId) : null;
+              
+              const moduleData: any = {
+                  name: module.name || module.type,
+                  type: module.type,
+                  enabled: module.isEnabled,
+                  subject: rocket?.name || 'Unknown',
+                  reference: ref?.name || 'Unknown',
+                  target: target?.name || null,
+                  color: module.color
+              };
+              
+              // Calculate orbit info if this is an orbit_info module
+              if (module.type === 'orbit_info' && rocket && ref) {
+                  const dx = rocket.position.x - ref.position.x;
+                  const dy = rocket.position.y - ref.position.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  const altitude = dist - ref.radius;
+                  
+                  const dvx = rocket.velocity.x - ref.velocity.x;
+                  const dvy = rocket.velocity.y - ref.velocity.y;
+                  const vSq = dvx*dvx + dvy*dvy;
+                  
+                  const mu = physicsConfig.gravitationalConstant * ref.mass;
+                  const E = (vSq / 2) - (mu / dist);
+                  
+                  moduleData.orbitalData = {
+                      altitude: altitude,
+                      isBound: E < 0
+                  };
+                  
+                  if (E < 0) {
+                      const a = -mu / (2 * E);
+                      const h = (dx * dvy) - (dy * dvx);
+                      const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
+                      const periapsis = (a * (1 - eccentricity)) - ref.radius;
+                      const apoapsis = (a * (1 + eccentricity)) - ref.radius;
+                      const period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
+                      
+                      moduleData.orbitalData.periapsis = periapsis;
+                      moduleData.orbitalData.apoapsis = apoapsis;
+                      moduleData.orbitalData.period = period;
+                      moduleData.orbitalData.eccentricity = eccentricity;
+                      moduleData.orbitalData.semiMajorAxis = a;
+                  }
+              }
+              
+              // Calculate transfer window data if this is a transfer_window module
+              if (module.type === 'transfer_window' && rocket && ref && target) {
+                  const primaryAngle = Math.atan2(rocket.position.y - ref.position.y, rocket.position.x - ref.position.x);
+                  const targetAngle = Math.atan2(target.position.y - ref.position.y, target.position.x - ref.position.x);
+                  
+                  let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
+                  while (currentPhase > 180) currentPhase -= 360;
+                  while (currentPhase < -180) currentPhase += 360;
+                  
+                  const r1 = Math.sqrt(Math.pow(rocket.position.x - ref.position.x, 2) + Math.pow(rocket.position.y - ref.position.y, 2));
+                  const r2 = Math.sqrt(Math.pow(target.position.x - ref.position.x, 2) + Math.pow(target.position.y - ref.position.y, 2));
+                  const mu = physicsConfig.gravitationalConstant * ref.mass;
+                  const transferTime = Math.PI * Math.sqrt(Math.pow((r1 + r2) / 2, 3) / mu);
+                  const targetAngularVelocity = Math.sqrt(mu / Math.pow(r2, 3));
+                  const requiredPhase = 180 - (targetAngularVelocity * transferTime * 180 / Math.PI);
+                  const error = Math.abs(currentPhase - requiredPhase);
+                  
+                  moduleData.transferData = {
+                      currentPhase: currentPhase,
+                      requiredPhase: requiredPhase,
+                      error: error,
+                      ready: error < 5.0,
+                      transferTime: transferTime
+                  };
+              }
+              
+              // Add rendezvous data if available
+              const rdvData = rendezvousPoints.find(rdv => rdv.moduleId === module.id);
+              if (module.type === 'rendezvous_tracker') {
+                  if (rdvData) {
+                      moduleData.rendezvousData = {
+                          found: true,
+                          timeToRendezvous: rdvData.timeToRendezvous,
+                          distance: rdvData.distance,
+                          totalDeltaV: rdvData.totalDeltaV,
+                          deltaVPrograde: rdvData.deltaVPrograde,
+                          deltaVRadial: rdvData.deltaVRadial,
+                          positionX: rdvData.point.x,
+                          positionY: rdvData.point.y,
+                          maxDistance: module.maxDistance || 10
+                      };
+                  } else {
+                      moduleData.rendezvousData = {
+                          found: false,
+                          maxDistance: module.maxDistance || 10,
+                          message: "No rendezvous within prediction window"
+                      };
+                  }
+              }
+              
+              modulesData.push(moduleData);
+          }
+          
+          return JSON.stringify({
+              totalModules: flightComputerModules.length,
+              modules: modulesData
+          }, null, 2);
+      },
+      toggleFlightComputerModule: (moduleName, enabled) => {
+          const module = flightComputerModules.find(m => m.name?.toLowerCase().includes(moduleName.toLowerCase()));
+          if (!module) return `Flight Computer module '${moduleName}' not found.`;
+          
+          setFlightComputerModules(prev => prev.map(m => 
+              m.id === module.id ? { ...m, isEnabled: enabled } : m
+          ));
+          
+          return `Flight Computer module '${module.name}' ${enabled ? 'enabled' : 'disabled'}.`;
       }
   };
 
@@ -1091,6 +1520,8 @@ const App: React.FC = () => {
             followingBodyId={followingBodyId}
             followingCoM={followingCoM}
             flightComputerModules={flightComputerModules}
+            rendezvousPoint={rendezvousPoint}
+            rendezvousPoints={rendezvousPoints}
         />
       ) : (
         <Canvas 
@@ -1118,6 +1549,8 @@ const App: React.FC = () => {
             showTransferWindow={showTransferWindow}
             showTheoreticalOrbit={showTheoreticalOrbit}
             flightComputerModules={flightComputerModules}
+            rendezvousPoint={rendezvousPoint}
+            rendezvousPoints={rendezvousPoints}
         />
       )}
 
@@ -1184,6 +1617,7 @@ const App: React.FC = () => {
           onRemoveModule={handleRemoveModule}
           onUpdateModule={handleUpdateModule}
           onToggleModule={handleToggleModule}
+          rendezvousPoints={rendezvousPoints}
       />
 
       {/* Assistant */}
@@ -1254,6 +1688,7 @@ const App: React.FC = () => {
             predictionPaths={predictionPaths}
             predictionSteps={predictionSteps}
             predictSystem={isPredictionEnabled}
+            onRendezvousPointChange={setRendezvousPoint}
           />
       )}
 

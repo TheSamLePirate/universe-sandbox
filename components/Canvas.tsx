@@ -38,6 +38,18 @@ interface CanvasProps {
   showTransferWindow: boolean;
   showTheoreticalOrbit: boolean;
   flightComputerModules: FlightComputerModule[];
+  rendezvousPoint?: Vector2D | null; // Legacy from RocketPanel
+  rendezvousPoints?: Array<{ 
+    point: Vector2D; 
+    name: string; 
+    color: string; 
+    moduleId: string;
+    timeToRendezvous: number;
+    distance: number;
+    deltaVPrograde: number;
+    deltaVRadial: number;
+    totalDeltaV: number;
+  }>;
 }
 
 interface Star {
@@ -102,7 +114,9 @@ const Canvas: React.FC<CanvasProps> = ({
   coMData,
   showTransferWindow,
   showTheoreticalOrbit,
-  flightComputerModules
+  flightComputerModules,
+  rendezvousPoint,
+  rendezvousPoints
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -1097,7 +1111,166 @@ const Canvas: React.FC<CanvasProps> = ({
         }
     }
 
-  }, [bodies, particles, width, height, scale, offset, selectedBodyId, stars, nebulaClouds, visualConfig, physicsConfig, isCreationMode, creationCandidate, predictionPaths, observerBodyIds, coMData, isRocketMode, isRocketSpawning, rocketTargetBodyId]);
+    // --- RENDEZVOUS MARKERS ---
+    // Legacy single rendezvous point from RocketPanel
+    if (rendezvousPoint) {
+        const rx = cx + rendezvousPoint.x * scale;
+        const ry = cy + rendezvousPoint.y * scale;
+        
+        if (Number.isFinite(rx) && Number.isFinite(ry)) {
+            const markerSize = 12;
+            const pulseScale = 1 + Math.sin(time * 3) * 0.2;
+            const effectiveSize = markerSize * pulseScale;
+            
+            ctx.save();
+            ctx.translate(rx, ry);
+            
+            // Outer ring
+            ctx.beginPath();
+            ctx.arc(0, 0, effectiveSize, 0, Math.PI * 2);
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.8;
+            ctx.stroke();
+            
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(0, 0, effectiveSize * 0.7, 0, Math.PI * 2);
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.5;
+            ctx.stroke();
+            
+            // Crosshair
+            ctx.globalAlpha = 0.8;
+            ctx.strokeStyle = '#00ff88';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-effectiveSize * 1.5, 0);
+            ctx.lineTo(effectiveSize * 1.5, 0);
+            ctx.moveTo(0, -effectiveSize * 1.5);
+            ctx.lineTo(0, effectiveSize * 1.5);
+            ctx.stroke();
+            
+            // Center dot
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#00ff88';
+            ctx.beginPath();
+            ctx.arc(0, 0, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Label
+            ctx.globalAlpha = 1;
+            ctx.font = 'bold 11px monospace';
+            ctx.fillStyle = '#00ff88';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.shadowColor = '#00ff88';
+            ctx.shadowBlur = 8;
+            ctx.fillText('RENDEZVOUS', 0, -effectiveSize * 2);
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+        }
+    }
+    
+    // Flight Computer rendezvous points (with custom names and colors)
+    if (rendezvousPoints && rendezvousPoints.length > 0) {
+        rendezvousPoints.forEach((rdv, index) => {
+            const rx = cx + rdv.point.x * scale;
+            const ry = cy + rdv.point.y * scale;
+            
+            if (Number.isFinite(rx) && Number.isFinite(ry)) {
+                const markerSize = 12;
+                const pulseScale = 1 + Math.sin(time * 3 + index * 0.5) * 0.2; // Offset animation per marker
+                const effectiveSize = markerSize * pulseScale;
+                
+                // Format time: only show non-zero values
+                const totalSeconds = Math.floor(rdv.timeToRendezvous);
+                const years = Math.floor(totalSeconds / (365.25 * 24 * 3600));
+                const remainingAfterYears = totalSeconds % (365.25 * 24 * 3600);
+                const months = Math.floor(remainingAfterYears / (30.44 * 24 * 3600));
+                const remainingAfterMonths = remainingAfterYears % (30.44 * 24 * 3600);
+                const days = Math.floor(remainingAfterMonths / (24 * 3600));
+                const remainingAfterDays = remainingAfterMonths % (24 * 3600);
+                const hours = Math.floor(remainingAfterDays / 3600);
+                const minutes = Math.floor((remainingAfterDays % 3600) / 60);
+                const seconds = Math.floor(remainingAfterDays % 60);
+                
+                const timeParts = [];
+                if (years > 0) timeParts.push(`${years}y`);
+                if (months > 0) timeParts.push(`${months}m`);
+                if (days > 0) timeParts.push(`${days}d`);
+                if (hours > 0) timeParts.push(`${hours}h`);
+                if (minutes > 0) timeParts.push(`${minutes}m`);
+                if (seconds > 0 && timeParts.length === 0) timeParts.push(`${seconds}s`); // Show seconds only if everything else is 0
+                
+                const timeStr = timeParts.length > 0 ? timeParts.join(' ') : '0s';
+                const secondsStr = `${rdv.timeToRendezvous.toFixed(1)}s`;
+                
+                ctx.save();
+                ctx.translate(rx, ry);
+                
+                // Outer ring
+                ctx.beginPath();
+                ctx.arc(0, 0, effectiveSize, 0, Math.PI * 2);
+                ctx.strokeStyle = rdv.color;
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.8;
+                ctx.stroke();
+                
+                // Inner ring
+                ctx.beginPath();
+                ctx.arc(0, 0, effectiveSize * 0.7, 0, Math.PI * 2);
+                ctx.strokeStyle = rdv.color;
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                
+                // Crosshair
+                ctx.globalAlpha = 0.8;
+                ctx.strokeStyle = rdv.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-effectiveSize * 1.5, 0);
+                ctx.lineTo(effectiveSize * 1.5, 0);
+                ctx.moveTo(0, -effectiveSize * 1.5);
+                ctx.lineTo(0, effectiveSize * 1.5);
+                ctx.stroke();
+                
+                // Center dot
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = rdv.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Label with custom name
+                ctx.globalAlpha = 1;
+                ctx.font = 'bold 11px monospace';
+                ctx.fillStyle = rdv.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.shadowColor = rdv.color;
+                ctx.shadowBlur = 8;
+                ctx.fillText(rdv.name.toUpperCase(), 0, -effectiveSize * 2 - 32);
+                
+                // Time labels
+                ctx.font = '9px monospace';
+                ctx.fillText(timeStr, 0, -effectiveSize * 2 - 20);
+                ctx.fillText(secondsStr, 0, -effectiveSize * 2 - 10);
+                
+                // Delta-V labels
+                ctx.fillText(`ΔV: ${rdv.totalDeltaV.toFixed(1)} m/s`, 0, -effectiveSize * 2);
+                ctx.fillText(`P:${rdv.deltaVPrograde.toFixed(1)} R:${rdv.deltaVRadial.toFixed(1)}`, 0, -effectiveSize * 2 + 10);
+                ctx.shadowBlur = 0;
+                
+                ctx.restore();
+            }
+        });
+    }
+
+  }, [bodies, particles, width, height, scale, offset, selectedBodyId, stars, nebulaClouds, visualConfig, physicsConfig, isCreationMode, creationCandidate, predictionPaths, observerBodyIds, coMData, isRocketMode, isRocketSpawning, rocketTargetBodyId, rendezvousPoint, rendezvousPoints]);
 
   const getClickedBodyId = (mouseX: number, mouseY: number) => {
     const cx = width / 2 + offset.x;

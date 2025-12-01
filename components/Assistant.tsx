@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, AssistantActions, Body, VisualConfig, PhysicsConfig } from '../types';
+import { ChatMessage, AssistantActions, Body, VisualConfig, PhysicsConfig, FlightComputerModuleType } from '../types';
 import { createChatSession, generateSpeech } from '../services/geminiService';
 import { Sparkles, Send, User, Bot, Wrench, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { Chat, GenerateContentResponse } from "@google/genai";
@@ -301,6 +301,40 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
                             break;
                         case 'get_rocket_telemetry':
                             result = actions.getRocketTelemetry(args.rocketName as string, args.targetBodyName as string | undefined);
+                            break;
+                        case 'add_manual_node':
+                            result = actions.addManualNode(
+                                args.rocketName as string,
+                                Number(args.timeFromNow),
+                                Number(args.deltaVPrograde),
+                                Number(args.deltaVRadial)
+                            );
+                            break;
+                        case 'get_rocket_flight_plan':
+                            result = actions.getRocketFlightPlan(args.rocketName as string);
+                            break;
+                        case 'add_flight_computer_module':
+                            result = actions.addFlightComputerModule(
+                                args.moduleType as FlightComputerModuleType,
+                                args.rocketName as string,
+                                args.referenceBodyName as string,
+                                args.targetBodyName as string | undefined,
+                                args.customName as string | undefined,
+                                args.color as string | undefined,
+                                args.maxDistance as number | undefined
+                            );
+                            break;
+                        case 'remove_flight_computer_module':
+                            result = actions.removeFlightComputerModule(args.moduleName as string);
+                            break;
+                        case 'get_flight_computer_data':
+                            result = actions.getFlightComputerData();
+                            break;
+                        case 'toggle_flight_computer_module':
+                            result = actions.toggleFlightComputerModule(
+                                args.moduleName as string,
+                                args.enabled as boolean
+                            );
                             break;
                         default:
                             result = `Unknown tool: ${name}`;

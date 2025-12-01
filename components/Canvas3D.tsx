@@ -38,6 +38,18 @@ interface Canvas3DProps {
   followingBodyId: string | null;
   followingCoM: boolean;
   flightComputerModules: FlightComputerModule[];
+  rendezvousPoint?: Vector2D | null; // Legacy from RocketPanel
+  rendezvousPoints?: Array<{ 
+    point: Vector2D; 
+    name: string; 
+    color: string; 
+    moduleId: string;
+    timeToRendezvous: number;
+    distance: number;
+    deltaVPrograde: number;
+    deltaVRadial: number;
+    totalDeltaV: number;
+  }>;
 }
 
 // ... (rest of file)
@@ -784,8 +796,125 @@ const FlightComputerOverlay: React.FC<{
     );
 };
 
+// Rendezvous Marker Component
+const RendezvousMarker: React.FC<{ 
+    point: Vector2D; 
+    name: string; 
+    color: string;
+    timeToRendezvous?: number;
+    deltaVPrograde?: number;
+    deltaVRadial?: number;
+    totalDeltaV?: number;
+}> = ({ point, name, color, timeToRendezvous, deltaVPrograde, deltaVRadial, totalDeltaV }) => {
+    const meshRef = useRef<THREE.Group>(null);
+    
+    // Pulsing animation
+    useFrame(({ clock }) => {
+        if (meshRef.current) {
+            const scale = 1 + Math.sin(clock.getElapsedTime() * 3) * 0.2;
+            meshRef.current.scale.set(scale, scale, scale);
+        }
+    });
+    
+    // Convert hex color to rgba for background
+    const hexToRgba = (hex: string, alpha: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+    
+    // Format time: only show non-zero values
+    let timeStr = '';
+    let secondsStr = '';
+    if (timeToRendezvous !== undefined) {
+        const totalSeconds = Math.floor(timeToRendezvous);
+        const years = Math.floor(totalSeconds / (365.25 * 24 * 3600));
+        const remainingAfterYears = totalSeconds % (365.25 * 24 * 3600);
+        const months = Math.floor(remainingAfterYears / (30.44 * 24 * 3600));
+        const remainingAfterMonths = remainingAfterYears % (30.44 * 24 * 3600);
+        const days = Math.floor(remainingAfterMonths / (24 * 3600));
+        const remainingAfterDays = remainingAfterMonths % (24 * 3600);
+        const hours = Math.floor(remainingAfterDays / 3600);
+        const minutes = Math.floor((remainingAfterDays % 3600) / 60);
+        const seconds = Math.floor(remainingAfterDays % 60);
+        
+        const timeParts = [];
+        if (years > 0) timeParts.push(`${years}y`);
+        if (months > 0) timeParts.push(`${months}m`);
+        if (days > 0) timeParts.push(`${days}d`);
+        if (hours > 0) timeParts.push(`${hours}h`);
+        if (minutes > 0) timeParts.push(`${minutes}m`);
+        if (seconds > 0 && timeParts.length === 0) timeParts.push(`${seconds}s`); // Show seconds only if everything else is 0
+        
+        timeStr = timeParts.length > 0 ? timeParts.join(' ') : '0s';
+        secondsStr = `${timeToRendezvous.toFixed(1)}s`;
+    }
+    
+    return (
+        <group ref={meshRef} position={[point.x, -point.y, 0]}>
+            {/* Outer ring */}
+            <mesh>
+                <ringGeometry args={[8, 10, 32]} />
+                <meshBasicMaterial color={color} transparent opacity={0.8} side={THREE.DoubleSide} />
+            </mesh>
+            
+            {/* Inner cross */}
+            <Line 
+                points={[[-12, 0, 0], [12, 0, 0]]}
+                color={color}
+                lineWidth={2}
+            />
+            <Line 
+                points={[[0, -12, 0], [0, 12, 0]]}
+                color={color}
+                lineWidth={2}
+            />
+            
+            {/* Center dot */}
+            <mesh>
+                <sphereGeometry args={[2, 16, 16]} />
+                <meshBasicMaterial color={color} />
+            </mesh>
+            
+            {/* Label */}
+            <Html position={[0, 15, 0]} center style={{ pointerEvents: 'none' }}>
+                <div style={{
+                    background: hexToRgba(color, 0.2),
+                    border: `1px solid ${color}`,
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    color: color,
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    whiteSpace: 'nowrap',
+                    textShadow: `0 0 4px ${hexToRgba(color, 0.8)}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '2px'
+                }}>
+                    <div>{name.toUpperCase()}</div>
+                    {timeToRendezvous !== undefined && (
+                        <>
+                            <div style={{ fontSize: '9px', opacity: 0.9 }}>{timeStr}</div>
+                            <div style={{ fontSize: '9px', opacity: 0.9 }}>{secondsStr}</div>
+                        </>
+                    )}
+                    {totalDeltaV !== undefined && (
+                        <>
+                            <div style={{ fontSize: '9px', opacity: 0.9 }}>ΔV: {totalDeltaV.toFixed(1)} m/s</div>
+                            <div style={{ fontSize: '8px', opacity: 0.8 }}>P:{deltaVPrograde?.toFixed(1)} R:{deltaVRadial?.toFixed(1)}</div>
+                        </>
+                    )}
+                </div>
+            </Html>
+        </group>
+    );
+};
+
 const SceneContent: React.FC<Canvas3DProps> = (props) => {
-    const { bodies, particles, visualConfig, selectedBodyId, onSelectBody, onCanvasClick, isCreationMode, creationCandidate, predictionPaths, width, height, scale, offset, isRocketMode, rocketTargetBodyId, showTheoreticalOrbit, showTransferWindow, physicsConfig, observerBodyIds, followingBodyId, followingCoM, coMData, flightComputerModules } = props;
+    const { bodies, particles, visualConfig, selectedBodyId, onSelectBody, onCanvasClick, isCreationMode, creationCandidate, predictionPaths, width, height, scale, offset, isRocketMode, rocketTargetBodyId, showTheoreticalOrbit, showTransferWindow, physicsConfig, observerBodyIds, followingBodyId, followingCoM, coMData, flightComputerModules, rendezvousPoint, rendezvousPoints } = props;
     
     const controlsRef = useRef<any>(null);
     const { camera } = useThree();
@@ -1026,6 +1155,21 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
 
             {/* CoM Overlay */}
             <CoMOverlay coMData={coMData} visualConfig={visualConfig} />
+
+            {/* Rendezvous Markers */}
+            {rendezvousPoint && <RendezvousMarker point={rendezvousPoint} name="RENDEZVOUS" color="#00ff88" />}
+            {rendezvousPoints && rendezvousPoints.map((rdv, index) => (
+                <RendezvousMarker 
+                    key={rdv.moduleId} 
+                    point={rdv.point} 
+                    name={rdv.name} 
+                    color={rdv.color}
+                    timeToRendezvous={rdv.timeToRendezvous}
+                    deltaVPrograde={rdv.deltaVPrograde}
+                    deltaVRadial={rdv.deltaVRadial}
+                    totalDeltaV={rdv.totalDeltaV}
+                />
+            ))}
 
             {/* Gravitational Waves */}
             <GravitationalWaves bodies={bodies} physicsConfig={physicsConfig} showWaves={visualConfig.showWaves} />

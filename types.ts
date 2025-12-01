@@ -178,6 +178,14 @@ export interface AssistantActions {
     programAdvancedFlightPlan: (rocketName: string, maneuvers: any[]) => string;
     executeManeuverPlan: (rocketName: string) => string;
     getRocketTelemetry: (rocketName: string, targetBodyName?: string) => string;
+    addManualNode: (rocketName: string, timeFromNow: number, deltaVPrograde: number, deltaVRadial: number) => string;
+    getRocketFlightPlan: (rocketName: string) => string;
+    
+    // Flight Computer Actions
+    addFlightComputerModule: (moduleType: FlightComputerModuleType, rocketName: string, referenceBodyName: string, targetBodyName?: string, customName?: string, color?: string, maxDistance?: number) => string;
+    removeFlightComputerModule: (moduleName: string) => string;
+    getFlightComputerData: () => string;
+    toggleFlightComputerModule: (moduleName: string, enabled: boolean) => string;
 }
 
 export interface RocketSpawnConfig {
@@ -187,7 +195,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker';
 
 export interface FlightComputerModule {
     id: string;
@@ -197,4 +205,6 @@ export interface FlightComputerModule {
     referenceBodyId: string; // The parent/center (e.g., Earth)
     targetBodyId?: string; // The target (e.g., Moon) - Optional depending on type
     color: string; // For visualization lines
+    name?: string; // Custom name for the module (e.g., "Apollo 11 Rendezvous")
+    maxDistance?: number; // For rendezvous tracker - max distance threshold
 }

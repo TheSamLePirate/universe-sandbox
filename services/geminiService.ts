@@ -303,6 +303,88 @@ const getRocketTelemetryTool: FunctionDeclaration = {
     },
 };
 
+const addManualNodeTool: FunctionDeclaration = {
+    name: "add_manual_node",
+    description: "Add a manual maneuver node to a rocket's flight plan. This allows precise delta-V planning with prograde and radial components.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            rocketName: { type: Type.STRING, description: "Name of the rocket." },
+            timeFromNow: { type: Type.NUMBER, description: "Time in seconds from now when to execute the burn (e.g., 60 for 1 minute from now)." },
+            deltaVPrograde: { type: Type.NUMBER, description: "Delta-V in the prograde direction in m/s. Positive = speed up, Negative = slow down." },
+            deltaVRadial: { type: Type.NUMBER, description: "Delta-V in the radial direction in m/s. Positive = radial out, Negative = radial in." },
+        },
+        required: ["rocketName", "timeFromNow", "deltaVPrograde", "deltaVRadial"],
+    },
+};
+
+const addFlightComputerModuleTool: FunctionDeclaration = {
+    name: "add_flight_computer_module",
+    description: "Add a calculation/tracker module to the Flight Computer. Available types: 'orbit_info' (orbital parameters), 'transfer_window' (phase angle tracking), 'rendezvous_tracker' (intercept point calculator with delta-V).",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            moduleType: { 
+                type: Type.STRING, 
+                description: "Type of module: 'orbit_info', 'transfer_window', or 'rendezvous_tracker'" 
+            },
+            rocketName: { type: Type.STRING, description: "Name of the rocket/subject body." },
+            referenceBodyName: { type: Type.STRING, description: "Name of the reference/parent body (e.g., 'Earth')." },
+            targetBodyName: { type: Type.STRING, description: "Name of the target body (required for 'transfer_window' and 'rendezvous_tracker')." },
+            customName: { type: Type.STRING, description: "Optional custom name for the module (e.g., 'ISS Docking', 'Apollo 11')." },
+            color: { type: Type.STRING, description: "Optional hex color for visualization (e.g., '#00ff88'). Default is purple." },
+            maxDistance: { type: Type.NUMBER, description: "For rendezvous_tracker: maximum distance threshold in units (default 10)." },
+        },
+        required: ["moduleType", "rocketName", "referenceBodyName"],
+    },
+};
+
+const removeFlightComputerModuleTool: FunctionDeclaration = {
+    name: "remove_flight_computer_module",
+    description: "Remove a Flight Computer module by its custom name.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            moduleName: { type: Type.STRING, description: "The custom name of the module to remove." },
+        },
+        required: ["moduleName"],
+    },
+};
+
+const getFlightComputerDataTool: FunctionDeclaration = {
+    name: "get_flight_computer_data",
+    description: "Get all active Flight Computer module data including orbital parameters, transfer windows, and rendezvous information with delta-V calculations.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {},
+    },
+};
+
+const toggleFlightComputerModuleTool: FunctionDeclaration = {
+    name: "toggle_flight_computer_module",
+    description: "Enable or disable a Flight Computer module by its custom name.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            moduleName: { type: Type.STRING, description: "The custom name of the module." },
+            enabled: { type: Type.BOOLEAN, description: "True to enable, false to disable." },
+        },
+        required: ["moduleName", "enabled"],
+    },
+};
+
+const getRocketFlightPlanTool: FunctionDeclaration = {
+    name: "get_rocket_flight_plan",
+    description: "Get detailed information about a rocket's flight plan including all maneuvers, their status (pending/active/completed), and current execution progress. Shows mission status and step-by-step breakdown.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            rocketName: { type: Type.STRING, description: "Name of the rocket." },
+        },
+        required: ["rocketName"],
+    },
+};
+
 const tools: Tool[] = [{
     functionDeclarations: [
         spawnBodyTool, 
@@ -320,7 +402,13 @@ const tools: Tool[] = [{
         controlRocketTool,
         programAdvancedFlightPlanTool,
         executeManeuverPlanTool,
-        getRocketTelemetryTool
+        getRocketTelemetryTool,
+        addManualNodeTool,
+        getRocketFlightPlanTool,
+        addFlightComputerModuleTool,
+        removeFlightComputerModuleTool,
+        getFlightComputerDataTool,
+        toggleFlightComputerModuleTool
     ]
 }];
 
@@ -402,28 +490,94 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
       {type: "auto_circularize", targetBodyName: "Earth"}
     ]
     
+    Simple Coast and Burn:
+    [
+      {type: "burn", thrust: 0.01, duration: 2.0, angleOffset: 0},
+      {type: "wait", duration: 30.0},
+      {type: "burn", thrust: 0.01, duration: 1.5, angleOffset: 180}
+    ]
+    
     To execute: Use 'execute_maneuver_plan' after programming.
     Use 'execute_maneuver_plan' to only when asked to execute. When a user ask to plan a mission or a maneuvre, do not execute it unless asked to.
     Note: Rocket mass is very small (0.001). Typical thrust values are 0.001 to 0.004 N.
     
+    FLIGHT PLAN MONITORING:
+    Use 'get_rocket_flight_plan' to get detailed status of a rocket's mission:
+    - Shows all programmed maneuvers with their parameters
+    - Status of each step: 'pending' (queued), 'active' (executing), 'completed' (done)
+    - Current progress percentage for active maneuvers
+    - Mission launch status (are maneuvers activated or just planned?)
+    - Useful for monitoring mission execution and troubleshooting
+    Example: Check if Apollo 11's transfer burn completed successfully
+    
+    MANUAL MANEUVER NODES:
+    Use 'add_manual_node' to add precise delta-V nodes to a rocket's flight plan. This is useful for:
+    - Fine-tuning orbital adjustments
+    - Creating specific delta-V burns with prograde and radial components
+    - Planning complex multi-burn sequences
+    Example: {rocketName: "Explorer 1", timeFromNow: 120, deltaVPrograde: 50.5, deltaVRadial: -10.2}
+    
+    FLIGHT COMPUTER:
+    The Flight Computer provides real-time calculations and tracking. Use these tools:
+    
+    1. ADD MODULE ('add_flight_computer_module'):
+       - 'orbit_info': Shows altitude, apoapsis, periapsis, period for a rocket around a reference body
+       - 'transfer_window': Tracks phase angle for optimal transfer windows between bodies
+       - 'rendezvous_tracker': Calculates intercept points with delta-V requirements (prograde & radial)
+       
+       Example rendezvous tracker:
+       {moduleType: "rendezvous_tracker", rocketName: "Apollo 11", referenceBodyName: "Earth", 
+        targetBodyName: "Moon", customName: "Lunar Docking", color: "#00ff88", maxDistance: 15}
+    
+    2. GET DATA ('get_flight_computer_data'):
+       Retrieves all active module calculations including:
+       - Orbital parameters (altitude, period, apoapsis, periapsis)
+       - Transfer window status (phase angles, readiness)
+       - Rendezvous data (time, distance, delta-V prograde, delta-V radial, total delta-V)
+    
+    3. REMOVE MODULE ('remove_flight_computer_module'):
+       Remove a module by its custom name
+    
+    4. TOGGLE MODULE ('toggle_flight_computer_module'):
+       Enable/disable a module without removing it
+    
+    Flight Computer modules are persistent and update in real-time. Rendezvous trackers show visual markers on the canvas with time and delta-V information.
+    
     Be helpful, scientific, and concise. If you execute a tool, strictly confirm what you did in the text response.
     `;
 
-    return getAI().chats.create({
-        model: 'gemini-3-pro-preview',
-        config: { 
-            systemInstruction,
-            tools: tools,
-            temperature: 0.7,
-            thinkingConfig: {
-                thinkingLevel: ThinkingLevel.LOW,
+    const useGeminiPro=false;
+
+    if (useGeminiPro) {
+        return getAI().chats.create({
+            model: "gemini-3-pro-preview",
+            config: { 
+                systemInstruction,
+                tools: tools,
+                temperature: 0.7,
+                thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.LOW,
+                },
             },
-        },
-        history: initialHistory.map(h => ({
-            role: h.role,
-            parts: [{ text: h.text }]
-        }))
-    });
+            history: initialHistory.map(h => ({
+                role: h.role,
+                parts: [{ text: h.text }]
+            }))
+        });
+    } else {
+        return getAI().chats.create({
+            model: "gemini-2.5-flash",
+            config: { 
+                systemInstruction,
+                tools: tools,
+                temperature: 0.7,
+            },
+            history: initialHistory.map(h => ({
+                role: h.role,
+                parts: [{ text: h.text }]
+            }))
+        });
+    }
 };
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
