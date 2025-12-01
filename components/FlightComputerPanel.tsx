@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight } from 'lucide-react';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2 } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
-import { calculateOrbitInfo, resolveInput, calculateTransferInfo } from '../services/orbitalMath';
+import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
@@ -32,41 +32,46 @@ const InputSelector: React.FC<{
     bodies: Body[];
     modules: FlightComputerModule[];
     currentModuleId: string;
-}> = ({ label, value, onChange, bodies, modules, currentModuleId }) => {
+    allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean')[];
+}> = ({ label, value, onChange, bodies, modules, currentModuleId, allowedTypes = ['body', 'module_output'] }) => {
     const [mode, setMode] = useState<'body' | 'module'>('body');
 
     // Initialize mode based on current value
     useEffect(() => {
         if (value?.type === 'module_output') {
             setMode('module');
-        } else {
+        } else if (value?.type === 'body') {
             setMode('body');
+        } else if (allowedTypes.includes('scalar') && !allowedTypes.includes('body')) {
+             setMode('module'); // Force module mode if body not allowed (e.g. for scalar inputs)
         }
-    }, [value]);
+    }, [value, allowedTypes]);
 
-    const availableModules = modules.filter(m => m.id !== currentModuleId && m.type === 'orbit_info');
+    const availableModules = modules.filter(m => m.id !== currentModuleId);
 
     return (
         <div className="space-y-1">
             <div className="flex justify-between items-center">
                 <label className="text-[9px] text-slate-500 uppercase">{label}</label>
-                <div className="flex bg-slate-800 rounded p-0.5">
-                    <button 
-                        onClick={() => setMode('body')}
-                        className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'body' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        BODY
-                    </button>
-                    <button 
-                        onClick={() => setMode('module')}
-                        className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'module' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        MODULE
-                    </button>
-                </div>
+                {allowedTypes.includes('body') && allowedTypes.includes('module_output') && (
+                    <div className="flex bg-slate-800 rounded p-0.5">
+                        <button 
+                            onClick={() => setMode('body')}
+                            className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'body' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            BODY
+                        </button>
+                        <button 
+                            onClick={() => setMode('module')}
+                            className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'module' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            MODULE
+                        </button>
+                    </div>
+                )}
             </div>
             
-            {mode === 'body' ? (
+            {mode === 'body' && allowedTypes.includes('body') ? (
                 <select 
                     value={value?.type === 'body' ? value.value : ''}
                     onChange={(e) => onChange({ type: 'body', value: e.target.value, label: bodies.find(b => b.id === e.target.value)?.name })}
@@ -83,21 +88,58 @@ const InputSelector: React.FC<{
                     onChange={(e) => {
                         const [modId, key] = e.target.value.split(':');
                         const mod = modules.find(m => m.id === modId);
+                        let label = `${mod?.name || 'Module'} - ${key}`;
+                        if (key === 'pe_point') label = `${mod?.name || 'Orbit'} Pe`;
+                        if (key === 'pa_point') label = `${mod?.name || 'Orbit'} Pa`;
+                        
                         onChange({ 
                             type: 'module_output', 
                             value: e.target.value, 
-                            label: `${mod?.name || 'Module'} (${key === 'pe_point' ? 'Pe' : 'Pa'})` 
+                            label: label
                         });
                     }}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
                 >
                     <option value="">Select Output...</option>
-                    {availableModules.map(m => (
-                        <React.Fragment key={m.id}>
-                            <option value={`${m.id}:pe_point`}>{m.name || 'Orbit Info'} - Periapsis Point</option>
-                            <option value={`${m.id}:pa_point`}>{m.name || 'Orbit Info'} - Apoapsis Point</option>
-                        </React.Fragment>
-                    ))}
+                    {availableModules.map(m => {
+                        const options = [];
+                        
+                        // Vector/Point Outputs
+                        if (!allowedTypes.includes('scalar')) {
+                            if (m.type === 'orbit_info') {
+                                options.push(<option key={`${m.id}:pe_point`} value={`${m.id}:pe_point`}>{m.name || 'Orbit'} - Periapsis Point</option>);
+                                options.push(<option key={`${m.id}:pa_point`} value={`${m.id}:pa_point`}>{m.name || 'Orbit'} - Apoapsis Point</option>);
+                            }
+                        }
+                        
+                        // Scalar Outputs
+                        if (allowedTypes.includes('scalar')) {
+                            if (m.type === 'track_distance') {
+                                options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Distance'} - Value</option>);
+                            }
+                            if (m.type === 'track_velocity') {
+                                options.push(<option key={`${m.id}:speed`} value={`${m.id}:speed`}>{m.name || 'Velocity'} - Speed</option>);
+                            }
+                            if (m.type === 'orbit_info') {
+                                options.push(<option key={`${m.id}:altitude`} value={`${m.id}:altitude`}>{m.name || 'Orbit'} - Altitude</option>);
+                                options.push(<option key={`${m.id}:periapsis`} value={`${m.id}:periapsis`}>{m.name || 'Orbit'} - Periapsis Alt</option>);
+                                options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis Alt</option>);
+                                options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>);
+                            }
+                        }
+                        
+                        // Boolean Outputs
+                        if (allowedTypes.includes('boolean')) {
+                            if (m.type === 'notify') {
+                                options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>);
+                            }
+                            if (m.type === 'logic_gate') {
+                                options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>);
+                            }
+                        }
+                        
+                        return options;
+                    })}
                 </select>
             )}
         </div>
@@ -117,6 +159,89 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
     const isMobile = useIsMobile();
+
+    const [expandedModules, setExpandedModules] = useState<string[]>([]);
+    
+    // Audio Context for Beep Module
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const prevBeepInputStateRef = useRef<Map<string, boolean>>(new Map());
+    const lastBeepTimeRef = useRef<Map<string, number>>(new Map());
+
+    useEffect(() => {
+        // Init Audio Context on user interaction if needed
+        const initAudio = () => {
+             const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+             if (AudioContextClass && !audioContextRef.current) {
+                 audioContextRef.current = new AudioContextClass();
+             }
+             if (audioContextRef.current?.state === 'suspended') {
+                 audioContextRef.current.resume();
+             }
+        };
+        
+        window.addEventListener('click', initAudio);
+        return () => window.removeEventListener('click', initAudio);
+    }, []);
+
+    const playBeep = (frequency: number = 800) => {
+        if (!audioContextRef.current) return;
+        const ctx = audioContextRef.current;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.value = frequency;
+        
+        const now = ctx.currentTime;
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.01);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(now);
+        osc.stop(now + 0.1);
+    };
+
+    // Beep Module Logic Loop
+    useEffect(() => {
+        modules.forEach(module => {
+            if (module.type === 'beep' && module.isEnabled) {
+                const input = resolveBooleanInput(module.inputs?.primary, bodies, modules, physicsConfig.gravitationalConstant);
+                const mode = module.beepTriggerMode || 'rising';
+                const pitch = module.beepPitch || 800;
+                const rate = module.beepRate || 2;
+                const prevState = prevBeepInputStateRef.current.get(module.id) || false;
+                
+                if (input !== null) {
+                    let shouldBeep = false;
+                    const now = Date.now();
+                    
+                    if (mode === 'rising' && input && !prevState) {
+                        shouldBeep = true;
+                    } else if (mode === 'falling' && !input && prevState) {
+                        shouldBeep = true;
+                    } else if (mode === 'continuous' && input) {
+                        const lastTime = lastBeepTimeRef.current.get(module.id) || 0;
+                        const interval = 1000 / rate;
+                        if (now - lastTime > interval) {
+                            shouldBeep = true;
+                            lastBeepTimeRef.current.set(module.id, now);
+                        }
+                    }
+                    
+                    if (shouldBeep) {
+                        playBeep(pitch);
+                    }
+                }
+                
+                if (input !== null) {
+                    prevBeepInputStateRef.current.set(module.id, input);
+                }
+            }
+        });
+    }, [bodies, modules, physicsConfig]);
 
     // Helper to get input or fallback to legacy fields
     const getInput = (module: FlightComputerModule, key: string): FlightComputerInput | undefined => {
@@ -408,6 +533,218 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     </div>
                 );
 
+            case 'track_distance':
+                const dPrimary = resolveInput(getInput(module, 'primary'), bodies, modules, physicsConfig.gravitationalConstant);
+                const dTarget = resolveInput(getInput(module, 'target'), bodies, modules, physicsConfig.gravitationalConstant);
+                
+                if (!dPrimary || !dTarget) return <div className="text-xs text-slate-500 italic">Select Objects</div>;
+                
+                const distance = calculateDistance(dPrimary, dTarget);
+                
+                return (
+                    <div className="mt-2">
+                        <div className="bg-slate-800/50 p-1.5 rounded flex justify-between items-center">
+                            <div className="text-[9px] text-slate-500 uppercase">Distance</div>
+                            <div className="text-xs text-emerald-300 font-mono">{distance.toFixed(1)} u</div>
+                        </div>
+                    </div>
+                );
+
+            case 'track_velocity':
+                const vPrimary = resolveInput(getInput(module, 'primary'), bodies, modules, physicsConfig.gravitationalConstant);
+                const vTarget = resolveInput(getInput(module, 'target'), bodies, modules, physicsConfig.gravitationalConstant);
+                
+                if (!vPrimary || !vTarget) return <div className="text-xs text-slate-500 italic">Select Objects</div>;
+                
+                const speed = calculateRelativeSpeed(vPrimary, vTarget);
+                
+                return (
+                    <div className="mt-2">
+                        <div className="bg-slate-800/50 p-1.5 rounded flex justify-between items-center">
+                            <div className="text-[9px] text-slate-500 uppercase">Rel. Speed</div>
+                            <div className="text-xs text-yellow-300 font-mono">{speed.toFixed(1)} m/s</div>
+                        </div>
+                    </div>
+                );
+
+            case 'notify':
+                const nInput = getInput(module, 'primary'); // Source
+                const currentValue = resolveScalarInput(nInput, bodies, modules, physicsConfig.gravitationalConstant);
+                
+                const operator = module.comparisonOperator || '>';
+                const threshold = module.comparisonValue || 0;
+                
+                let triggered = false;
+                if (currentValue !== null) {
+                    switch (operator) {
+                        case '>': triggered = currentValue > threshold; break;
+                        case '<': triggered = currentValue < threshold; break;
+                        case '=': triggered = Math.abs(currentValue - threshold) < 0.1; break; // Epsilon for float equality
+                        case '>=': triggered = currentValue >= threshold; break;
+                        case '<=': triggered = currentValue <= threshold; break;
+                    }
+                }
+
+                // Trigger visual feedback
+                if (triggered && !module.notifyTriggered) {
+                     // Could play sound here if we had audio context
+                     // For now, visual only
+                }
+
+                return (
+                    <div className="mt-2 space-y-2">
+                        <div className="flex gap-2 items-center">
+                            <select 
+                                value={operator}
+                                onChange={(e) => onUpdateModule(module.id, { comparisonOperator: e.target.value as any })}
+                                className="bg-slate-900 border border-slate-700 rounded px-1 py-1 text-xs text-slate-300 outline-none w-12"
+                            >
+                                <option value=">">&gt;</option>
+                                <option value="<">&lt;</option>
+                                <option value="=">=</option>
+                                <option value=">=">&ge;</option>
+                                <option value="<=">&le;</option>
+                            </select>
+                            <input 
+                                type="number"
+                                value={threshold}
+                                onChange={(e) => onUpdateModule(module.id, { comparisonValue: parseFloat(e.target.value) })}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none flex-1"
+                                placeholder="Value"
+                            />
+                        </div>
+                        
+                        <div className={`p-2 rounded border ${triggered ? 'bg-red-900/50 border-red-500 animate-pulse' : 'bg-slate-800/50 border-slate-700'}`}>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[9px] text-slate-500 uppercase">Current</span>
+                                <span className={`text-xs font-mono ${triggered ? 'text-red-300 font-bold' : 'text-slate-300'}`}>
+                                    {currentValue !== null ? currentValue.toFixed(2) : '---'}
+                                </span>
+                            </div>
+                            {triggered && (
+                                <div className="text-[10px] text-red-400 font-bold text-center mt-1 uppercase tracking-wider">
+                                    ALERT TRIGGERED
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'logic_gate':
+                const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, physicsConfig.gravitationalConstant);
+                const inputB = resolveBooleanInput(module.inputs?.inputB, bodies, modules, physicsConfig.gravitationalConstant);
+                const logicOp = module.logicOperator || 'AND';
+                
+                let result: boolean | null = null;
+                
+                if (inputA !== null) {
+                    if (logicOp === 'NOT') {
+                        result = !inputA;
+                    } else if (inputB !== null) {
+                        switch (logicOp) {
+                            case 'AND': result = inputA && inputB; break;
+                            case 'OR': result = inputA || inputB; break;
+                            case 'NOR': result = !(inputA || inputB); break;
+                            case 'NAND': result = !(inputA && inputB); break;
+                            case 'XOR': result = inputA !== inputB; break;
+                            case 'XNOR': result = inputA === inputB; break;
+                        }
+                    }
+                }
+
+                return (
+                    <div className="mt-2 space-y-2">
+                         <div className="flex justify-center">
+                            <select 
+                                value={logicOp}
+                                onChange={(e) => onUpdateModule(module.id, { logicOperator: e.target.value as any })}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-purple-300 font-bold outline-none text-center w-full"
+                            >
+                                <option value="AND">AND</option>
+                                <option value="OR">OR</option>
+                                <option value="NOR">NOR</option>
+                                <option value="NAND">NAND</option>
+                                <option value="XOR">XOR</option>
+                                <option value="XNOR">XNOR</option>
+                                <option value="NOT">NOT</option>
+                            </select>
+                         </div>
+                         
+                         <div className={`p-2 rounded border flex justify-between items-center ${result ? 'bg-purple-900/50 border-purple-500' : 'bg-slate-800/50 border-slate-700'}`}>
+                            <span className="text-[9px] text-slate-500 uppercase">Output</span>
+                            <span className={`text-xs font-mono font-bold ${result ? 'text-purple-300' : 'text-slate-500'}`}>
+                                {result === null ? '---' : (result ? 'TRUE' : 'FALSE')}
+                            </span>
+                         </div>
+                    </div>
+                );
+
+            case 'beep':
+                const beepInput = resolveBooleanInput(module.inputs?.primary, bodies, modules, physicsConfig.gravitationalConstant);
+                const beepMode = module.beepTriggerMode || 'rising';
+                const beepPitch = module.beepPitch || 800;
+                const beepRate = module.beepRate || 2;
+                
+                return (
+                    <div className="mt-2 space-y-2">
+                        <div className="flex justify-center">
+                            <select 
+                                value={beepMode}
+                                onChange={(e) => onUpdateModule(module.id, { beepTriggerMode: e.target.value as any })}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-yellow-300 font-bold outline-none text-center w-full"
+                            >
+                                <option value="rising">At Rising Edge</option>
+                                <option value="falling">At Falling Edge</option>
+                                <option value="continuous">Continuous (True)</option>
+                            </select>
+                        </div>
+
+                        {/* Config: Pitch & Rate */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
+                                <div className="text-[9px] text-slate-500 uppercase mb-1">Pitch (Hz)</div>
+                                <div className="flex items-center gap-1">
+                                    <input 
+                                        type="range" 
+                                        min="200" 
+                                        max="2000" 
+                                        step="50"
+                                        value={beepPitch}
+                                        onChange={(e) => onUpdateModule(module.id, { beepPitch: parseInt(e.target.value) })}
+                                        className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <span className="text-[10px] font-mono text-slate-300 w-8 text-right">{beepPitch}</span>
+                                </div>
+                            </div>
+                            
+                            {beepMode === 'continuous' && (
+                                <div className="bg-slate-900/50 rounded p-1.5 border border-slate-700/50">
+                                    <div className="text-[9px] text-slate-500 uppercase mb-1">Rate (/s)</div>
+                                    <div className="flex items-center gap-1">
+                                        <input 
+                                            type="range" 
+                                            min="0.5" 
+                                            max="10" 
+                                            step="0.5"
+                                            value={beepRate}
+                                            onChange={(e) => onUpdateModule(module.id, { beepRate: parseFloat(e.target.value) })}
+                                            className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <span className="text-[10px] font-mono text-slate-300 w-6 text-right">{beepRate}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className={`p-2 rounded border flex justify-between items-center ${beepInput ? 'bg-yellow-900/20 border-yellow-500/50' : 'bg-slate-800/50 border-slate-700'}`}>
+                            <span className="text-[9px] text-slate-500 uppercase">Input State</span>
+                            <span className={`text-xs font-mono font-bold ${beepInput ? 'text-yellow-300' : 'text-slate-500'}`}>
+                                {beepInput === null ? '---' : (beepInput ? 'TRUE' : 'FALSE')}
+                            </span>
+                        </div>
+                    </div>
+                );
+
             default:
                 return null;
         }
@@ -463,6 +800,36 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             >
                                 <Navigation size={14} className="text-cyan-400" /> Rendezvous
                             </button>
+                            <button 
+                                onClick={() => { onAddModule('track_distance'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <ArrowRight size={14} className="text-emerald-400" /> Distance
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('track_velocity'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Gauge size={14} className="text-yellow-400" /> Velocity
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('notify'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Activity size={14} className="text-red-400" /> Notify
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('logic_gate'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Activity size={14} className="text-purple-400" /> Logic Gate
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('beep'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-yellow-600/20 hover:border-yellow-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Volume2 size={14} className="text-yellow-400" /> Beep
+                            </button>
                         </div>
                     )}
 
@@ -483,9 +850,14 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             className="w-2 h-2 rounded-full"
                                             style={{ backgroundColor: module.color }}
                                         />
-                                        <span className="text-xs font-bold text-slate-200 uppercase">
-                                            {module.type.replace('_', ' ')}
-                                        </span>
+                                        <input 
+                                            type="text"
+                                            value={module.name || ''}
+                                            placeholder={module.type.replace('_', ' ').toUpperCase()}
+                                            onChange={(e) => onUpdateModule(module.id, { name: e.target.value })}
+                                            className="bg-transparent text-xs font-bold text-slate-200 uppercase border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 -ml-1 outline-none w-32 transition-all placeholder:text-slate-500"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <button 
@@ -505,35 +877,177 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                                 {/* Body Selectors */}
                                 <div className="grid grid-cols-2 gap-2 mb-2">
-                                    <div className="space-y-1">
-                                        <InputSelector 
-                                            label="Subject"
-                                            value={getInput(module, 'primary')}
-                                            onChange={(input) => updateInput(module.id, 'primary', input)}
-                                            bodies={bodies}
-                                            modules={modules}
-                                            currentModuleId={module.id}
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <InputSelector 
-                                            label="Reference"
-                                            value={getInput(module, 'reference')}
-                                            onChange={(input) => updateInput(module.id, 'reference', input)}
-                                            bodies={bodies}
-                                            modules={modules}
-                                            currentModuleId={module.id}
-                                        />
-                                    </div>
-                                    {(module.type === 'transfer_window' || module.type === 'rendezvous_tracker') && (
+                                    {/* Orbit Info: Primary + Reference */}
+                                    {module.type === 'orbit_info' && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Subject"
+                                                    value={getInput(module, 'primary')}
+                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+
+                                </div>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Reference"
+                                                    value={getInput(module, 'reference')}
+                                                    onChange={(input) => updateInput(module.id, 'reference', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Transfer: Primary + Reference + Target */}
+                                    {module.type === 'transfer_window' && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Subject"
+                                                    value={getInput(module, 'primary')}
+                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Reference"
+                                                    value={getInput(module, 'reference')}
+                                                    onChange={(input) => updateInput(module.id, 'reference', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                            <div className="col-span-2 space-y-1">
+                                                <InputSelector 
+                                                    label="Target"
+                                                    value={getInput(module, 'target')}
+                                                    onChange={(input) => updateInput(module.id, 'target', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Rendezvous: Primary + Target */}
+                                    {module.type === 'rendezvous_tracker' && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Rocket"
+                                                    value={getInput(module, 'primary')}
+                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Target"
+                                                    value={getInput(module, 'target')}
+                                                    onChange={(input) => updateInput(module.id, 'target', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Distance/Velocity: Primary + Target */}
+                                    {(module.type === 'track_distance' || module.type === 'track_velocity') && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="From"
+                                                    value={getInput(module, 'primary')}
+                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="To"
+                                                    value={getInput(module, 'target')}
+                                                    onChange={(input) => updateInput(module.id, 'target', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Notify: Source (Scalar) */}
+                                    {module.type === 'notify' && (
                                         <div className="col-span-2 space-y-1">
                                             <InputSelector 
-                                                label="Target"
-                                                value={getInput(module, 'target')}
-                                                onChange={(input) => updateInput(module.id, 'target', input)}
+                                                label="Monitored Value"
+                                                value={getInput(module, 'primary')}
+                                                onChange={(input) => updateInput(module.id, 'primary', input)}
                                                 bodies={bodies}
                                                 modules={modules}
                                                 currentModuleId={module.id}
+                                                allowedTypes={['scalar']}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Logic Gate: Input A + Input B */}
+                                    {module.type === 'logic_gate' && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <InputSelector 
+                                                    label="Input A"
+                                                    value={getInput(module, 'inputA')}
+                                                    onChange={(input) => updateInput(module.id, 'inputA', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                    allowedTypes={['boolean']}
+                                                />
+                                            </div>
+                                            {module.logicOperator !== 'NOT' && (
+                                                <div className="space-y-1">
+                                                    <InputSelector 
+                                                        label="Input B"
+                                                        value={getInput(module, 'inputB')}
+                                                        onChange={(input) => updateInput(module.id, 'inputB', input)}
+                                                        bodies={bodies}
+                                                        modules={modules}
+                                                        currentModuleId={module.id}
+                                                        allowedTypes={['boolean']}
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Beep: Input (Boolean) */}
+                                    {module.type === 'beep' && (
+                                        <div className="col-span-2 space-y-1">
+                                            <InputSelector 
+                                                label="Trigger Input"
+                                                value={getInput(module, 'primary')}
+                                                onChange={(input) => updateInput(module.id, 'primary', input)}
+                                                bodies={bodies}
+                                                modules={modules}
+                                                currentModuleId={module.id}
+                                                allowedTypes={['boolean']}
                                             />
                                         </div>
                                     )}

@@ -196,7 +196,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
 
@@ -205,6 +205,10 @@ export interface FlightComputerInput {
     value: string; // ID for body, "moduleId:outputKey" for module output, or JSON string for vector
     label?: string; // Display name
 }
+
+export type ComparisonOperator = '>' | '<' | '=' | '>=' | '<=';
+export type LogicOperator = 'AND' | 'OR' | 'NOR' | 'NAND' | 'XOR' | 'XNOR' | 'NOT';
+export type BeepTriggerMode = 'rising' | 'falling' | 'continuous';
 
 export interface FlightComputerModule {
     id: string;
@@ -222,4 +226,17 @@ export interface FlightComputerModule {
     color: string; 
     name?: string; 
     maxDistance?: number; 
+    
+    // Notify Module Config
+    comparisonOperator?: ComparisonOperator;
+    comparisonValue?: number;
+    notifyTriggered?: boolean; // State to track if notification is active
+    
+    // Logic Gate Config
+    logicOperator?: LogicOperator;
+    
+    // Beep Module Config
+    beepTriggerMode?: BeepTriggerMode;
+    beepPitch?: number; // Hz (default 800)
+    beepRate?: number; // Beeps per second (default 2)
 }

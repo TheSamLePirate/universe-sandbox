@@ -165,3 +165,130 @@ export const calculateTransferInfo = (
     
     return { currentPhase, requiredPhase: normalizedRequired, error, ready: error < 5 };
 };
+
+export const calculateDistance = (obj1: Body | Vector2D, obj2: Body | Vector2D): number => {
+    const p1 = 'position' in obj1 ? obj1.position : obj1;
+    const p2 = 'position' in obj2 ? obj2.position : obj2;
+    
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+};
+
+export const calculateRelativeSpeed = (obj1: Body | Vector2D, obj2: Body | Vector2D): number => {
+    const v1 = 'velocity' in obj1 ? obj1.velocity : { x: 0, y: 0 };
+    const v2 = 'velocity' in obj2 ? obj2.velocity : { x: 0, y: 0 };
+    
+    // Relative velocity vector
+    const rvx = v1.x - v2.x;
+    const rvy = v1.y - v2.y;
+    
+    return Math.sqrt(rvx * rvx + rvy * rvy);
+};
+
+export const resolveScalarInput = (
+    input: FlightComputerInput | undefined,
+    bodies: Body[],
+    modules: FlightComputerModule[],
+    gravitationalConstant: number
+): number | null => {
+    if (!input) return null;
+
+    if (input.type === 'module_output') {
+        const [moduleId, outputKey] = input.value.split(':');
+        const module = modules.find(m => m.id === moduleId);
+        if (!module) return null;
+
+        // Resolve based on module type
+        if (module.type === 'track_distance') {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
+            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant);
+            if (p1 && p2 && outputKey === 'distance') {
+                return calculateDistance(p1, p2);
+            }
+        } else if (module.type === 'track_velocity') {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
+            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant);
+            if (p1 && p2 && outputKey === 'speed') {
+                return calculateRelativeSpeed(p1, p2);
+            }
+        } else if (module.type === 'orbit_info') {
+             // Re-resolve orbit info for scalar outputs
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
+
+            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
+            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant);
+            
+            if (primary && reference && 'mass' in reference) {
+                 const info = calculateOrbitInfo(primary, reference as Body, gravitationalConstant);
+                 if (info) {
+                     if (outputKey === 'altitude') return info.altitude;
+                     if (outputKey === 'periapsis') return info.periapsis;
+                     if (outputKey === 'apoapsis') return info.apoapsis;
+                     if (outputKey === 'period') return info.period;
+                 }
+            }
+        }
+    }
+    
+    return null;
+};
+
+export const resolveBooleanInput = (
+    input: FlightComputerInput | undefined,
+    bodies: Body[],
+    modules: FlightComputerModule[],
+    gravitationalConstant: number
+): boolean | null => {
+    if (!input) return null;
+
+    if (input.type === 'module_output') {
+        const [moduleId, outputKey] = input.value.split(':');
+        const module = modules.find(m => m.id === moduleId);
+        if (!module) return null;
+
+        if (module.type === 'notify' && outputKey === 'triggered') {
+            // Re-evaluate notify logic
+            const nInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const currentValue = resolveScalarInput(nInput, bodies, modules, gravitationalConstant);
+            const operator = module.comparisonOperator || '>';
+            const threshold = module.comparisonValue || 0;
+
+            if (currentValue !== null) {
+                switch (operator) {
+                    case '>': return currentValue > threshold;
+                    case '<': return currentValue < threshold;
+                    case '=': return Math.abs(currentValue - threshold) < 0.1;
+                    case '>=': return currentValue >= threshold;
+                    case '<=': return currentValue <= threshold;
+                }
+            }
+            return false;
+        } else if (module.type === 'logic_gate' && outputKey === 'result') {
+            // Recursive resolution for Logic Gate
+            const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, gravitationalConstant);
+            const inputB = resolveBooleanInput(module.inputs?.inputB, bodies, modules, gravitationalConstant);
+            const op = module.logicOperator || 'AND';
+
+            if (inputA === null) return null; // A is always required
+            // B is required for binary operators
+            if (op !== 'NOT' && inputB === null) return null;
+
+            switch (op) {
+                case 'AND': return inputA && (inputB as boolean);
+                case 'OR': return inputA || (inputB as boolean);
+                case 'NOR': return !(inputA || (inputB as boolean));
+                case 'NAND': return !(inputA && (inputB as boolean));
+                case 'XOR': return inputA !== inputB;
+                case 'XNOR': return inputA === inputB;
+                case 'NOT': return !inputA;
+            }
+        }
+    }
+    return null;
+};
