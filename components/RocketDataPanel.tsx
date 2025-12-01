@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Body, PhysicsConfig, Vector2D } from '../types';
-import { Activity, Anchor, ArrowRight, Clock, Compass, Fuel, Gauge, Globe, MapPin, Navigation, Rocket, Timer, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Anchor, ArrowRight, Clock, Compass, Fuel, Gauge, Globe, MapPin, Navigation, Rocket, Timer, Zap, ChevronDown, ChevronUp, Pause, Play } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 
 interface RocketDataPanelProps {
@@ -13,6 +13,7 @@ interface RocketDataPanelProps {
     predictionPaths: { id: string, color: string, points: Vector2D[] }[];
     predictionSteps: number;
     predictSystem: boolean;
+    onUpdateRocket?: (id: string, updates: Partial<Body>) => void;
 }
 
 const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
@@ -23,7 +24,8 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
     targetBodyId,
     predictionPaths,
     predictionSteps,
-    predictSystem
+    predictSystem,
+    onUpdateRocket
 }) => {
     
     // Helper function to format time in human-readable format
@@ -172,6 +174,34 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
 
     }, [rocket, targetBodyId, predictionPaths, predictionSteps, physicsConfig.timeStep, bodies, predictSystem]);
 
+    // Mission control handlers
+    const handleStopMission = () => {
+        if (!onUpdateRocket || !rocket.maneuvers) return;
+        
+        // Set all active maneuvers to pending
+        const updatedManeuvers = rocket.maneuvers.map(m => {
+            if (m.status === 'active') {
+                return { ...m, status: 'pending' as const };
+            }
+            return m;
+        });
+        
+        onUpdateRocket(rocket.id, { maneuvers: updatedManeuvers });
+    };
+
+    const handleResumeMission = () => {
+        if (!onUpdateRocket || !rocket.maneuvers) return;
+        
+        // Activate all pending maneuvers (will be executed in sequence by physics engine)
+        const updatedManeuvers = rocket.maneuvers.map(m => {
+            if (m.status === 'pending') {
+                return { ...m, status: 'active' as const };
+            }
+            return m;
+        });
+        
+        onUpdateRocket(rocket.id, { maneuvers: updatedManeuvers });
+    };
 
     const isMobile = useIsMobile();
     const [isExpanded, setIsExpanded] = useState(false);
@@ -410,10 +440,23 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
             {/* FLIGHT COMPUTER STATUS Details on maneuver*/}
             {rocket.maneuvers && rocket.maneuvers.some(m => m.status === 'active') && (
                 <div className="mt-2 bg-slate-900/90 border border-green-500/50 p-3 rounded-r-xl shadow-lg animate-pulse-slow">
-                     <div className="flex items-center gap-2 text-green-400 mb-2">
-                     <Activity size={14} />
-                     <span className="text-xs font-bold uppercase">Maneuver Executing</span>
-                </div>
+                     <div className="flex items-center justify-between text-green-400 mb-2">
+                        <div className="flex items-center gap-2">
+                            <Activity size={14} />
+                            <span className="text-xs font-bold uppercase">Maneuver Executing</span>
+                        </div>
+                        {/* Mission Control Buttons */}
+                        {onUpdateRocket && (
+                            <button 
+                                onClick={handleStopMission}
+                                className="flex items-center gap-1 px-2 py-1 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/50 rounded text-[10px] font-bold text-orange-400 transition-colors pointer-events-auto"
+                                title="Stop mission after current step"
+                            >
+                                <Pause size={12} />
+                                STOP
+                            </button>
+                        )}
+                 </div>
                      
                      {/* Takes only the first active maneuver */}
                      {rocket.maneuvers.filter(m => m.status === 'active').slice(0, 1).map(m => {
@@ -541,6 +584,28 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
                 </div>
             )}
         
+            {/* MISSION PAUSED - Show Resume Button */}
+            {rocket.maneuvers && !rocket.maneuvers.some(m => m.status === 'active') && rocket.maneuvers.some(m => m.status === 'pending') && onUpdateRocket && (
+                <div className="mt-2 bg-slate-900/90 border border-blue-500/50 p-3 rounded-r-xl shadow-lg">
+                     <div className="flex items-center justify-between text-blue-400 mb-2">
+                        <div className="flex items-center gap-2">
+                            <Clock size={14} />
+                            <span className="text-xs font-bold uppercase">Mission Paused</span>
+                        </div>
+                        <button 
+                            onClick={handleResumeMission}
+                            className="flex items-center gap-1 px-2 py-1 bg-green-600/20 hover:bg-green-600/40 border border-green-500/50 rounded text-[10px] font-bold text-green-400 transition-colors pointer-events-auto"
+                            title="Resume mission execution"
+                        >
+                            <Play size={12} />
+                            RESUME
+                        </button>
+                     </div>
+                     <div className="text-[10px] text-slate-400">
+                        {rocket.maneuvers.filter(m => m.status === 'pending').length} pending maneuver(s)
+                     </div>
+                </div>
+            )}
 
             
 

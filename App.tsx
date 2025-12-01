@@ -1640,6 +1640,7 @@ const App: React.FC = () => {
              predictionPaths={predictionPaths}
              predictionSteps={predictionSteps}
              predictSystem={isPredictionEnabled}
+             onUpdateRocket={updateRocket}
           />
       )}
 
