@@ -86,6 +86,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [nodeTime, setNodeTime] = useState<number>(60);
     const [dvPrograde, setDvPrograde] = useState<number>(0);
     const [dvRadial, setDvRadial] = useState<number>(0);
+    
+    const [editingManeuverId, setEditingManeuverId] = useState<string | null>(null);
 
     // Quick Action Body Selections (independent from maneuver queue)
     const [sasReferenceBodyId, setSasReferenceBodyId] = useState<string>(''); // SAS reference
@@ -105,6 +107,49 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const burnStartTimeRef = useRef<number | null>(null);
     const lastActionTimeRef = useRef<number | null>(null);
     
+    // Sync Edit State from Rocket to Local when Selection Changes
+    useEffect(() => {
+        if (editingManeuverId && selectedRocket?.maneuvers) {
+            const m = selectedRocket.maneuvers.find(x => x.id === editingManeuverId);
+            if (m) {
+                setManeuverType(m.type);
+                if (m.type === 'manual_node') {
+                    // Only update local state if it differs significantly to avoid fighting inputs
+                    setNodeTime(prev => Math.abs(prev - (m.timeFromNow||0)) > 0.01 ? (m.timeFromNow||0) : prev);
+                    setDvPrograde(prev => Math.abs(prev - (m.deltaVPrograde||0)) > 0.01 ? (m.deltaVPrograde||0) : prev);
+                    setDvRadial(prev => Math.abs(prev - (m.deltaVRadial||0)) > 0.01 ? (m.deltaVRadial||0) : prev);
+                }
+            }
+        }
+    }, [editingManeuverId]); 
+
+    // Live Update from Local to Rocket (Realtime Editing)
+    useEffect(() => {
+        if (editingManeuverId && selectedRocket?.maneuvers) {
+             const m = selectedRocket.maneuvers.find(x => x.id === editingManeuverId);
+             if (m && m.type === 'manual_node') {
+                 // Check if changed
+                 if (Math.abs((m.timeFromNow||0) - nodeTime) > 0.01 || 
+                     Math.abs((m.deltaVPrograde||0) - dvPrograde) > 0.01 || 
+                     Math.abs((m.deltaVRadial||0) - dvRadial) > 0.01) {
+                     
+                     const updatedManeuvers = selectedRocket.maneuvers.map(x => {
+                        if (x.id === editingManeuverId) {
+                            return { 
+                                ...x, 
+                                timeFromNow: nodeTime, 
+                                deltaVPrograde: dvPrograde, 
+                                deltaVRadial: dvRadial 
+                            };
+                        }
+                        return x;
+                     });
+                     onUpdateRocket(selectedRocket.id, { maneuvers: updatedManeuvers });
+                 }
+             }
+        }
+    }, [nodeTime, dvPrograde, dvRadial, editingManeuverId]);
+
     const showNotification = (msg: string) => {
         setNotification(msg);
         setTimeout(() => setNotification(null), 3000);
@@ -186,7 +231,23 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
 
         const updatedManeuvers = selectedRocket.maneuvers ? [...selectedRocket.maneuvers, newManeuver] : [newManeuver];
         onUpdateRocket(selectedRocket.id, { maneuvers: updatedManeuvers });
+        
+        if (maneuverType === 'manual_node') {
+            setEditingManeuverId(newManeuver.id);
+        }
+        
         showNotification(`${maneuverType.toUpperCase()} Maneuver added`);
+    };
+
+    const handleUpdateManeuver = (mId: string, updates: Partial<Maneuver>) => {
+        if (!selectedRocket || !selectedRocket.maneuvers) return;
+        const updated = selectedRocket.maneuvers.map(m => {
+            if (m.id === mId) {
+                return { ...m, ...updates };
+            }
+            return m;
+        });
+        onUpdateRocket(selectedRocket.id, { maneuvers: updated });
     };
 
     const handleRemoveManeuver = (mId: string) => {
@@ -2215,7 +2276,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     <div className="bg-slate-900/50 rounded-lg p-2 max-h-[200px] overflow-y-auto space-y-1 border border-slate-800">
                                         {(!selectedRocket.maneuvers || selectedRocket.maneuvers.length === 0) && <div className="text-[10px] text-slate-600 text-center italic py-2">Queue Empty</div>}
                                         {selectedRocket.maneuvers?.map((m, i) => (
-                                            <div key={m.id} className={`text-[10px] flex items-center gap-2 p-1.5 rounded border ${m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}>
+                                            <div 
+                                                key={m.id} 
+                                                onClick={() => m.status === 'pending' && setEditingManeuverId(m.id)}
+                                                className={`text-[10px] flex items-center gap-2 p-1.5 rounded border transition-colors ${m.status==='pending' ? 'cursor-pointer hover:border-slate-500' : ''} ${editingManeuverId===m.id ? 'bg-indigo-900/40 border-indigo-500' : m.status==='active'?'bg-green-900/20 border-green-500/30':m.status==='completed'?'bg-slate-800/50 border-transparent opacity-50':'bg-slate-800 border-slate-700'}`}
+                                            >
                                                 <div className={`w-1.5 h-1.5 rounded-full ${m.status==='active'?'bg-green-500 animate-pulse':m.status==='completed'?'bg-slate-600':'bg-orange-500'}`} />
                                                 <div className="flex-1 text-slate-300">
                                                     <span className="font-bold text-slate-200 mr-1">
@@ -2224,11 +2289,13 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                          m.type === 'wait_for_altitude' ? 'WAIT ALT' :
                                                          m.type === 'burn_until_altitude' ? 'BURN TO ALT' :
                                                          m.type === 'change_simulation_speed' ? 'SET SPEED' :
+                                                         m.type === 'manual_node' ? 'NODE' :
                                                          m.type.startsWith('auto_') ? m.type.replace('auto_','AUTO ').toUpperCase() : m.type.toUpperCase()} 
                                                     </span>
                                                     <span className="text-slate-500 font-mono">
                                                         {m.type==='wait'||m.type==='burn' ? `${m.duration.toFixed(1)}s` : ''}
                                                         {m.type==='burn' ? ` @ ${(m.thrust*100).toFixed(0)}%` : ''}
+                                                        {m.type==='manual_node' ? `T+${(m.timeFromNow||0).toFixed(0)}s dV:${Math.sqrt((m.deltaVPrograde||0)**2+(m.deltaVRadial||0)**2).toFixed(1)}` : ''}
                                                         {m.type==='rotate' ? `${m.param}°` : ''}
                                                         {m.type==='sas' ? `${m.param}` : ''}
                                                         {m.type==='change_simulation_speed' ? `${m.param}x` : ''}
@@ -2237,7 +2304,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         {m.targetBodyId ? ` -> ${bodies.find(b=>b.id===m.targetBodyId)?.name.substring(0,8)}` : ''}
                                                     </span>
                                                 </div>
-                                                {m.status==='pending' && <button onClick={()=>handleRemoveManeuver(m.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={10} /></button>}
+                                                {m.status==='pending' && <button onClick={(e)=>{ e.stopPropagation(); handleRemoveManeuver(m.id); }} className="text-slate-500 hover:text-red-400"><Trash2 size={10} /></button>}
                                             </div>
                                         ))}
                                     </div>
