@@ -2331,6 +2331,13 @@ const App: React.FC = () => {
         onExportGroup={handleExportGroup}
         onImportGroup={handleImportGroup}
         rendezvousPoints={rendezvousPoints}
+        onSetFollowingBody={(id) => {
+            if (id) {
+                handleToggleFollow(id);
+            } else {
+                setFollowingBodyId(null);
+            }
+        }}
       />
 
       {/* Assistant */}

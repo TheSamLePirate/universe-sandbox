@@ -132,6 +132,8 @@ export const resolveInput = (
             const rendezvous = rendezvousSolutions?.[module.id];
             if (!rendezvous) return null;
             if (outputKey === 'position') return rendezvous.point;
+        } else if (module.type === 'selector' && outputKey === 'body') {
+            return bodies.find(b => b.id === module.selectorBodyId) || null;
         }
     }
     
@@ -263,6 +265,22 @@ export const resolveScalarInput = (
             if (outputKey === 'progress') {
                 return module.maneuverExecutorProgress ?? 0;
             }
+        } else if (module.type === 'maths' && outputKey === 'result') {
+            // Use direct scalar values if no input is connected, otherwise resolve from input
+            const valA = module.inputs?.valueA 
+                ? (resolveScalarInput(module.inputs.valueA, bodies, modules, gravitationalConstant, rendezvousSolutions) ?? 0)
+                : (module.mathValueA ?? 0);
+            const valB = module.inputs?.valueB 
+                ? (resolveScalarInput(module.inputs.valueB, bodies, modules, gravitationalConstant, rendezvousSolutions) ?? 0)
+                : (module.mathValueB ?? 0);
+            
+            switch (module.mathOperator) {
+                case 'add': return valA + valB;
+                case 'subtract': return valA - valB;
+                case 'multiply': return valA * valB;
+                case 'divide': return valB !== 0 ? valA / valB : 0;
+                default: return 0;
+            }
         }
     }
     
@@ -323,6 +341,7 @@ export const resolveBooleanInput = (
             return module.thrustBurstCompleted ?? false;
         } else if (module.type === 'button' && outputKey === 'state') {
             return module.buttonState ?? false;
+
         }
     }
     return null;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup, RendezvousSolution, Maneuver } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload } from 'lucide-react';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload, Video, Calculator } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
@@ -22,6 +22,7 @@ interface FlightComputerPanelProps {
     onExportGroup: (groupId: string) => void;
     onImportGroup: () => void;
     rendezvousPoints?: RendezvousSolution[];
+    onSetFollowingBody?: (bodyId: string | null) => void;
 }
 
 const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [
@@ -136,6 +137,9 @@ const InputSelector: React.FC<{
                             if (m.type === 'rendezvous_tracker') {
                                 options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Rendezvous'} - Position</option>);
                             }
+                            if (m.type === 'selector') {
+                                options.push(<option key={`${m.id}:body`} value={`${m.id}:body`}>{m.name || 'Selector'} - Body</option>);
+                            }
                         }
                         
                         // Scalar Outputs
@@ -161,6 +165,9 @@ const InputSelector: React.FC<{
                             }
                             if (m.type === 'maneuver_executor') {
                                 options.push(<option key={`${m.id}:progress`} value={`${m.id}:progress`}>{m.name || 'Executor'} - Progress</option>);
+                            }
+                            if (m.type === 'maths') {
+                                options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Maths'} - Result</option>);
                             }
                         }
                         
@@ -204,7 +211,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     onMoveGroupToGroup,
     onExportGroup,
     onImportGroup,
-    rendezvousPoints
+    rendezvousPoints,
+    onSetFollowingBody
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -236,7 +244,61 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const audioContextRef = useRef<AudioContext | null>(null);
     const prevBeepInputStateRef = useRef<Map<string, boolean>>(new Map());
     const lastBeepTimeRef = useRef<Map<string, number>>(new Map());
+    const thrustBurstTriggerStateRef = useRef<Map<string, boolean>>(new Map());
+    const followModuleTriggerStateRef = useRef<Map<string, boolean>>(new Map());
+    const buttonResetTriggerStateRef = useRef<Map<string, boolean>>(new Map());
 
+    // --- Follow Module & Button Reset Logic ---
+    useEffect(() => {
+        const activeIds = new Set(modules.map(m => m.id));
+        
+        // Cleanup
+        Array.from(followModuleTriggerStateRef.current.keys()).forEach(id => {
+            if (!activeIds.has(id)) followModuleTriggerStateRef.current.delete(id);
+        });
+        Array.from(buttonResetTriggerStateRef.current.keys()).forEach(id => {
+            if (!activeIds.has(id)) buttonResetTriggerStateRef.current.delete(id);
+        });
+
+        modules.forEach(module => {
+            // Follow Module
+            if (module.type === 'follow' && module.isEnabled && onSetFollowingBody) {
+                const triggerValue = resolveBooleanInput(module.inputs?.trigger, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const shouldFollow = triggerValue ?? false;
+                const wasFollowing = followModuleTriggerStateRef.current.get(module.id) || false;
+
+                if (shouldFollow && !wasFollowing) {
+                    const targetInput = module.inputs?.target;
+                    if (targetInput) {
+                        const targetBody = resolveInput(targetInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                        if (targetBody && 'id' in targetBody) {
+                            onSetFollowingBody(targetBody.id);
+                        }
+                    }
+                } else if (!shouldFollow && wasFollowing) {
+                    onSetFollowingBody(null);
+                }
+                followModuleTriggerStateRef.current.set(module.id, shouldFollow);
+            }
+
+            // Button Module Reset
+            if (module.type === 'button') {
+                const resetValue = resolveBooleanInput(module.inputs?.reset, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const shouldReset = resetValue ?? false;
+                const wasReset = buttonResetTriggerStateRef.current.get(module.id) || false;
+
+                if (shouldReset && !wasReset) {
+                    // Rising edge: Reset button to false
+                    if (module.buttonState !== false) {
+                        onUpdateModule(module.id, { buttonState: false });
+                    }
+                }
+                buttonResetTriggerStateRef.current.set(module.id, shouldReset);
+            }
+        });
+    }, [modules, bodies, physicsConfig, onSetFollowingBody, rendezvousSolutionMap, onUpdateModule]);
+
+    // --- Thrust Burst Logic ---
     useEffect(() => {
         // Init Audio Context on user interaction if needed
         const initAudio = () => {
@@ -397,9 +459,21 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:progress` });
             return value !== null ? `${(value * 100).toFixed(0)}%` : '---';
         }
+        if (outputKey === 'result' && module.type === 'maths') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:result` });
+            return value !== null ? `${value.toFixed(2)}` : '---';
+        }
         if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
             const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+        }
+        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
+            const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
+            return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+        }
+        if (outputKey === 'body') {
+            const body = resolveVectorInputValue({ type: 'module_output', value: `${module.id}:body` });
+            return body && 'name' in body ? body.name : '---';
         }
         
         return '---';
@@ -1384,19 +1458,121 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 const buttonState = module.buttonState ?? false;
                 
                 return (
-                    <div className="mt-2 flex gap-2">
-                        <button
-                            onClick={() => onUpdateModule(module.id, { buttonState: true })}
-                            className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${buttonState ? 'bg-green-600 border-green-400 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                    <div className="mt-2">
+                        <div className="flex gap-2 mb-2">
+                            <button
+                                onClick={() => onUpdateModule(module.id, { buttonState: true })}
+                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${buttonState ? 'bg-green-600 border-green-400 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                            >
+                                TRUE
+                            </button>
+                            <button
+                                onClick={() => onUpdateModule(module.id, { buttonState: false })}
+                                className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${!buttonState ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                            >
+                                FALSE
+                            </button>
+                        </div>
+                        <div className="space-y-1">
+                            <InputSelector 
+                                label="Reset (Set False)" 
+                                value={getInput(module, 'reset')} 
+                                onChange={(input) => updateInput(module.id, 'reset', input)} 
+                                bodies={bodies} 
+                                modules={modules} 
+                                currentModuleId={module.id} 
+                                allowedTypes={['boolean']} 
+                            />
+                        </div>
+                    </div>
+                );
+
+            case 'selector':
+                return (
+                    <div className="mt-2">
+                        <select
+                            value={module.selectorBodyId || ''}
+                            onChange={(e) => onUpdateModule(module.id, { selectorBodyId: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
                         >
-                            TRUE
-                        </button>
-                        <button
-                            onClick={() => onUpdateModule(module.id, { buttonState: false })}
-                            className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${!buttonState ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
-                        >
-                            FALSE
-                        </button>
+                            <option value="">Select Body...</option>
+                            {bodies.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                );
+
+            case 'follow':
+                const isFollowing = followModuleTriggerStateRef.current.get(module.id);
+                return (
+                    <div className="mt-2 text-xs text-slate-400">
+                        Status: <span className={isFollowing ? "text-green-400 font-bold" : "text-slate-500"}>{isFollowing ? "ACTIVE" : "IDLE"}</span>
+                    </div>
+                );
+
+
+            case 'maths':
+                const mathResult = resolveScalarInput({ type: 'module_output', value: `${module.id}:result` }, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
+                const displayResult = typeof mathResult === 'number' ? mathResult : 0;
+                const mathInputA = getInput(module, 'valueA');
+                const mathInputB = getInput(module, 'valueB');
+                return (
+                    <div className="mt-2 space-y-2">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">Value A</label>
+                            {mathInputA ? (
+                                <div className="flex gap-1">
+                                    <InputSelector label="" value={mathInputA} onChange={(input) => updateInput(module.id, 'valueA', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar', 'module_output']} />
+                                    <button onClick={() => updateInput(module.id, 'valueA', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-1">
+                                    <input
+                                        type="number"
+                                        value={module.mathValueA ?? 0}
+                                        onChange={(e) => onUpdateModule(module.id, { mathValueA: parseFloat(e.target.value) || 0 })}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                                    />
+                                    <button onClick={() => updateInput(module.id, 'valueA', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={module.mathOperator || 'add'}
+                                onChange={(e) => onUpdateModule(module.id, { mathOperator: e.target.value as any })}
+                                className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                            >
+                                <option value="add">Add (+)</option>
+                                <option value="subtract">Subtract (-)</option>
+                                <option value="multiply">Multiply (*)</option>
+                                <option value="divide">Divide (/)</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">Value B</label>
+                            {mathInputB ? (
+                                <div className="flex gap-1">
+                                    <InputSelector label="" value={mathInputB} onChange={(input) => updateInput(module.id, 'valueB', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar', 'module_output']} />
+                                    <button onClick={() => updateInput(module.id, 'valueB', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-1">
+                                    <input
+                                        type="number"
+                                        value={module.mathValueB ?? 0}
+                                        onChange={(e) => onUpdateModule(module.id, { mathValueB: parseFloat(e.target.value) || 0 })}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                                    />
+                                    <button onClick={() => updateInput(module.id, 'valueB', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="pt-1 border-t border-slate-700/50 flex justify-between items-center">
+                            <span className="text-xs text-slate-400">Result:</span>
+                            <span className="text-sm font-mono font-bold text-purple-400">{displayResult.toFixed(2)}</span>
+                        </div>
                     </div>
                 );
 
@@ -1502,6 +1678,24 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Square size={14} className="text-white" /> Button
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('selector'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Globe size={14} className="text-white" /> Selector
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('follow'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Video size={14} className="text-white" /> Follow
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('maths'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Calculator size={14} className="text-white" /> Maths
                             </button>
                         </div>
                     )}
@@ -1637,6 +1831,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                 <div className="space-y-1"><InputSelector label="Rocket" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
                                                 <div className="space-y-1"><InputSelector label="Queue Trigger" value={getInput(module, 'queueTrigger')} onChange={(input) => updateInput(module.id, 'queueTrigger', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
                                                 <div className="space-y-1"><InputSelector label="Execute Trigger" value={getInput(module, 'executeTrigger')} onChange={(input) => updateInput(module.id, 'executeTrigger', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
+                                            </>
+                                        )}
+                                        {/* Follow */}
+                                        {module.type === 'follow' && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="Target Body" value={getInput(module, 'target')} onChange={(input) => updateInput(module.id, 'target', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="Activate" value={getInput(module, 'trigger')} onChange={(input) => updateInput(module.id, 'trigger', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
                                             </>
                                         )}
                                     </div>
@@ -1813,6 +2014,9 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                             if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); 
                                                                             if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); 
                                                                             if (m.type === 'thrust_burst') options.push(<option key={`${m.id}:done`} value={`${m.id}:done`}>{m.name || 'Burst'} - Done</option>); 
+                                                                            if (m.type === 'maneuver_executor') options.push(<option key={`${m.id}:progress`} value={`${m.id}:progress`}>{m.name || 'Executor'} - Progress</option>);
+                                                                            if (m.type === 'button') options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Button'} - State</option>);
+                                                                            if (m.type === 'maths') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Maths'} - Result</option>);
                                                                             return options; 
                                                                         })}
                                                                     </select>
