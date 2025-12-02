@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic } from 'lucide-react';
+import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup } from '../types';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
+    groups: ModuleGroup[];
     bodies: Body[];
     physicsConfig: PhysicsConfig;
     onAddModule: (type: FlightComputerModuleType, inputs?: Record<string, FlightComputerInput>) => void;
     onRemoveModule: (id: string) => void;
     onUpdateModule: (id: string, updates: Partial<FlightComputerModule>) => void;
     onToggleModule: (id: string) => void;
+    onAddGroup: () => void;
+    onRemoveGroup: (groupId: string) => void;
+    onUpdateGroup: (groupId: string, updates: Partial<ModuleGroup>) => void;
+    onMoveModuleToGroup: (moduleId: string, groupId: string | null) => void;
     rendezvousPoints?: Array<{ 
         point: Vector2D; 
         name: string; 
@@ -149,19 +154,26 @@ const InputSelector: React.FC<{
 
 const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     modules,
+    groups,
     bodies,
     physicsConfig,
     onAddModule,
     onRemoveModule,
     onUpdateModule,
     onToggleModule,
+    onAddGroup,
+    onRemoveGroup,
+    onUpdateGroup,
+    onMoveModuleToGroup,
     rendezvousPoints
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
     const isMobile = useIsMobile();
 
-    const [expandedModules, setExpandedModules] = useState<string[]>([]);
+   const [expandedModules, setExpandedModules] = useState<string[]>([]);
+    const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
+    const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
     
     // Audio Context for Beep Module
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -287,6 +299,65 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         }
 
         onUpdateModule(moduleId, { inputs: newInputs, ...legacyUpdates });
+    };
+
+    // Helper to get display value for collapsed group
+    const getGroupDisplayValue = (group: ModuleGroup): string => {
+        if (!group.displayOutput) return '---';
+        
+        const module = modules.find(m => m.id === group.displayOutput?.moduleId);
+        if (!module) return '---';
+        
+        const outputKey = group.displayOutput.outputKey;
+        
+        // Get the value based on the output key
+        if (outputKey === 'distance') {
+            const distance = resolveScalarInput(
+                { type: 'module_output', value: `${module.id}:distance` },
+                bodies,
+                modules,
+                physicsConfig.gravitationalConstant
+            );
+            return distance !== null ? `${distance.toFixed(1)} u` : '---';
+        }
+        if (outputKey === 'speed') {
+            const speed = resolveScalarInput(
+                { type: 'module_output', value: `${module.id}:speed` },
+                bodies,
+                modules,
+                physicsConfig.gravitationalConstant
+            );
+            return speed !== null ? `${speed.toFixed(1)} m/s` : '---';
+        }
+        if (outputKey === 'altitude' || outputKey === 'periapsis' || outputKey === 'apoapsis') {
+            const value = resolveScalarInput(
+                { type: 'module_output', value: `${module.id}:${outputKey}` },
+                bodies,
+                modules,
+                physicsConfig.gravitationalConstant
+            );
+            return value !== null ? `${value.toFixed(1)} u` : '---';
+        }
+        if (outputKey === 'period') {
+            const value = resolveScalarInput(
+                { type: 'module_output', value: `${module.id}:period` },
+                bodies,
+                modules,
+                physicsConfig.gravitationalConstant
+            );
+            return value !== null ? formatTime(value) : '---';
+        }
+        if (outputKey === 'triggered' || outputKey === 'result') {
+            const value = resolveBooleanInput(
+                { type: 'module_output', value: `${module.id}:${outputKey}` },
+                bodies,
+                modules,
+                physicsConfig.gravitationalConstant
+            );
+            return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+        }
+        
+        return '---';
     };
 
     // Helper function to format time
@@ -820,7 +891,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
             {/* Expanded Panel */}
             {isExpanded && (
-                <div className="pointer-events-auto mt-2 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg shadow-2xl w-80 max-h-[80vh] flex flex-col animate-in slide-in-from-right-4 duration-200">
+                <div className="pointer-events-auto mt-2 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg shadow-2xl w-[100vw] h-[100vh] flex flex-col animate-in slide-in-from-right-4 duration-200">
                     
                     {/* Header */}
                     <div className="p-3 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30 rounded-t-lg">
@@ -895,226 +966,197 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             </div>
                         )}
 
-                        {modules.map(module => (
-                            <div key={module.id} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-3 transition-all hover:border-slate-600">
-                                {/* Module Header */}
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div 
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: module.color }}
-                                        />
-                                        <input 
-                                            type="text"
-                                            value={module.name || ''}
-                                            placeholder={module.type.replace('_', ' ').toUpperCase()}
-                                            onChange={(e) => onUpdateModule(module.id, { name: e.target.value })}
-                                            className="bg-transparent text-xs font-bold text-slate-200 uppercase border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 -ml-1 outline-none w-32 transition-all placeholder:text-slate-500"
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <button 
-                                            onClick={() => onToggleModule(module.id)}
-                                            className={`p-1 rounded hover:bg-slate-700 ${module.isEnabled ? 'text-green-400' : 'text-slate-600'}`}
-                                        >
-                                            {module.isEnabled ? <CheckSquare size={14} /> : <Square size={14} />}
-                                        </button>
-                                        <button 
-                                            onClick={() => onRemoveModule(module.id)}
-                                            className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </div>
+                        {(() => {
+                            // Organize modules by groups
+                            const ungroupedModules = modules.filter(m => !m.groupId);
+                            const groupedModules = groups.map(group => ({
+                                group,
+                                modules: modules.filter(m => m.groupId === group.id)
+                            }));
 
-                                {/* Body Selectors */}
-                                <div className="grid grid-cols-2 gap-2 mb-2">
-                                    {/* Orbit Info: Primary + Reference */}
-                                    {module.type === 'orbit_info' && (
-                                        <>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Subject"
-                                                    value={getInput(module, 'primary')}
-                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-
-                                </div>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Reference"
-                                                    value={getInput(module, 'reference')}
-                                                    onChange={(input) => updateInput(module.id, 'reference', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Transfer: Primary + Reference + Target */}
-                                    {module.type === 'transfer_window' && (
-                                        <>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Subject"
-                                                    value={getInput(module, 'primary')}
-                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Reference"
-                                                    value={getInput(module, 'reference')}
-                                                    onChange={(input) => updateInput(module.id, 'reference', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                            <div className="col-span-2 space-y-1">
-                                                <InputSelector 
-                                                    label="Target"
-                                                    value={getInput(module, 'target')}
-                                                    onChange={(input) => updateInput(module.id, 'target', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Rendezvous: Primary + Target */}
-                                    {module.type === 'rendezvous_tracker' && (
-                                        <>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Rocket"
-                                                    value={getInput(module, 'primary')}
-                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Target"
-                                                    value={getInput(module, 'target')}
-                                                    onChange={(input) => updateInput(module.id, 'target', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Distance/Velocity: Primary + Target */}
-                                    {(module.type === 'track_distance' || module.type === 'track_velocity') && (
-                                        <>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="From"
-                                                    value={getInput(module, 'primary')}
-                                                    onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="To"
-                                                    value={getInput(module, 'target')}
-                                                    onChange={(input) => updateInput(module.id, 'target', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Notify: Source (Scalar) */}
-                                    {module.type === 'notify' && (
-                                        <div className="col-span-2 space-y-1">
-                                            <InputSelector 
-                                                label="Monitored Value"
-                                                value={getInput(module, 'primary')}
-                                                onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                bodies={bodies}
-                                                modules={modules}
-                                                currentModuleId={module.id}
-                                                allowedTypes={['scalar']}
+                            // Render function for a single module
+                            const renderModule = (module: FlightComputerModule) => (
+                                <div 
+                                    key={module.id} 
+                                    className={`bg-slate-800/30 border rounded-lg p-3 transition-all hover:border-slate-600 cursor-move w-1/4 h-1/4 ${
+                                        draggedModuleId === module.id ? 'opacity-50' : ''
+                                    }`}
+                                    style={{ borderColor: module.color + '50' }}
+                                    draggable
+                                    onDragStart={() => setDraggedModuleId(module.id)}
+                                    onDragEnd={() => setDraggedModuleId(null)}
+                                >
+                                    {/* Module Header */}
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <GripVertical size={12} className="text-slate-600" />
+                                            <div 
+                                                className="w-2 h-2 rounded-full"
+                                                style={{ backgroundColor: module.color }}
+                                            />
+                                            <input 
+                                                type="text"
+                                                value={module.name || ''}
+                                                placeholder={module.type.replace('_', ' ').toUpperCase()}
+                                                onChange={(e) => onUpdateModule(module.id, { name: e.target.value })}
+                                                className="bg-transparent text-xs font-bold text-slate-200 uppercase border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 -ml-1 outline-none w-24 transition-all placeholder:text-slate-500"
+                                                onClick={(e) => e.stopPropagation()}
+                                                draggable={false}
                                             />
                                         </div>
-                                    )}
+                                        <div className="flex items-center gap-1">
+                                            <button 
+                                                onClick={() => onToggleModule(module.id)}
+                                                className={`p-1 rounded hover:bg-slate-700 ${module.isEnabled ? 'text-green-400' : 'text-slate-600'}`}
+                                                draggable={false}
+                                            >
+                                                {module.isEnabled ? <CheckSquare size={14} /> : <Square size={14} />}
+                                            </button>
+                                            <button 
+                                                onClick={() => onRemoveModule(module.id)}
+                                                className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
+                                                draggable={false}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
 
-                                    {/* Logic Gate: Input A + Input B */}
-                                    {module.type === 'logic_gate' && (
-                                        <>
-                                            <div className="space-y-1">
-                                                <InputSelector 
-                                                    label="Input A"
-                                                    value={getInput(module, 'inputA')}
-                                                    onChange={(input) => updateInput(module.id, 'inputA', input)}
-                                                    bodies={bodies}
-                                                    modules={modules}
-                                                    currentModuleId={module.id}
-                                                    allowedTypes={['boolean']}
-                                                />
-                                            </div>
-                                            {module.logicOperator !== 'NOT' && (
+                                    {/* Body Selectors */}
+                                    <div className="grid grid-cols-2 gap-2 mb-2" draggable={false}>
+                                        {/* Orbit Info */}
+                                        {module.type === 'orbit_info' && (
+                                            <>
                                                 <div className="space-y-1">
-                                                    <InputSelector 
-                                                        label="Input B"
-                                                        value={getInput(module, 'inputB')}
-                                                        onChange={(input) => updateInput(module.id, 'inputB', input)}
-                                                        bodies={bodies}
-                                                        modules={modules}
-                                                        currentModuleId={module.id}
-                                                        allowedTypes={['boolean']}
-                                                    />
+                                                    <InputSelector label="Subject" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <InputSelector label="Reference" value={getInput(module, 'reference')} onChange={(input) => updateInput(module.id, 'reference', input)} bodies={bodies} modules={modules} currentModuleId={module.id} />
+                                                </div>
+                                            </>
+                                        )}
+                                        {/* Transfer */}
+                                        {module.type === 'transfer_window' && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="Subject" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="Reference" value={getInput(module, 'reference')} onChange={(input) => updateInput(module.id, 'reference', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="col-span-2 space-y-1"><InputSelector label="Target" value={getInput(module, 'target')} onChange={(input) => updateInput(module.id, 'target', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                            </>
+                                        )}
+                                        {/* Rendezvous */}
+                                        {module.type === 'rendezvous_tracker' && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="Rocket" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="Target" value={getInput(module, 'target')} onChange={(input) => updateInput(module.id, 'target', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                            </>
+                                        )}
+                                        {/* Distance/Velocity */}
+                                        {(module.type === 'track_distance' || module.type === 'track_velocity') && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="From" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="To" value={getInput(module, 'target')} onChange={(input) => updateInput(module.id, 'target', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                            </>
+                                        )}
+                                        {/* Notify */}
+                                        {module.type === 'notify' && (
+                                            <div className="col-span-2 space-y-1"><InputSelector label="Monitored Value" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar']} /></div>
+                                        )}
+                                        {/* Logic Gate */}
+                                        {module.type === 'logic_gate' && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="Input A" value={getInput(module, 'inputA')} onChange={(input) => updateInput(module.id, 'inputA', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
+                                                {module.logicOperator !== 'NOT' && (<div className="space-y-1"><InputSelector label="Input B" value={getInput(module, 'inputB')} onChange={(input) => updateInput(module.id, 'inputB', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>)}
+                                            </>
+                                        )}
+                                        {/* Beep */}
+                                        {module.type === 'beep' && (
+                                            <div className="col-span-2 space-y-1"><InputSelector label="Trigger Input" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
+                                        )}
+                                    </div>
+
+                                    {/* Data Display */}
+                                    {module.isEnabled && (
+                                        <div className="border-t border-slate-700/30 pt-2" draggable={false}>
+                                            {renderModuleContent(module)}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+
+                            return (
+                                <>
+                                    {/* Render Groups */}
+                                    {groupedModules.map(({ group, modules: groupModules }) => (
+                                        <div 
+                                            key={group.id}
+                                            className={`border-2 rounded-lg transition-all ${dragOverGroupId === group.id ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/50'} ${group.isCollapsed ? 'w-1/5' : 'w-full'}`}
+                                            style={{ borderColor: group.isCollapsed ? group.color : undefined }}
+                                            onDragOver={(e) => { e.preventDefault(); setDragOverGroupId(group.id); }}
+                                            onDragLeave={() => setDragOverGroupId(null)}
+                                            onDrop={() => { if (draggedModuleId) { onMoveModuleToGroup(draggedModuleId, group.id); setDraggedModuleId(null); setDragOverGroupId(null); } }}
+                                        >
+                                            {/* Group Header */}
+                                            <div className="flex justify-between items-center p-2 bg-slate-800/50 rounded-t-lg cursor-pointer hover:bg-slate-800/70" onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })} style={{ backgroundColor: group.color + '20' }}>
+                                                <div className="flex items-center gap-2 flex-1">
+                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
+                                                    <input type="text" value={group.name} onChange={(e) => { e.stopPropagation(); onUpdateGroup(group.id, { name: e.target.value }); }} onClick={(e) => e.stopPropagation()} className="bg-transparent text-xs font-bold text-slate-200 border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 outline-none flex-1" />
+                                                    {!group.isCollapsed && <span className="text-[10px] text-slate-500">({groupModules.length})</span>}
+                                                    {group.isCollapsed && group.displayOutput && (<span className="text-[20px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={(e) => { e.stopPropagation(); onRemoveGroup(group.id); }} className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"><Trash2 size={12} /></button>
+                                                    {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                                </div>
+                                            </div>
+
+                                            {/* Group Content */}
+                                            {!group.isCollapsed && (
+                                                <div className="p-2 space-y-2">
+                                                    {groupModules.length === 0 ? (
+                                                        <div className="text-center py-4 text-slate-500 text-[10px] italic">Drag modules here</div>
+                                                    ) : (
+                                                        groupModules.map(module => renderModule(module))
+                                                    )}
+                                                    
+                                                    {/* Display Output Selector */}
+                                                    {groupModules.length > 0 && (
+                                                        <div className="pt-2 border-t border-slate-700/30">
+                                                            <label className="text-[9px] text-slate-500 uppercase block mb-1">Display Output (collapsed)</label>
+                                                            <select value={group.displayOutput ? `${group.displayOutput.moduleId}:${group.displayOutput.outputKey}` : ''} onChange={(e) => { if (!e.target.value) { onUpdateGroup(group.id, { displayOutput: undefined }); return; } const [moduleId, outputKey] = e.target.value.split(':'); onUpdateGroup(group.id, { displayOutput: { moduleId, outputKey } }); }} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 focus:border-purple-500 outline-none">
+                                                                <option value="">None</option>
+                                                                {groupModules.map(m => { const options = []; if (m.type === 'track_distance') options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Distance'} - Value</option>); if (m.type === 'track_velocity') options.push(<option key={`${m.id}:speed`} value={`${m.id}:speed`}>{m.name || 'Velocity'} - Speed</option>); if (m.type === 'orbit_info') { options.push(<option key={`${m.id}:altitude`} value={`${m.id}:altitude`}>{m.name || 'Orbit'} - Altitude</option>); options.push(<option key={`${m.id}:periapsis`} value={`${m.id}:periapsis`}>{m.name || 'Orbit'} - Periapsis</option>); options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis</option>); options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>); } if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); return options; })}
+                                                            </select>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
-                                        </>
-                                    )}
+                                        </div>
+                                    ))}
 
-                                    {/* Beep: Input (Boolean) */}
-                                    {module.type === 'beep' && (
-                                        <div className="col-span-2 space-y-1">
-                                            <InputSelector 
-                                                label="Trigger Input"
-                                                value={getInput(module, 'primary')}
-                                                onChange={(input) => updateInput(module.id, 'primary', input)}
-                                                bodies={bodies}
-                                                modules={modules}
-                                                currentModuleId={module.id}
-                                                allowedTypes={['boolean']}
-                                            />
+                                    {/* Ungrouped Modules */}
+                                    {ungroupedModules.length > 0 && (
+                                        <div 
+                                            className={`border rounded-lg p-2 ${dragOverGroupId === null && draggedModuleId ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/30'}`}
+                                            onDragOver={(e) => { e.preventDefault(); setDragOverGroupId(null); }}
+                                            onDrop={() => { if (draggedModuleId) { onMoveModuleToGroup(draggedModuleId, null); setDraggedModuleId(null); setDragOverGroupId(null); } }}
+                                        >
+                                            <div className="text-[10px] text-slate-500 uppercase mb-2 px-1">Ungrouped Modules</div>
+                                            <div className="space-y-2">
+                                                {ungroupedModules.map(module => renderModule(module))}
+                                            </div>
                                         </div>
                                     )}
-                                </div>
 
-                                {/* Data Display */}
-                                {module.isEnabled && (
-                                    <div className="border-t border-slate-700/30 pt-2">
-                                        {renderModuleContent(module)}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                                    {/* Create Group Button */}
+                                    {modules.length > 0 && (
+                                        <button onClick={onAddGroup} className="w-full py-2 text-xs text-slate-400 hover:text-green-400 border border-dashed border-slate-700 hover:border-green-500/50 rounded-lg flex items-center justify-center gap-2 transition-all">
+                                            <FolderPlus size={14} />
+                                            Create Group
+                                        </button>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

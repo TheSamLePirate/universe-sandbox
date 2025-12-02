@@ -241,4 +241,18 @@ export interface FlightComputerModule {
     beepRate?: number; // Beeps per second (default 2)
     beepSoundType?: 'beep' | 'speak'; // Default 'beep'
     beepSpeakText?: string; // Text to speak
+    
+    // Grouping (cosmetic only)
+    groupId?: string | null; // ID of the group this module belongs to, null = ungrouped
+}
+
+export interface ModuleGroup {
+    id: string;
+    name: string;
+    color: string;
+    isCollapsed: boolean;
+    displayOutput?: {
+        moduleId: string;
+        outputKey: string;
+    };
 }

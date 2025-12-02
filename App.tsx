@@ -16,7 +16,7 @@ import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
 import { resolveInput } from './services/orbitalMath';
-import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput } from './types';
+import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -150,8 +150,9 @@ const App: React.FC = () => {
 
   // Flight Computer State
   const [flightComputerModules, setFlightComputerModules] = useState<FlightComputerModule[]>([]);
+  const [moduleGroups, setModuleGroups] = useState<ModuleGroup[]>([]);
 
-  const handleAddModule = (type: FlightComputerModuleType) => {
+  const handleAddModule = (type: FlightComputerModuleType, inputs?: Record<string, FlightComputerInput>) => {
       const newModule: FlightComputerModule = {
           id: `fc_mod_${Date.now()}`,
           type,
@@ -159,7 +160,8 @@ const App: React.FC = () => {
           primaryBodyId: selectedBodyId || bodies[0]?.id || '',
           referenceBodyId: bodies.find(b => b.mass > (bodies.find(s => s.id === (selectedBodyId || bodies[0]?.id))?.mass || 0))?.id || bodies[0]?.id || '',
           color: '#a855f7', // Default purple
-          inputs: {} // Initialize empty inputs
+          inputs: inputs || {}, // Initialize empty inputs or use provided
+          groupId: null // Start ungrouped
       };
       setFlightComputerModules(prev => [...prev, newModule]);
   };
@@ -174,6 +176,35 @@ const App: React.FC = () => {
 
   const handleToggleModule = (id: string) => {
       setFlightComputerModules(prev => prev.map(m => m.id === id ? { ...m, isEnabled: !m.isEnabled } : m));
+  };
+
+  // Module Group Management
+  const handleAddGroup = () => {
+      const newGroup: ModuleGroup = {
+          id: `fc_group_${Date.now()}`,
+          name: 'New Group',
+          color: '#10b981', // Default green
+          isCollapsed: false
+      };
+      setModuleGroups(prev => [...prev, newGroup]);
+  };
+
+  const handleRemoveGroup = (groupId: string) => {
+      // Ungroup all modules in this group
+      setFlightComputerModules(prev => prev.map(m => 
+          m.groupId === groupId ? { ...m, groupId: null } : m
+      ));
+      setModuleGroups(prev => prev.filter(g => g.id !== groupId));
+  };
+
+  const handleUpdateGroup = (groupId: string, updates: Partial<ModuleGroup>) => {
+      setModuleGroups(prev => prev.map(g => g.id === groupId ? { ...g, ...updates } : g));
+  };
+
+  const handleMoveModuleToGroup = (moduleId: string, groupId: string | null) => {
+      setFlightComputerModules(prev => prev.map(m => 
+          m.id === moduleId ? { ...m, groupId } : m
+      ));
   };
   useEffect(() => { particlesRef.current = particles; }, [particles]);
   useEffect(() => { followingBodyIdRef.current = followingBodyId; }, [followingBodyId]);
@@ -1642,14 +1673,19 @@ const App: React.FC = () => {
       
       {/* Flight Computer Panel */}
       <FlightComputerPanel 
-          modules={flightComputerModules}
-          bodies={bodies}
-          physicsConfig={physicsConfig}
-          onAddModule={handleAddModule}
-          onRemoveModule={handleRemoveModule}
-          onUpdateModule={handleUpdateModule}
-          onToggleModule={handleToggleModule}
-          rendezvousPoints={rendezvousPoints}
+        modules={flightComputerModules}
+        groups={moduleGroups}
+        bodies={bodies}
+        physicsConfig={physicsConfig}
+        onAddModule={handleAddModule}
+        onRemoveModule={handleRemoveModule}
+        onUpdateModule={handleUpdateModule}
+        onToggleModule={handleToggleModule}
+        onAddGroup={handleAddGroup}
+        onRemoveGroup={handleRemoveGroup}
+        onUpdateGroup={handleUpdateGroup}
+        onMoveModuleToGroup={handleMoveModuleToGroup}
+        rendezvousPoints={rendezvousPoints}
       />
 
       {/* Assistant */}
