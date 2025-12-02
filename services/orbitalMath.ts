@@ -1,4 +1,4 @@
-import { Body, Vector2D, FlightComputerModule, FlightComputerInput } from '../types';
+import { Body, Vector2D, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 
 export interface OrbitInfo {
     altitude: number;
@@ -91,7 +91,8 @@ export const resolveInput = (
     input: FlightComputerInput | undefined, 
     bodies: Body[], 
     modules: FlightComputerModule[],
-    gravitationalConstant: number
+    gravitationalConstant: number,
+    rendezvousSolutions?: Record<string, RendezvousSolution>
 ): Body | Vector2D | null => {
     if (!input) return null;
 
@@ -117,8 +118,8 @@ export const resolveInput = (
             let referenceInput = module.inputs?.reference;
             if (!referenceInput && module.referenceBodyId) referenceInput = { type: 'body', value: module.referenceBodyId };
 
-            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
-            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant);
+            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             
             if (primary && reference && 'mass' in reference) { // Reference must be a Body
                  const info = calculateOrbitInfo(primary, reference as Body, gravitationalConstant);
@@ -127,6 +128,10 @@ export const resolveInput = (
                      if (outputKey === 'pa_point') return info.paPoint || null;
                  }
             }
+        } else if (module.type === 'rendezvous_tracker') {
+            const rendezvous = rendezvousSolutions?.[module.id];
+            if (!rendezvous) return null;
+            if (outputKey === 'position') return rendezvous.point;
         }
     }
     
@@ -188,7 +193,8 @@ export const resolveScalarInput = (
     input: FlightComputerInput | undefined,
     bodies: Body[],
     modules: FlightComputerModule[],
-    gravitationalConstant: number
+    gravitationalConstant: number,
+    rendezvousSolutions?: Record<string, RendezvousSolution>
 ): number | null => {
     if (!input) return null;
 
@@ -202,8 +208,9 @@ export const resolveScalarInput = (
             const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
             const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
 
-            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
-            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant);
+            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
             if (p1 && p2 && outputKey === 'distance') {
                 return calculateDistance(p1, p2);
             }
@@ -211,8 +218,9 @@ export const resolveScalarInput = (
             const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
             const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
 
-            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
-            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant);
+            const p1 = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const p2 = resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
             if (p1 && p2 && outputKey === 'speed') {
                 return calculateRelativeSpeed(p1, p2);
             }
@@ -221,8 +229,8 @@ export const resolveScalarInput = (
             const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
             const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
 
-            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant);
-            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant);
+            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             
             if (primary && reference && 'mass' in reference) {
                  const info = calculateOrbitInfo(primary, reference as Body, gravitationalConstant);
@@ -232,6 +240,24 @@ export const resolveScalarInput = (
                      if (outputKey === 'apoapsis') return info.apoapsis;
                      if (outputKey === 'period') return info.period;
                  }
+            }
+        } else if (module.type === 'rendezvous_tracker') {
+            const rendezvous = rendezvousSolutions?.[module.id];
+            if (!rendezvous) return null;
+
+            switch (outputKey) {
+                case 'time':
+                    return rendezvous.timeToRendezvous;
+                case 'distance':
+                    return rendezvous.distance;
+                case 'delta_v_total':
+                    return rendezvous.totalDeltaV;
+                case 'delta_v_prograde':
+                    return rendezvous.deltaVPrograde;
+                case 'delta_v_radial':
+                    return rendezvous.deltaVRadial;
+                default:
+                    return null;
             }
         }
     }
@@ -243,7 +269,8 @@ export const resolveBooleanInput = (
     input: FlightComputerInput | undefined,
     bodies: Body[],
     modules: FlightComputerModule[],
-    gravitationalConstant: number
+    gravitationalConstant: number,
+    rendezvousSolutions?: Record<string, RendezvousSolution>
 ): boolean | null => {
     if (!input) return null;
 
@@ -255,7 +282,7 @@ export const resolveBooleanInput = (
         if (module.type === 'notify' && outputKey === 'triggered') {
             // Re-evaluate notify logic
             const nInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
-            const currentValue = resolveScalarInput(nInput, bodies, modules, gravitationalConstant);
+            const currentValue = resolveScalarInput(nInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             const operator = module.comparisonOperator || '>';
             const threshold = module.comparisonValue || 0;
 
@@ -271,8 +298,8 @@ export const resolveBooleanInput = (
             return false;
         } else if (module.type === 'logic_gate' && outputKey === 'result') {
             // Recursive resolution for Logic Gate
-            const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, gravitationalConstant);
-            const inputB = resolveBooleanInput(module.inputs?.inputB, bodies, modules, gravitationalConstant);
+            const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const inputB = resolveBooleanInput(module.inputs?.inputB, bodies, modules, gravitationalConstant, rendezvousSolutions);
             const op = module.logicOperator || 'AND';
 
             if (inputA === null) return null; // A is always required

@@ -17,7 +17,7 @@ import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
 import { resolveInput } from './services/orbitalMath';
-import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup } from './types';
+import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup, RendezvousSolution } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -83,17 +83,7 @@ const App: React.FC = () => {
   const [rendezvousPoint, setRendezvousPoint] = useState<Vector2D | null>(null);
   
   // Rendezvous points from Flight Computer modules
-  const [rendezvousPoints, setRendezvousPoints] = useState<Array<{
-    point: Vector2D;
-    name: string;
-    color: string;
-    moduleId: string;
-    timeToRendezvous: number; // in seconds
-    distance: number; // actual distance at rendezvous
-    deltaVPrograde: number; // delta-V in prograde direction
-    deltaVRadial: number; // delta-V in radial direction
-    totalDeltaV: number; // total delta-V magnitude
-  }>>([]);
+  const [rendezvousPoints, setRendezvousPoints] = useState<RendezvousSolution[]>([]);
 
   // Manual Creation Mode State
   const [isCreationMode, setIsCreationMode] = useState(false);
@@ -388,17 +378,7 @@ const App: React.FC = () => {
       return;
     }
     
-    const newRendezvousPoints: Array<{
-      point: Vector2D;
-      name: string;
-      color: string;
-      moduleId: string;
-      timeToRendezvous: number;
-      distance: number;
-      deltaVPrograde: number;
-      deltaVRadial: number;
-      totalDeltaV: number;
-    }> = [];
+    const newRendezvousPoints: RendezvousSolution[] = [];
     
     for (const module of activeRendezvousModules) {
       // Resolve Inputs

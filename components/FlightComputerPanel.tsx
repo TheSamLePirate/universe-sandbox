@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup, RendezvousSolution } from '../types';
 import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
@@ -21,17 +21,7 @@ interface FlightComputerPanelProps {
     onMoveGroupToGroup: (groupId: string, parentGroupId: string | null) => void;
     onExportGroup: (groupId: string) => void;
     onImportGroup: () => void;
-    rendezvousPoints?: Array<{ 
-        point: Vector2D; 
-        name: string; 
-        color: string; 
-        moduleId: string;
-        timeToRendezvous: number;
-        distance: number;
-        deltaVPrograde: number;
-        deltaVRadial: number;
-        totalDeltaV: number;
-    }>;
+    rendezvousPoints?: RendezvousSolution[];
 }
 
 const InputSelector: React.FC<{
@@ -100,6 +90,14 @@ const InputSelector: React.FC<{
                         let label = `${mod?.name || 'Module'} - ${key}`;
                         if (key === 'pe_point') label = `${mod?.name || 'Orbit'} Pe`;
                         if (key === 'pa_point') label = `${mod?.name || 'Orbit'} Pa`;
+                        if (mod?.type === 'rendezvous_tracker') {
+                            if (key === 'position') label = `${mod?.name || 'Rendezvous'} Position`;
+                            if (key === 'time') label = `${mod?.name || 'Rendezvous'} Time`;
+                            if (key === 'distance') label = `${mod?.name || 'Rendezvous'} Distance`;
+                            if (key === 'delta_v_total') label = `${mod?.name || 'Rendezvous'} ΔV Total`;
+                            if (key === 'delta_v_prograde') label = `${mod?.name || 'Rendezvous'} ΔV Prograde`;
+                            if (key === 'delta_v_radial') label = `${mod?.name || 'Rendezvous'} ΔV Radial`;
+                        }
                         
                         onChange({ 
                             type: 'module_output', 
@@ -119,6 +117,9 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:pe_point`} value={`${m.id}:pe_point`}>{m.name || 'Orbit'} - Periapsis Point</option>);
                                 options.push(<option key={`${m.id}:pa_point`} value={`${m.id}:pa_point`}>{m.name || 'Orbit'} - Apoapsis Point</option>);
                             }
+                            if (m.type === 'rendezvous_tracker') {
+                                options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Rendezvous'} - Position</option>);
+                            }
                         }
                         
                         // Scalar Outputs
@@ -134,6 +135,13 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:periapsis`} value={`${m.id}:periapsis`}>{m.name || 'Orbit'} - Periapsis Alt</option>);
                                 options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis Alt</option>);
                                 options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>);
+                            }
+                            if (m.type === 'rendezvous_tracker') {
+                                options.push(<option key={`${m.id}:time`} value={`${m.id}:time`}>{m.name || 'Rendezvous'} - Time</option>);
+                                options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Rendezvous'} - Distance</option>);
+                                options.push(<option key={`${m.id}:delta_v_total`} value={`${m.id}:delta_v_total`}>{m.name || 'Rendezvous'} - ΔV Total</option>);
+                                options.push(<option key={`${m.id}:delta_v_prograde`} value={`${m.id}:delta_v_prograde`}>{m.name || 'Rendezvous'} - ΔV Prograde</option>);
+                                options.push(<option key={`${m.id}:delta_v_radial`} value={`${m.id}:delta_v_radial`}>{m.name || 'Rendezvous'} - ΔV Radial</option>);
                             }
                         }
                         
@@ -181,6 +189,23 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
     const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
     const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+    
+    const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
+        const map: Record<string, RendezvousSolution> = {};
+        rendezvousPoints?.forEach(point => {
+            map[point.moduleId] = point;
+        });
+        return map;
+    }, [rendezvousPoints]);
+
+    const resolveVectorInputValue = (input?: FlightComputerInput) =>
+        resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+
+    const resolveScalarValue = (input?: FlightComputerInput) =>
+        resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+
+    const resolveBooleanValue = (input?: FlightComputerInput) =>
+        resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
     
     // Audio Context for Beep Module
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -232,7 +257,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     useEffect(() => {
         modules.forEach(module => {
             if (module.type === 'beep' && module.isEnabled) {
-                const input = resolveBooleanInput(module.inputs?.primary, bodies, modules, physicsConfig.gravitationalConstant);
+                const input = resolveBooleanValue(module.inputs?.primary);
                 const mode = module.beepTriggerMode || 'rising';
                 const pitch = module.beepPitch || 800;
                 const rate = module.beepRate || 2;
@@ -254,7 +279,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             lastBeepTimeRef.current.set(module.id, now);
                         }
                     }
-                    
+
                     if (shouldBeep) {
                         if (module.beepSoundType === 'speak' && module.beepSpeakText && mode !== 'continuous') {
                             EasySpeech.speak({
@@ -275,7 +300,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 }
             }
         });
-    }, [bodies, modules, physicsConfig]);
+    }, [bodies, modules, physicsConfig, rendezvousSolutionMap]);
+
 
     // Helper to get input or fallback to legacy fields
     const getInput = (module: FlightComputerModule, key: string): FlightComputerInput | undefined => {
@@ -319,48 +345,31 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         
         // Get the value based on the output key
         if (outputKey === 'distance') {
-            const distance = resolveScalarInput(
-                { type: 'module_output', value: `${module.id}:distance` },
-                bodies,
-                modules,
-                physicsConfig.gravitationalConstant
-            );
+            const distance = resolveScalarValue({ type: 'module_output', value: `${module.id}:distance` });
             return distance !== null ? `${distance.toFixed(1)} u` : '---';
         }
         if (outputKey === 'speed') {
-            const speed = resolveScalarInput(
-                { type: 'module_output', value: `${module.id}:speed` },
-                bodies,
-                modules,
-                physicsConfig.gravitationalConstant
-            );
+            const speed = resolveScalarValue({ type: 'module_output', value: `${module.id}:speed` });
             return speed !== null ? `${speed.toFixed(1)} m/s` : '---';
         }
         if (outputKey === 'altitude' || outputKey === 'periapsis' || outputKey === 'apoapsis') {
-            const value = resolveScalarInput(
-                { type: 'module_output', value: `${module.id}:${outputKey}` },
-                bodies,
-                modules,
-                physicsConfig.gravitationalConstant
-            );
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? `${value.toFixed(1)} u` : '---';
         }
         if (outputKey === 'period') {
-            const value = resolveScalarInput(
-                { type: 'module_output', value: `${module.id}:period` },
-                bodies,
-                modules,
-                physicsConfig.gravitationalConstant
-            );
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:period` });
             return value !== null ? formatTime(value) : '---';
         }
+        if (outputKey === 'time') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:time` });
+            return value !== null ? formatTime(value) : '---';
+        }
+        if (outputKey === 'delta_v_total' || outputKey === 'delta_v_prograde' || outputKey === 'delta_v_radial') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
+            return value !== null ? `${value.toFixed(1)} m/s` : '---';
+        }
         if (outputKey === 'triggered' || outputKey === 'result') {
-            const value = resolveBooleanInput(
-                { type: 'module_output', value: `${module.id}:${outputKey}` },
-                bodies,
-                modules,
-                physicsConfig.gravitationalConstant
-            );
+            const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
         }
         
@@ -399,8 +408,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 const primaryInput = getInput(module, 'primary');
                 const referenceInput = getInput(module, 'reference');
                 
-                const primary = resolveInput(primaryInput, bodies, modules, physicsConfig.gravitationalConstant);
-                const reference = resolveInput(referenceInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const primary = resolveVectorInputValue(primaryInput);
+                const reference = resolveVectorInputValue(referenceInput);
                 
                 // For orbit info, reference MUST be a body (need mass)
                 if (!primary || !reference || !('mass' in reference)) return <div className="text-xs text-slate-500 italic">Invalid Selection</div>;
@@ -467,9 +476,9 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 const tReferenceInput = getInput(module, 'reference');
                 const tTargetInput = getInput(module, 'target');
 
-                const tPrimary = resolveInput(tPrimaryInput, bodies, modules, physicsConfig.gravitationalConstant);
-                const tReference = resolveInput(tReferenceInput, bodies, modules, physicsConfig.gravitationalConstant);
-                const tTarget = resolveInput(tTargetInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const tPrimary = resolveVectorInputValue(tPrimaryInput);
+                const tReference = resolveVectorInputValue(tReferenceInput);
+                const tTarget = resolveVectorInputValue(tTargetInput);
 
                 if (!tPrimary || !tReference || !tTarget || !('mass' in tPrimary) || !('mass' in tReference) || !('mass' in tTarget)) {
                      return <div className="text-xs text-slate-500 italic">Select Bodies for Transfer</div>;
@@ -627,8 +636,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 );
 
             case 'track_distance':
-                const dPrimary = resolveInput(getInput(module, 'primary'), bodies, modules, physicsConfig.gravitationalConstant);
-                const dTarget = resolveInput(getInput(module, 'target'), bodies, modules, physicsConfig.gravitationalConstant);
+                const dPrimary = resolveVectorInputValue(getInput(module, 'primary'));
+                const dTarget = resolveVectorInputValue(getInput(module, 'target'));
                 
                 if (!dPrimary || !dTarget) return <div className="text-xs text-slate-500 italic">Select Objects</div>;
                 
@@ -644,8 +653,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 );
 
             case 'track_velocity':
-                const vPrimary = resolveInput(getInput(module, 'primary'), bodies, modules, physicsConfig.gravitationalConstant);
-                const vTarget = resolveInput(getInput(module, 'target'), bodies, modules, physicsConfig.gravitationalConstant);
+                const vPrimary = resolveVectorInputValue(getInput(module, 'primary'));
+                const vTarget = resolveVectorInputValue(getInput(module, 'target'));
                 
                 if (!vPrimary || !vTarget) return <div className="text-xs text-slate-500 italic">Select Objects</div>;
                 
@@ -662,7 +671,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
             case 'notify':
                 const nInput = getInput(module, 'primary'); // Source
-                const currentValue = resolveScalarInput(nInput, bodies, modules, physicsConfig.gravitationalConstant);
+                const currentValue = resolveScalarValue(nInput);
                 
                 const operator = module.comparisonOperator || '>';
                 const threshold = module.comparisonValue || 0;
@@ -724,8 +733,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 );
 
             case 'logic_gate':
-                const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, physicsConfig.gravitationalConstant);
-                const inputB = resolveBooleanInput(module.inputs?.inputB, bodies, modules, physicsConfig.gravitationalConstant);
+                const inputA = resolveBooleanValue(module.inputs?.inputA);
+                const inputB = resolveBooleanValue(module.inputs?.inputB);
                 const logicOp = module.logicOperator || 'AND';
                 
                 let result: boolean | null = null;
@@ -773,7 +782,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 );
 
             case 'beep':
-                const beepInput = resolveBooleanInput(module.inputs?.primary, bodies, modules, physicsConfig.gravitationalConstant);
+                const beepInput = resolveBooleanValue(module.inputs?.primary);
                 const beepMode = module.beepTriggerMode || 'rising';
                 const beepPitch = module.beepPitch || 800;
                 const beepRate = module.beepRate || 2;
@@ -1243,6 +1252,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                                 options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis</option>); 
                                                                                 options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>); 
                                                                             } 
+                                                                            if (m.type === 'rendezvous_tracker') {
+                                                                                options.push(<option key={`${m.id}:time`} value={`${m.id}:time`}>{m.name || 'Rendezvous'} - Time</option>);
+                                                                                options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Rendezvous'} - Distance</option>);
+                                                                                options.push(<option key={`${m.id}:delta_v_total`} value={`${m.id}:delta_v_total`}>{m.name || 'Rendezvous'} - ΔV Total</option>);
+                                                                                options.push(<option key={`${m.id}:delta_v_prograde`} value={`${m.id}:delta_v_prograde`}>{m.name || 'Rendezvous'} - ΔV Prograde</option>);
+                                                                                options.push(<option key={`${m.id}:delta_v_radial`} value={`${m.id}:delta_v_radial`}>{m.name || 'Rendezvous'} - ΔV Radial</option>);
+                                                                            }
                                                                             if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); 
                                                                             if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); 
                                                                             return options; 

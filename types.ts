@@ -75,6 +75,18 @@ export interface Particle {
   size: number;
 }
 
+export interface RendezvousSolution {
+  moduleId: string;
+  name: string;
+  color: string;
+  point: Vector2D;
+  timeToRendezvous: number;
+  distance: number;
+  deltaVPrograde: number;
+  deltaVRadial: number;
+  totalDeltaV: number;
+}
+
 export interface VisualConfig {
     // Toggles
     showGrid: boolean;
