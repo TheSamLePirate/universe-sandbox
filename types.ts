@@ -251,6 +251,7 @@ export interface ModuleGroup {
     name: string;
     color: string;
     isCollapsed: boolean;
+    parentGroupId?: string | null; // ID of parent group, null = top-level
     displayOutput?: {
         moduleId: string;
         outputKey: string;

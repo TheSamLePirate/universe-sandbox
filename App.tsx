@@ -184,7 +184,8 @@ const App: React.FC = () => {
           id: `fc_group_${Date.now()}`,
           name: 'New Group',
           color: '#10b981', // Default green
-          isCollapsed: false
+          isCollapsed: false,
+          parentGroupId: null // Start as top-level
       };
       setModuleGroups(prev => [...prev, newGroup]);
   };
@@ -194,7 +195,10 @@ const App: React.FC = () => {
       setFlightComputerModules(prev => prev.map(m => 
           m.groupId === groupId ? { ...m, groupId: null } : m
       ));
-      setModuleGroups(prev => prev.filter(g => g.id !== groupId));
+      // Unparent all child groups
+      setModuleGroups(prev => prev.map(g =>
+          g.parentGroupId === groupId ? { ...g, parentGroupId: null } : g
+      ).filter(g => g.id !== groupId));
   };
 
   const handleUpdateGroup = (groupId: string, updates: Partial<ModuleGroup>) => {
@@ -205,6 +209,25 @@ const App: React.FC = () => {
       setFlightComputerModules(prev => prev.map(m => 
           m.id === moduleId ? { ...m, groupId } : m
       ));
+  };
+
+  const handleMoveGroupToGroup = (groupId: string, parentGroupId: string | null) => {
+      // Prevent circular references
+      const wouldCreateCycle = (childId: string, potentialParentId: string | null): boolean => {
+          if (!potentialParentId) return false;
+          if (childId === potentialParentId) return true;
+          
+          const parent = moduleGroups.find(g => g.id === potentialParentId);
+          if (!parent || !parent.parentGroupId) return false;
+          
+          return wouldCreateCycle(childId, parent.parentGroupId);
+      };
+
+      if (!wouldCreateCycle(groupId, parentGroupId)) {
+          setModuleGroups(prev => prev.map(g =>
+              g.id === groupId ? { ...g, parentGroupId } : g
+          ));
+      }
   };
   useEffect(() => { particlesRef.current = particles; }, [particles]);
   useEffect(() => { followingBodyIdRef.current = followingBodyId; }, [followingBodyId]);
@@ -1685,6 +1708,7 @@ const App: React.FC = () => {
         onRemoveGroup={handleRemoveGroup}
         onUpdateGroup={handleUpdateGroup}
         onMoveModuleToGroup={handleMoveModuleToGroup}
+        onMoveGroupToGroup={handleMoveGroupToGroup}
         rendezvousPoints={rendezvousPoints}
       />
 

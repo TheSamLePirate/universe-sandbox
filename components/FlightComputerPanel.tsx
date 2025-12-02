@@ -165,6 +165,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     onRemoveGroup,
     onUpdateGroup,
     onMoveModuleToGroup,
+    onMoveGroupToGroup,
     rendezvousPoints
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -173,6 +174,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
    const [expandedModules, setExpandedModules] = useState<string[]>([]);
     const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
+    const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
     const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
     
     // Audio Context for Beep Module
@@ -1085,55 +1087,161 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                             return (
                                 <>
-                                    {/* Render Groups */}
-                                    {groupedModules.map(({ group, modules: groupModules }) => (
-                                        <div 
-                                            key={group.id}
-                                            className={`border-2 rounded-lg transition-all ${dragOverGroupId === group.id ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/50'} ${group.isCollapsed ? 'w-1/5' : 'w-full'}`}
-                                            style={{ borderColor: group.isCollapsed ? group.color : undefined }}
-                                            onDragOver={(e) => { e.preventDefault(); setDragOverGroupId(group.id); }}
-                                            onDragLeave={() => setDragOverGroupId(null)}
-                                            onDrop={() => { if (draggedModuleId) { onMoveModuleToGroup(draggedModuleId, group.id); setDraggedModuleId(null); setDragOverGroupId(null); } }}
-                                        >
-                                            {/* Group Header */}
-                                            <div className="flex justify-between items-center p-2 bg-slate-800/50 rounded-t-lg cursor-pointer hover:bg-slate-800/70" onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })} style={{ backgroundColor: group.color + '20' }}>
-                                                <div className="flex items-center gap-2 flex-1">
-                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
-                                                    <input type="text" value={group.name} onChange={(e) => { e.stopPropagation(); onUpdateGroup(group.id, { name: e.target.value }); }} onClick={(e) => e.stopPropagation()} className="bg-transparent text-xs font-bold text-slate-200 border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 outline-none flex-1" />
-                                                    {!group.isCollapsed && <span className="text-[10px] text-slate-500">({groupModules.length})</span>}
-                                                    {group.isCollapsed && group.displayOutput && (<span className="text-[20px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); onRemoveGroup(group.id); }} className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"><Trash2 size={12} /></button>
-                                                    {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                                                </div>
-                                            </div>
+                                    {/* Render Groups Recursively */}
+                                    {(() => {
+                                        // Only render top-level groups (no parent)
+                                        const topLevelGroups = groups.filter(g => !g.parentGroupId);
+                                        
+                                        // Recursive function to render a group and its children
+                                        const renderGroup = (group: ModuleGroup, depth: number = 0) => {
+                                            // Max depth limit
+                                            if (depth >= 6) return null;
+                                            
+                                            const childGroups = groups.filter(g => g.parentGroupId === group.id);
+                                            const groupModules = modules.filter(m => m.groupId === group.id);
+                                            
+                                            return (
+                                                <div 
+                                                    key={group.id}
+                                                    className={`border-2 rounded-lg transition-all ${dragOverGroupId === group.id ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/50'} ${group.isCollapsed ? 'w-1/5' : 'w-full'} mb-2`}
+                                                    style={{ 
+                                                        borderColor: group.isCollapsed ? group.color : undefined,
+                                                        marginLeft: depth > 0 ? `${depth * 16}px` : undefined
+                                                    }}
+                                                    draggable={depth < 5} // Can't drag groups at max depth
+                                                    onDragStart={(e) => {
+                                                        if (depth < 5) {
+                                                            e.stopPropagation();
+                                                            setDraggedGroupId(group.id);
+                                                        }
+                                                    }}
+                                                    onDragEnd={(e) => {
+                                                        e.stopPropagation();
+                                                        setDraggedGroupId(null);
+                                                    }}
+                                                    onDragOver={(e) => { 
+                                                        e.preventDefault(); 
+                                                        e.stopPropagation();
+                                                        setDragOverGroupId(group.id); 
+                                                    }}
+                                                    onDragLeave={(e) => {
+                                                        e.stopPropagation();
+                                                        if (e.currentTarget === e.target) {
+                                                            setDragOverGroupId(null);
+                                                        }
+                                                    }}
+                                                    onDrop={(e) => { 
+                                                        e.stopPropagation();
+                                                        if (draggedModuleId) { 
+                                                            onMoveModuleToGroup(draggedModuleId, group.id); 
+                                                            setDraggedModuleId(null); 
+                                                        } else if (draggedGroupId && draggedGroupId !== group.id && depth < 5) {
+                                                            onMoveGroupToGroup(draggedGroupId, group.id);
+                                                            setDraggedGroupId(null);
+                                                        }
+                                                        setDragOverGroupId(null);
+                                                    }}
+                                                >
+                                                    {/* Group Header */}
+                                                    <div 
+                                                        className="flex justify-between items-center p-2 bg-slate-800/50 rounded-t-lg cursor-pointer hover:bg-slate-800/70" 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed });
+                                                        }} 
+                                                        style={{ backgroundColor: group.color + '20' }}
+                                                    >
+                                                        <div className="flex items-center gap-2 flex-1">
+                                                            {depth < 5 && <GripVertical size={12} className="text-slate-600" />}
+                                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
+                                                            <input 
+                                                                type="text" 
+                                                                value={group.name} 
+                                                                onChange={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    onUpdateGroup(group.id, { name: e.target.value }); 
+                                                                }} 
+                                                                onClick={(e) => e.stopPropagation()} 
+                                                                className="bg-transparent text-xs font-bold text-slate-200 border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 outline-none flex-1" 
+                                                            />
+                                                            {!group.isCollapsed && <span className="text-[10px] text-slate-500">({groupModules.length}m + {childGroups.length}g)</span>}
+                                                            {group.isCollapsed && group.displayOutput && (<span className="text-[20px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    onRemoveGroup(group.id); 
+                                                                }} 
+                                                                className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
+                                                            >
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                            {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                                        </div>
+                                                    </div>
 
-                                            {/* Group Content */}
-                                            {!group.isCollapsed && (
-                                                <div className="p-2">
-                                                    {groupModules.length === 0 ? (
-                                                        <div className="text-center py-4 text-slate-500 text-[10px] italic">Drag modules here</div>
-                                                    ) : (
-                                                        <div className="grid grid-cols-4 gap-2">
-                                                            {groupModules.map(module => renderModule(module))}
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {/* Display Output Selector */}
-                                                    {groupModules.length > 0 && (
-                                                        <div className="pt-2 border-t border-slate-700/30">
-                                                            <label className="text-[9px] text-slate-500 uppercase block mb-1">Display Output (collapsed)</label>
-                                                            <select value={group.displayOutput ? `${group.displayOutput.moduleId}:${group.displayOutput.outputKey}` : ''} onChange={(e) => { if (!e.target.value) { onUpdateGroup(group.id, { displayOutput: undefined }); return; } const [moduleId, outputKey] = e.target.value.split(':'); onUpdateGroup(group.id, { displayOutput: { moduleId, outputKey } }); }} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 focus:border-purple-500 outline-none">
-                                                                <option value="">None</option>
-                                                                {groupModules.map(m => { const options = []; if (m.type === 'track_distance') options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Distance'} - Value</option>); if (m.type === 'track_velocity') options.push(<option key={`${m.id}:speed`} value={`${m.id}:speed`}>{m.name || 'Velocity'} - Speed</option>); if (m.type === 'orbit_info') { options.push(<option key={`${m.id}:altitude`} value={`${m.id}:altitude`}>{m.name || 'Orbit'} - Altitude</option>); options.push(<option key={`${m.id}:periapsis`} value={`${m.id}:periapsis`}>{m.name || 'Orbit'} - Periapsis</option>); options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis</option>); options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>); } if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); return options; })}
-                                                            </select>
+                                                    {/* Group Content */}
+                                                    {!group.isCollapsed && (
+                                                        <div className="p-2">
+                                                            {/* Child Groups */}
+                                                            {childGroups.length > 0 && (
+                                                                <div className="space-y-2 mb-2">
+                                                                    {childGroups.map(childGroup => renderGroup(childGroup, depth + 1))}
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {/* Modules */}
+                                                            {groupModules.length === 0 && childGroups.length === 0 ? (
+                                                                <div className="text-center py-4 text-slate-500 text-[10px] italic">Drag modules or groups here</div>
+                                                            ) : groupModules.length > 0 ? (
+                                                                <div className="grid grid-cols-4 gap-2">
+                                                                    {groupModules.map(module => renderModule(module))}
+                                                                </div>
+                                                            ) : null}
+                                                            
+                                                            {/* Display Output Selector */}
+                                                            {groupModules.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-700/30 mt-2">
+                                                                    <label className="text-[9px] text-slate-500 uppercase block mb-1">Display Output (collapsed)</label>
+                                                                    <select 
+                                                                        value={group.displayOutput ? `${group.displayOutput.moduleId}:${group.displayOutput.outputKey}` : ''} 
+                                                                        onChange={(e) => { 
+                                                                            if (!e.target.value) { 
+                                                                                onUpdateGroup(group.id, { displayOutput: undefined }); 
+                                                                                return; 
+                                                                            } 
+                                                                            const [moduleId, outputKey] = e.target.value.split(':'); 
+                                                                            onUpdateGroup(group.id, { displayOutput: { moduleId, outputKey } }); 
+                                                                        }} 
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
+                                                                    >
+                                                                        <option value="">None</option>
+                                                                        {groupModules.map(m => { 
+                                                                            const options = []; 
+                                                                            if (m.type === 'track_distance') options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Distance'} - Value</option>); 
+                                                                            if (m.type === 'track_velocity') options.push(<option key={`${m.id}:speed`} value={`${m.id}:speed`}>{m.name || 'Velocity'} - Speed</option>); 
+                                                                            if (m.type === 'orbit_info') { 
+                                                                                options.push(<option key={`${m.id}:altitude`} value={`${m.id}:altitude`}>{m.name || 'Orbit'} - Altitude</option>); 
+                                                                                options.push(<option key={`${m.id}:periapsis`} value={`${m.id}:periapsis`}>{m.name || 'Orbit'} - Periapsis</option>); 
+                                                                                options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis</option>); 
+                                                                                options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>); 
+                                                                            } 
+                                                                            if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); 
+                                                                            if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); 
+                                                                            return options; 
+                                                                        })}
+                                                                    </select>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                            );
+                                        };
+                                        
+                                        return topLevelGroups.map(group => renderGroup(group, 0));
+                                    })()}
 
                                     {/* Ungrouped Modules */}
                                     {ungroupedModules.length > 0 && (
