@@ -17,6 +17,8 @@ interface SettingsPanelProps {
     setUse3D: (use3D: boolean) => void;
     audioState: AudioContextState | 'uninitialized';
     onEnableAudio: () => void;
+    showMusicPanel: boolean;
+    setShowMusicPanel: (show: boolean) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
@@ -31,7 +33,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     use3D,
     setUse3D,
     audioState,
-    onEnableAudio
+    onEnableAudio,
+    showMusicPanel,
+    setShowMusicPanel
 }) => {
     const [activeTab, setActiveTab] = useState<'visuals' | 'physics' | 'api'>('visuals');
     const [apiKey, setApiKey] = useState<string>(() => {
@@ -155,6 +159,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     </div>
                                 </label>
                             </div>
+
+                            {/* Music Panel Toggle */}
+                            <label className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer hover:bg-slate-750 transition-colors mb-4 border border-purple-500/30">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles size={16} className="text-purple-400" />
+                                    <span className="text-sm text-purple-300 font-bold">AI Music Generator</span>
+                                </div>
+                                <div className={`w-10 h-5 rounded-full relative transition-colors ${showMusicPanel ? 'bg-purple-600' : 'bg-slate-600'}`}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={showMusicPanel} 
+                                        onChange={(e) => setShowMusicPanel(e.target.checked)}
+                                        className="hidden"
+                                    />
+                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${showMusicPanel ? 'left-6' : 'left-1'}`} />
+                                </div>
+                            </label>
 
                             {/* Audio Status */}
                             <div className="bg-slate-800 p-3 rounded-lg mb-4 flex items-center justify-between border border-slate-700">

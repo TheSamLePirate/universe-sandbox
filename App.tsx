@@ -12,6 +12,7 @@ import CoMInfoPanel from './components/CoMInfoPanel';
 import RocketPanel from './components/RocketPanel';
 import PredictionPanel from './components/PredictionPanel';
 import Assistant from './components/Assistant';
+import MusicPanel from './components/MusicPanel';
 import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
@@ -48,6 +49,7 @@ const App: React.FC = () => {
   const [showBuilder, setShowBuilder] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
+  const [showMusicPanel, setShowMusicPanel] = useState(false);
   
   // Observer Mode
   const [showObserver, setShowObserver] = useState(false);
@@ -1979,6 +1981,8 @@ const App: React.FC = () => {
             setUse3D={setUse3D}
             audioState={audioState}
             onEnableAudio={resumeAudio}
+            showMusicPanel={showMusicPanel}
+            setShowMusicPanel={setShowMusicPanel}
           />
       )}
 
@@ -2029,6 +2033,13 @@ const App: React.FC = () => {
         showRocketPanel={showRocketPanel}
         onToggleRocketPanel={() => setShowRocketPanel(!showRocketPanel)}
       />
+      {/* Music Panel */}
+      {showMusicPanel && (
+          <MusicPanel 
+              apiKey={localStorage.getItem('gemini_api_key') || ''}
+              onClose={() => setShowMusicPanel(false)}
+          />
+      )}
     </div>
   );
 };
