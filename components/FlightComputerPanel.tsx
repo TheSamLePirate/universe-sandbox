@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus } from 'lucide-react';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
@@ -18,6 +18,9 @@ interface FlightComputerPanelProps {
     onRemoveGroup: (groupId: string) => void;
     onUpdateGroup: (groupId: string, updates: Partial<ModuleGroup>) => void;
     onMoveModuleToGroup: (moduleId: string, groupId: string | null) => void;
+    onMoveGroupToGroup: (groupId: string, parentGroupId: string | null) => void;
+    onExportGroup: (groupId: string) => void;
+    onImportGroup: () => void;
     rendezvousPoints?: Array<{ 
         point: Vector2D; 
         name: string; 
@@ -166,6 +169,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     onUpdateGroup,
     onMoveModuleToGroup,
     onMoveGroupToGroup,
+    onExportGroup,
+    onImportGroup,
     rendezvousPoints
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -878,7 +883,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     };
 
     return (
-        <div className={`fixed ${isMobile ? 'top-16 right-4' : 'top-0 right-0'} z-40 flex flex-col items-end pointer-events-none`}>
+        <div className={`fixed ${isMobile ? 'top-16 right-4' : 'top-0 right-0'} z-[40] flex flex-col items-end pointer-events-none `}>
             {/* Main Toggle Button */}
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -893,7 +898,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
             {/* Expanded Panel */}
             {isExpanded && (
-                <div className="pointer-events-auto mt-2 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg shadow-2xl w-[100vw] h-[100vh] flex flex-col animate-in slide-in-from-right-4 duration-200">
+                <div className="fixed top-8 bottom-16 pointer-events-auto mt-2 bg-slate-900/10 backdrop-blur-[2px] border border-slate-700 rounded-lg shadow-2xl w-[100vw]  flex flex-col animate-in slide-in-from-right-4 duration-200 bottom-16 ">
                     
                     {/* Header */}
                     <div className="p-3 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30 rounded-t-lg">
@@ -1166,8 +1171,18 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                             />
                                                             {!group.isCollapsed && <span className="text-[10px] text-slate-500">({groupModules.length}m + {childGroups.length}g)</span>}
                                                             {group.isCollapsed && group.displayOutput && (<span className="text-[20px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
-                                                        </div>
+                                                         </div>
                                                         <div className="flex items-center gap-1">
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    onExportGroup(group.id); 
+                                                                }} 
+                                                                className="p-1 rounded hover:bg-green-900/30 text-slate-600 hover:text-green-400"
+                                                                title="Export group"
+                                                            >
+                                                                <Download size={12} />
+                                                            </button>
                                                             <button 
                                                                 onClick={(e) => { 
                                                                     e.stopPropagation(); 
@@ -1259,10 +1274,22 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                                     {/* Create Group Button */}
                                     {modules.length > 0 && (
-                                        <button onClick={onAddGroup} className="w-full py-2 text-xs text-slate-400 hover:text-green-400 border border-dashed border-slate-700 hover:border-green-500/50 rounded-lg flex items-center justify-center gap-2 transition-all">
-                                            <FolderPlus size={14} />
-                                            Create Group
-                                        </button>
+                                        <div className="mt-2 flex gap-2">
+                                            <button 
+                                                onClick={onAddGroup} 
+                                                className="w-full p-2 bg-green-600 hover:bg-green-500 text-white text-xs rounded flex items-center justify-center gap-2"
+                                            >
+                                                <FolderPlus size={14} />
+                                                Create Group
+                                            </button>
+                                            <button 
+                                                onClick={onImportGroup} 
+                                                className="p-2 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded flex items-center gap-2"
+                                                title="Import group from file"
+                                            >
+                                                <Upload size={14} />
+                                            </button>
+                                        </div>
                                     )}
                                 </>
                             );

@@ -223,11 +223,120 @@ const App: React.FC = () => {
           return wouldCreateCycle(childId, parent.parentGroupId);
       };
 
-      if (!wouldCreateCycle(groupId, parentGroupId)) {
+       if (!wouldCreateCycle(groupId, parentGroupId)) {
           setModuleGroups(prev => prev.map(g =>
               g.id === groupId ? { ...g, parentGroupId } : g
           ));
       }
+  };
+
+  const handleExportGroup = (groupId: string) => {
+      const group = moduleGroups.find(g => g.id === groupId);
+      if (!group) return;
+
+      // Recursively collect all child groups
+      const collectChildGroups = (parentId: string): ModuleGroup[] => {
+          const children = moduleGroups.filter(g => g.parentGroupId === parentId);
+          return [...children, ...children.flatMap(c => collectChildGroups(c.id))];
+      };
+
+      const allGroupIds = [groupId, ...collectChildGroups(groupId).map(g => g.id)];
+      const groupsToExport = moduleGroups.filter(g => allGroupIds.includes(g.id));
+      const modulesToExport = flightComputerModules.filter(m => allGroupIds.includes(m.groupId || ''));
+
+      const exportData = {
+          version: '1.0',
+          exportDate: new Date().toISOString(),
+          rootGroup: group,
+          groups: groupsToExport,
+          modules: modulesToExport
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${group.name.replace(/[^a-z0-9]/gi, '_')}_group.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+  };
+
+  const handleImportGroup = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (!file) return;
+
+          try {
+              const text = await file.text();
+              const data = JSON.parse(text);
+
+              // Generate new IDs to avoid conflicts
+              const idMap = new Map<string, string>();
+              const timestamp = Date.now();
+              
+              // Map old IDs to new IDs
+              data.groups.forEach((g: ModuleGroup, idx: number) => {
+                  idMap.set(g.id, `fc_group_${timestamp}_${idx}`);
+              });
+              data.modules.forEach((m: FlightComputerModule, idx: number) => {
+                  idMap.set(m.id, `fc_module_${timestamp}_${idx}`);
+              });
+
+              // Update groups with new IDs
+              const newGroups: ModuleGroup[] = data.groups.map((g: ModuleGroup) => ({
+                  ...g,
+                  id: idMap.get(g.id)!,
+                  parentGroupId: g.parentGroupId ? (idMap.get(g.parentGroupId) || null) : null
+              }));
+
+              // Update modules with new IDs
+              const newModules: FlightComputerModule[] = data.modules.map((m: FlightComputerModule) => {
+                  const newModule = {
+                      ...m,
+                      id: idMap.get(m.id)!,
+                      groupId: m.groupId ? (idMap.get(m.groupId) || null) : null
+                  };
+
+                  // Update input references in modules
+                  if (m.inputs) {
+                      const newInputs: Record<string, FlightComputerInput> = {};
+                      Object.entries(m.inputs).forEach(([key, input]) => {
+                          // Check if this is a module reference (value format: "moduleId:outputKey")
+                          if (input.type === 'body') {
+                              const [moduleId, outputKey] = input.value.split(':');
+                              if (outputKey) {
+                                  // This is a module reference
+                                  const newModuleId = idMap.get(moduleId) || moduleId;
+                                  newInputs[key] = {
+                                      ...input,
+                                      value: `${newModuleId}:${outputKey}`
+                                  };
+                              } else {
+                                  newInputs[key] = input;
+                              }
+                          } else {
+                              newInputs[key] = input;
+                          }
+                      });
+                      newModule.inputs = newInputs;
+                  }
+
+                  return newModule;
+              });
+
+              // Add to existing state (don't clear)
+              setModuleGroups(prev => [...prev, ...newGroups]);
+              setFlightComputerModules(prev => [...prev, ...newModules]);
+
+          } catch (error) {
+              console.error('Failed to import group:', error);
+              alert('Failed to import group. Please check the file format.');
+          }
+      };
+      input.click();
   };
   useEffect(() => { particlesRef.current = particles; }, [particles]);
   useEffect(() => { followingBodyIdRef.current = followingBodyId; }, [followingBodyId]);
@@ -1709,6 +1818,8 @@ const App: React.FC = () => {
         onUpdateGroup={handleUpdateGroup}
         onMoveModuleToGroup={handleMoveModuleToGroup}
         onMoveGroupToGroup={handleMoveGroupToGroup}
+        onExportGroup={handleExportGroup}
+        onImportGroup={handleImportGroup}
         rendezvousPoints={rendezvousPoints}
       />
 
