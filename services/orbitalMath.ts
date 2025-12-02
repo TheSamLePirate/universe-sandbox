@@ -321,6 +321,8 @@ export const resolveBooleanInput = (
             }
         } else if (module.type === 'thrust_burst' && outputKey === 'done') {
             return module.thrustBurstCompleted ?? false;
+        } else if (module.type === 'button' && outputKey === 'state') {
+            return module.buttonState ?? false;
         }
     }
     return null;

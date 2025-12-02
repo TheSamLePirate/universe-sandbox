@@ -175,6 +175,9 @@ const InputSelector: React.FC<{
                             if (m.type === 'thrust_burst') {
                                 options.push(<option key={`${m.id}:done`} value={`${m.id}:done`}>{m.name || 'Burst'} - Done</option>);
                             }
+                            if (m.type === 'button') {
+                                options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Button'} - State</option>);
+                            }
                         }
                         
                         return options;
@@ -394,7 +397,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:progress` });
             return value !== null ? `${(value * 100).toFixed(0)}%` : '---';
         }
-        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done') {
+        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
             const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
         }
@@ -1377,6 +1380,26 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     </div>
                 );
 
+            case 'button':
+                const buttonState = module.buttonState ?? false;
+                
+                return (
+                    <div className="mt-2 flex gap-2">
+                        <button
+                            onClick={() => onUpdateModule(module.id, { buttonState: true })}
+                            className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${buttonState ? 'bg-green-600 border-green-400 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                        >
+                            TRUE
+                        </button>
+                        <button
+                            onClick={() => onUpdateModule(module.id, { buttonState: false })}
+                            className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${!buttonState ? 'bg-red-600 border-red-400 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+                        >
+                            FALSE
+                        </button>
+                    </div>
+                );
+
             default:
                 return null;
         }
@@ -1473,6 +1496,12 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-green-600/20 hover:border-green-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Play size={14} className="text-green-400" /> Maneuver Exec
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('button'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Square size={14} className="text-white" /> Button
                             </button>
                         </div>
                     )}

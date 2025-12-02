@@ -208,7 +208,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
 
@@ -282,6 +282,9 @@ export interface FlightComputerModule {
     
     // Grouping (cosmetic only)
     groupId?: string | null; // ID of the group this module belongs to, null = ungrouped
+    
+    // Button Module Config
+    buttonState?: boolean;
 }
 
 export interface ModuleGroup {
