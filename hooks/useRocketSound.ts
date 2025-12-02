@@ -20,6 +20,8 @@ export const useRocketSound = (bodies: Body[]) => {
 
     const [isReady, setIsReady] = useState(false);
 
+    const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+
     // Initialize Audio Context lazily on user interaction
     useEffect(() => {
         const initAudio = () => {
@@ -31,6 +33,10 @@ export const useRocketSound = (bodies: Body[]) => {
                         setAudioState('running');
                     });
                 }
+                // Ensure silent audio is playing (for silent switch bypass)
+                if (silentAudioRef.current && silentAudioRef.current.paused) {
+                    silentAudioRef.current.play().catch(() => {});
+                }
                 return;
             }
 
@@ -38,7 +44,7 @@ export const useRocketSound = (bodies: Body[]) => {
             if (!AudioContextClass) return;
 
             // Create context ONLY after user interaction
-            const ctx = new AudioContextClass();
+            const ctx = new AudioContextClass({ latencyHint: 'interactive' });
             audioContextRef.current = ctx;
             setAudioState(ctx.state);
 
@@ -52,13 +58,22 @@ export const useRocketSound = (bodies: Body[]) => {
                 ctx.resume();
             }
 
-            // 2. Play silent buffer (iOS unlock)
+            // 2. Play silent HTML5 Audio (Bypass iPhone Silent Switch)
             try {
-                const buffer = ctx.createBuffer(1, 1, 22050);
-                const source = ctx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(ctx.destination);
-                source.start(0);
+                if (!silentAudioRef.current) {
+                    // Silent MP3
+                    const silentAudio = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAP/7UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAInfoAAAAaAAAAAQAAAwAAwAAAAAADAAAAAAAAAAAAAAAAAD//7UAAALAAAABAAAAAAABAAAAAA==');
+                    silentAudio.loop = true; // Loop to keep session active
+                    silentAudio.volume = 0.01; // Non-zero volume sometimes helps
+                    silentAudioRef.current = silentAudio;
+                }
+                silentAudioRef.current.play().then(() => {
+                     console.log('Silent HTML5 audio playing (Silent Switch Bypass Active)');
+                }).catch(e => {
+                    if (e.name !== 'NotSupportedError') {
+                        console.debug('Silent HTML5 audio skipped:', e);
+                    }
+                });
             } catch (e) {
                 // Ignore
             }
@@ -117,12 +132,24 @@ export const useRocketSound = (bodies: Body[]) => {
             if (audioContextRef.current) {
                 audioContextRef.current.close();
             }
+            if (silentAudioRef.current) {
+                silentAudioRef.current.pause();
+                silentAudioRef.current = null;
+            }
         };
     }, []);
 
     const resumeAudio = () => {
-        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-            audioContextRef.current.resume();
+        if (audioContextRef.current) {
+            if (audioContextRef.current.state === 'suspended') {
+                audioContextRef.current.resume();
+            }
+            // Also try to play silent audio again
+            if (silentAudioRef.current && silentAudioRef.current.paused) {
+                silentAudioRef.current.play().catch(() => {});
+            }
+            // Play a test beep to confirm
+            playBeep(1);
         }
     };
 

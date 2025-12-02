@@ -175,7 +175,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                             onClick={onEnableAudio}
                                             className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
                                         >
-                                            Enable
+                                            Enable & Test
                                         </button>
                                     )}
                                 </div>
