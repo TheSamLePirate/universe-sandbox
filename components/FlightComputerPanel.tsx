@@ -153,6 +153,9 @@ const InputSelector: React.FC<{
                             if (m.type === 'logic_gate') {
                                 options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>);
                             }
+                            if (m.type === 'thrust_burst') {
+                                options.push(<option key={`${m.id}:done`} value={`${m.id}:done`}>{m.name || 'Burst'} - Done</option>);
+                            }
                         }
                         
                         return options;
@@ -368,7 +371,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? `${value.toFixed(1)} m/s` : '---';
         }
-        if (outputKey === 'triggered' || outputKey === 'result') {
+        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done') {
             const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
         }
@@ -886,6 +889,111 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     </div>
                 );
 
+            case 'thrust_burst':
+                const burstMode = module.thrustBurstMode || 'impulse';
+                const burstPrograde = module.thrustBurstDeltaVPrograde ?? 0;
+                const burstRadial = module.thrustBurstDeltaVRadial ?? 0;
+                const burstDuration = module.thrustBurstDuration ?? 1;
+                const burstReady = module.thrustBurstCompleted ?? true;
+                const progradeSource = getInput(module, 'deltaVPrograde');
+                const radialSource = getInput(module, 'deltaVRadial');
+                const durationSource = getInput(module, 'duration');
+
+                return (
+                    <div className="mt-2 space-y-3">
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => onUpdateModule(module.id, { thrustBurstMode: 'impulse' })}
+                                className={`flex-1 px-3 py-1 text-[10px] font-bold uppercase rounded border ${burstMode === 'impulse' ? 'bg-purple-600/40 border-purple-500 text-purple-200' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}
+                            >
+                                Impulse (ΔV)
+                            </button>
+                            <button
+                                onClick={() => onUpdateModule(module.id, { thrustBurstMode: 'force' })}
+                                className={`flex-1 px-3 py-1 text-[10px] font-bold uppercase rounded border ${burstMode === 'force' ? 'bg-orange-600/30 border-orange-400 text-orange-200' : 'border-slate-700 text-slate-400 hover:text-slate-200'}`}
+                            >
+                                Force Burst
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-slate-900/40 rounded p-2 border border-slate-800">
+                                <div className="text-[9px] text-slate-500 uppercase flex justify-between items-center">
+                                    <span>ΔV Prograde</span>
+                                    {progradeSource && <span className="text-[8px] text-purple-300">SRC</span>}
+                                </div>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={burstPrograde}
+                                    disabled={!!progradeSource}
+                                    onChange={(e) => {
+                                        const value = parseFloat(e.target.value);
+                                        onUpdateModule(module.id, { thrustBurstDeltaVPrograde: isNaN(value) ? 0 : value });
+                                    }}
+                                    className={`w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none ${progradeSource ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                />
+                                <div className="text-[9px] text-slate-500 mt-1">m/s</div>
+                            </div>
+                            <div className="bg-slate-900/40 rounded p-2 border border-slate-800">
+                                <div className="text-[9px] text-slate-500 uppercase flex justify-between items-center">
+                                    <span>ΔV Radial</span>
+                                    {radialSource && <span className="text-[8px] text-purple-300">SRC</span>}
+                                </div>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={burstRadial}
+                                    disabled={!!radialSource}
+                                    onChange={(e) => {
+                                        const value = parseFloat(e.target.value);
+                                        onUpdateModule(module.id, { thrustBurstDeltaVRadial: isNaN(value) ? 0 : value });
+                                    }}
+                                    className={`w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none ${radialSource ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                />
+                                <div className="text-[9px] text-slate-500 mt-1">m/s</div>
+                            </div>
+                            <div className="bg-slate-900/40 rounded p-2 border border-slate-800">
+                                <div className="text-[9px] text-slate-500 uppercase flex justify-between items-center">
+                                    <span>Duration</span>
+                                    {durationSource && <span className="text-[8px] text-purple-300">SRC</span>}
+                                </div>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={burstDuration}
+                                    disabled={!!durationSource}
+                                    onChange={(e) => {
+                                        const value = parseFloat(e.target.value);
+                                        onUpdateModule(module.id, { thrustBurstDuration: isNaN(value) ? 0 : value });
+                                    }}
+                                    className={`w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none ${durationSource ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                />
+                                <div className="text-[9px] text-slate-500 mt-1">seconds</div>
+                            </div>
+                        </div>
+
+                        <div className={`p-2 rounded border flex flex-col gap-1 ${burstReady ? 'bg-emerald-900/20 border-emerald-500/40' : 'bg-amber-900/20 border-amber-500/40'}`}>
+                            <div className="flex justify-between items-center text-[10px] uppercase">
+                                <span className="text-slate-400">Status</span>
+                                <span className={`font-bold ${burstReady ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                    {burstReady ? 'READY' : 'BURSTING'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] uppercase">
+                                <span className="text-slate-400">Done Output</span>
+                                <span className={`font-mono ${burstReady ? 'text-green-200' : 'text-amber-200'}`}>
+                                    {burstReady ? 'TRUE' : 'FALSE'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="text-[9px] text-slate-500 italic">
+                            Burst begins when the trigger input rises to TRUE. Force mode applies sustained thrust over the set duration; impulse mode applies ΔV immediately.
+                        </div>
+                    </div>
+                );
+
             default:
                 return null;
         }
@@ -970,6 +1078,12 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-yellow-600/20 hover:border-yellow-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Volume2 size={14} className="text-yellow-400" /> Beep
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('thrust_burst'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-orange-600/20 hover:border-orange-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Rocket size={14} className="text-orange-400" /> Thrust Burst
                             </button>
                         </div>
                     )}
@@ -1087,6 +1201,17 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                         {/* Beep */}
                                         {module.type === 'beep' && (
                                             <div className="col-span-2 space-y-1"><InputSelector label="Trigger Input" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
+                                        )}
+                                        {/* Thrust Burst */}
+                                        {module.type === 'thrust_burst' && (
+                                            <>
+                                                <div className="space-y-1"><InputSelector label="Rocket" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="Reference" value={getInput(module, 'reference')} onChange={(input) => updateInput(module.id, 'reference', input)} bodies={bodies} modules={modules} currentModuleId={module.id} /></div>
+                                                <div className="space-y-1"><InputSelector label="Start Trigger" value={getInput(module, 'trigger')} onChange={(input) => updateInput(module.id, 'trigger', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['boolean']} /></div>
+                                                <div className="space-y-1"><InputSelector label="ΔV Prograde Source" value={getInput(module, 'deltaVPrograde')} onChange={(input) => updateInput(module.id, 'deltaVPrograde', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar']} /></div>
+                                                <div className="space-y-1"><InputSelector label="ΔV Radial Source" value={getInput(module, 'deltaVRadial')} onChange={(input) => updateInput(module.id, 'deltaVRadial', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar']} /></div>
+                                                <div className="space-y-1"><InputSelector label="Duration Source" value={getInput(module, 'duration')} onChange={(input) => updateInput(module.id, 'duration', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar']} /></div>
+                                            </>
                                         )}
                                     </div>
 
@@ -1261,6 +1386,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                             }
                                                                             if (m.type === 'notify') options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>); 
                                                                             if (m.type === 'logic_gate') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Logic'} - Result</option>); 
+                                                                            if (m.type === 'thrust_burst') options.push(<option key={`${m.id}:done`} value={`${m.id}:done`}>{m.name || 'Burst'} - Done</option>); 
                                                                             return options; 
                                                                         })}
                                                                     </select>

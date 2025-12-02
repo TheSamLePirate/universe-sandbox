@@ -315,6 +315,8 @@ export const resolveBooleanInput = (
                 case 'XNOR': return inputA === inputB;
                 case 'NOT': return !inputA;
             }
+        } else if (module.type === 'thrust_burst' && outputKey === 'done') {
+            return module.thrustBurstCompleted ?? false;
         }
     }
     return null;

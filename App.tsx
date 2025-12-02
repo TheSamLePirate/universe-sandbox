@@ -16,7 +16,7 @@ import MusicPanel from './components/MusicPanel';
 import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
-import { resolveInput } from './services/orbitalMath';
+import { resolveInput, resolveScalarInput, resolveBooleanInput } from './services/orbitalMath';
 import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup, RendezvousSolution } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
@@ -155,6 +155,14 @@ const App: React.FC = () => {
           inputs: inputs || {}, // Initialize empty inputs or use provided
           groupId: null // Start ungrouped
       };
+
+      if (type === 'thrust_burst') {
+          newModule.thrustBurstMode = 'impulse';
+          newModule.thrustBurstDuration = 1;
+          newModule.thrustBurstDeltaVPrograde = 0;
+          newModule.thrustBurstDeltaVRadial = 0;
+          newModule.thrustBurstCompleted = true;
+      }
       setFlightComputerModules(prev => [...prev, newModule]);
   };
 
@@ -330,6 +338,255 @@ const App: React.FC = () => {
       };
       input.click();
   };
+
+  const flightComputerModulesRef = useRef(flightComputerModules);
+  useEffect(() => { flightComputerModulesRef.current = flightComputerModules; }, [flightComputerModules]);
+
+  const rendezvousSolutionMapRef = useRef<Record<string, RendezvousSolution>>({});
+  useEffect(() => {
+      const map: Record<string, RendezvousSolution> = {};
+      rendezvousPoints.forEach(point => {
+          map[point.moduleId] = point;
+      });
+      rendezvousSolutionMapRef.current = map;
+  }, [rendezvousPoints]);
+
+  const thrustBurstTriggerStateRef = useRef<Map<string, boolean>>(new Map());
+  const thrustBurstRuntimeRef = useRef<Map<string, { remainingTime: number; totalDuration: number; perSecondVector: Vector2D; forceVector: Vector2D; deltaVector: Vector2D; rocketId: string; elapsed: number }>>(new Map());
+
+  useEffect(() => {
+      const activeIds = new Set(flightComputerModules.map(m => m.id));
+      Array.from(thrustBurstRuntimeRef.current.keys()).forEach(id => {
+          if (!activeIds.has(id)) {
+              thrustBurstRuntimeRef.current.delete(id);
+          }
+      });
+      Array.from(thrustBurstTriggerStateRef.current.keys()).forEach(id => {
+          if (!activeIds.has(id)) {
+              thrustBurstTriggerStateRef.current.delete(id);
+          }
+      });
+  }, [flightComputerModules]);
+
+  const setThrustBurstCompletion = useCallback((moduleId: string, completed: boolean) => {
+      setFlightComputerModules(prev => {
+          let changed = false;
+          const next = prev.map(m => {
+              if (m.id === moduleId) {
+                  const current = m.thrustBurstCompleted ?? true;
+                  if (current !== completed) {
+                      changed = true;
+                      return { ...m, thrustBurstCompleted: completed };
+                  }
+              }
+              return m;
+          });
+          return changed ? next : prev;
+      });
+  }, []);
+
+  const applyThrustBurstModules = useCallback((bodiesSnapshot: Body[], dt: number) => {
+      const modules = flightComputerModulesRef.current;
+      if (!modules.length) return bodiesSnapshot;
+
+      const gConst = physicsConfigRef.current.gravitationalConstant;
+      const rendezvousMap = rendezvousSolutionMapRef.current;
+
+      const normalizeVector = (vec: Vector2D): Vector2D | null => {
+          const mag = Math.sqrt(vec.x * vec.x + vec.y * vec.y);
+          if (mag < 1e-6) return null;
+          return { x: vec.x / mag, y: vec.y / mag };
+      };
+
+      const getReferenceBody = (module: FlightComputerModule, rocket: Body): Body | null => {
+          const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
+          if (referenceInput) {
+              const referenceEntity = resolveInput(referenceInput, bodiesSnapshot, modules, gConst, rendezvousMap);
+              if (referenceEntity && 'mass' in referenceEntity) {
+                  return referenceEntity as Body;
+              }
+          }
+          if (rocket.orbitReferenceId) {
+              const ref = bodiesSnapshot.find(b => b.id === rocket.orbitReferenceId);
+              if (ref) return ref;
+          }
+          return null;
+      };
+
+      const stopBurst = (moduleId: string, rocket?: Body) => {
+          thrustBurstRuntimeRef.current.delete(moduleId);
+          if (rocket) {
+              rocket.thrust = { x: 0, y: 0 };
+          }
+          setThrustBurstCompletion(moduleId, true);
+      };
+
+      modules.forEach(module => {
+          if (module.type !== 'thrust_burst') return;
+
+          const runtime = thrustBurstRuntimeRef.current.get(module.id);
+
+          if (!module.isEnabled) {
+              if (runtime) {
+                  const targetRocket = bodiesSnapshot.find(b => b.id === runtime.rocketId);
+                  stopBurst(module.id, targetRocket || undefined);
+              } else if (module.thrustBurstCompleted === false) {
+                  setThrustBurstCompletion(module.id, true);
+              }
+              return;
+          }
+
+          const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+          if (!rocketInput) return;
+
+          const rocketEntity = resolveInput(rocketInput, bodiesSnapshot, modules, gConst, rendezvousMap);
+          if (!rocketEntity || !('id' in rocketEntity)) return;
+
+          const rocketIndex = bodiesSnapshot.findIndex(b => b.id === rocketEntity.id);
+          if (rocketIndex === -1) {
+              if (runtime) {
+                  stopBurst(module.id);
+              }
+              return;
+          }
+
+          const rocket = bodiesSnapshot[rocketIndex];
+          if (!rocket.isRocket) {
+              if (runtime) {
+                  stopBurst(module.id, rocket);
+              }
+              return;
+          }
+
+          const progradeScalar = resolveScalarInput(module.inputs?.deltaVPrograde, bodiesSnapshot, modules, gConst, rendezvousMap);
+          const radialScalar = resolveScalarInput(module.inputs?.deltaVRadial, bodiesSnapshot, modules, gConst, rendezvousMap);
+          const durationScalar = resolveScalarInput(module.inputs?.duration, bodiesSnapshot, modules, gConst, rendezvousMap);
+          const triggerValue = resolveBooleanInput(module.inputs?.trigger, bodiesSnapshot, modules, gConst, rendezvousMap);
+
+          const deltaVPrograde = progradeScalar ?? module.thrustBurstDeltaVPrograde ?? 0;
+          const deltaVRadial = radialScalar ?? module.thrustBurstDeltaVRadial ?? 0;
+          const plannedDuration = durationScalar ?? module.thrustBurstDuration ?? 1;
+          const mode = module.thrustBurstMode || 'impulse';
+
+          const startSignal = triggerValue ?? false;
+          const previousSignal = thrustBurstTriggerStateRef.current.get(module.id) || false;
+          const risingEdge = startSignal && !previousSignal;
+          thrustBurstTriggerStateRef.current.set(module.id, startSignal);
+
+          const resolveBasis = () => {
+              const reference = getReferenceBody(module, rocket);
+              let radial: Vector2D | null = reference ? normalizeVector({
+                  x: rocket.position.x - reference.position.x,
+                  y: rocket.position.y - reference.position.y
+              }) : null;
+
+              const speed = Math.sqrt(rocket.velocity.x * rocket.velocity.x + rocket.velocity.y * rocket.velocity.y);
+              let prograde: Vector2D | null = null;
+
+              if (speed > 0.0001) {
+                  prograde = { x: rocket.velocity.x / speed, y: rocket.velocity.y / speed };
+              }
+
+              if (!radial) {
+                  if (rocket.angle !== undefined) {
+                      radial = { x: Math.cos(rocket.angle), y: Math.sin(rocket.angle) };
+                      prograde = { x: -radial.y, y: radial.x };
+                  } else if (prograde) {
+                      radial = { x: -prograde.y, y: prograde.x };
+                  } else {
+                      prograde = { x: 1, y: 0 };
+                      radial = { x: 0, y: 1 };
+                  }
+              } else if (!prograde) {
+                  prograde = { x: -radial.y, y: radial.x };
+              }
+
+              const finalPrograde = normalizeVector(prograde) || { x: 1, y: 0 };
+              const finalRadial = normalizeVector(radial) || { x: -finalPrograde.y, y: finalPrograde.x };
+              return { prograde: finalPrograde, radial: finalRadial };
+          };
+
+          if (risingEdge) {
+              const magnitudeCheck = Math.abs(deltaVPrograde) + Math.abs(deltaVRadial);
+              if (magnitudeCheck < 1e-6) {
+                  stopBurst(module.id, rocket);
+              } else {
+                  const { prograde, radial } = resolveBasis();
+                  const deltaVector = {
+                      x: prograde.x * deltaVPrograde + radial.x * deltaVRadial,
+                      y: prograde.y * deltaVPrograde + radial.y * deltaVRadial
+                  };
+
+                  if (mode === 'impulse' || plannedDuration <= 0) {
+                      setThrustBurstCompletion(module.id, false);
+                      rocket.velocity = {
+                          x: rocket.velocity.x + deltaVector.x,
+                          y: rocket.velocity.y + deltaVector.y
+                      };
+                      stopBurst(module.id, rocket);
+                  } else {
+                      const totalDuration = Math.max(plannedDuration, 0.01);
+                      const perSecondVector = {
+                          x: deltaVector.x / totalDuration,
+                          y: deltaVector.y / totalDuration
+                      };
+                      const forceVector = {
+                          x: perSecondVector.x * rocket.mass,
+                          y: perSecondVector.y * rocket.mass
+                      };
+
+                      thrustBurstRuntimeRef.current.set(module.id, {
+                          remainingTime: totalDuration,
+                          totalDuration,
+                          perSecondVector,
+                          forceVector,
+                          deltaVector,
+                          rocketId: rocket.id,
+                          elapsed: 0
+                      });
+                      setThrustBurstCompletion(module.id, false);
+                  }
+              }
+          }
+
+          const activeRuntime = thrustBurstRuntimeRef.current.get(module.id);
+          if (activeRuntime) {
+              if (activeRuntime.rocketId !== rocket.id) {
+                  stopBurst(module.id, rocket);
+              } else {
+                  if (activeRuntime.remainingTime > 0) {
+                      rocket.thrust = { ...activeRuntime.forceVector };
+                      const step = Math.min(dt, activeRuntime.remainingTime);
+                      activeRuntime.remainingTime = Math.max(0, activeRuntime.remainingTime - step);
+                      activeRuntime.elapsed += step;
+                  }
+                  if (activeRuntime.remainingTime <= 0) {
+                      const delivered = {
+                          x: activeRuntime.perSecondVector.x * activeRuntime.elapsed,
+                          y: activeRuntime.perSecondVector.y * activeRuntime.elapsed
+                      };
+                      const correction = {
+                          x: activeRuntime.deltaVector.x - delivered.x,
+                          y: activeRuntime.deltaVector.y - delivered.y
+                      };
+                      rocket.velocity = {
+                          x: rocket.velocity.x + correction.x,
+                          y: rocket.velocity.y + correction.y
+                      };
+                      rocket.thrust = { x: 0, y: 0 };
+                      stopBurst(module.id);
+                  }
+              }
+          } else if (!startSignal && module.thrustBurstCompleted === false) {
+              rocket.thrust = { x: 0, y: 0 };
+              setThrustBurstCompletion(module.id, true);
+          }
+      });
+
+      return bodiesSnapshot;
+  }, [setThrustBurstCompletion]);
+
+
   useEffect(() => { particlesRef.current = particles; }, [particles]);
   useEffect(() => { followingBodyIdRef.current = followingBodyId; }, [followingBodyId]);
   useEffect(() => { followingCoMRef.current = followingCoM; }, [followingCoM]);
@@ -564,9 +821,17 @@ const App: React.FC = () => {
       const dt = physicsConfigRef.current.timeStep * speed; 
       simulationTimeRef.current += dt;
       
-      // Update Physics (Logic for Flight Computer has moved inside updatePhysics for sub-stepping accuracy)
+      const bodiesForSimulation = bodiesRef.current.map(body => ({
+          ...body,
+          position: { ...body.position },
+          velocity: { ...body.velocity },
+          thrust: body.thrust ? { ...body.thrust } : undefined
+      }));
+
+      applyThrustBurstModules(bodiesForSimulation, dt);
+
       const physicsResult = updatePhysics(
-          bodiesRef.current, 
+          bodiesForSimulation,
           dt, 
           physicsConfigRef.current.gravitationalConstant,
           visualConfigRef.current.trailLength,
@@ -744,7 +1009,7 @@ const App: React.FC = () => {
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [isRunning, speed]);
+  }, [applyThrustBurstModules, isRunning, speed]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -1522,19 +1787,28 @@ const App: React.FC = () => {
               if (!targetBody) return `Target body '${targetBodyName}' not found.`;
           }
           
-          const newModule: FlightComputerModule = {
-              id: `fc_${Date.now()}`,
-              type: moduleType as FlightComputerModuleType,
-              isEnabled: true,
-              primaryBodyId: rocket.id,
-              referenceBodyId: refBody.id,
-              targetBodyId: targetBody?.id,
-              color: color || '#a855f7',
-              name: customName || `${moduleType.replace('_', ' ')}`,
-              maxDistance: maxDistance
-          };
-          
-          setFlightComputerModules(prev => [...prev, newModule]);
+           const newModule: FlightComputerModule = {
+               id: `fc_${Date.now()}`,
+               type: moduleType as FlightComputerModuleType,
+               isEnabled: true,
+               primaryBodyId: rocket.id,
+               referenceBodyId: refBody.id,
+               targetBodyId: targetBody?.id,
+               color: color || '#a855f7',
+               name: customName || `${moduleType.replace('_', ' ')}`,
+               maxDistance: maxDistance
+           };
+
+           if (newModule.type === 'thrust_burst') {
+               newModule.thrustBurstMode = 'impulse';
+               newModule.thrustBurstDuration = 1;
+               newModule.thrustBurstDeltaVPrograde = 0;
+               newModule.thrustBurstDeltaVRadial = 0;
+               newModule.thrustBurstCompleted = true;
+           }
+           
+           setFlightComputerModules(prev => [...prev, newModule]);
+
           return `Flight Computer module '${newModule.name}' added (${moduleType}) for ${rocket.name}`;
       },
       removeFlightComputerModule: (moduleName) => {
@@ -1649,6 +1923,16 @@ const App: React.FC = () => {
                           message: "No rendezvous within prediction window"
                       };
                   }
+              }
+
+              if (module.type === 'thrust_burst') {
+                  moduleData.thrustBurst = {
+                      mode: module.thrustBurstMode || 'impulse',
+                      deltaVPrograde: module.thrustBurstDeltaVPrograde || 0,
+                      deltaVRadial: module.thrustBurstDeltaVRadial || 0,
+                      duration: module.thrustBurstDuration || 0,
+                      ready: module.thrustBurstCompleted ?? true
+                  };
               }
               
               modulesData.push(moduleData);

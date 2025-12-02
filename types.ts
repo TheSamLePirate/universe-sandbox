@@ -208,7 +208,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
 
@@ -253,6 +253,13 @@ export interface FlightComputerModule {
     beepRate?: number; // Beeps per second (default 2)
     beepSoundType?: 'beep' | 'speak'; // Default 'beep'
     beepSpeakText?: string; // Text to speak
+
+    // Thrust Burst Module Config
+    thrustBurstMode?: 'impulse' | 'force';
+    thrustBurstDuration?: number;
+    thrustBurstDeltaVPrograde?: number;
+    thrustBurstDeltaVRadial?: number;
+    thrustBurstCompleted?: boolean;
     
     // Grouping (cosmetic only)
     groupId?: string | null; // ID of the group this module belongs to, null = ungrouped
