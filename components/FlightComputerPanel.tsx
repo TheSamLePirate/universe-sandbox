@@ -1108,7 +1108,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             return (
                                                 <div 
                                                     key={group.id}
-                                                    className={`border-2 rounded-lg transition-all ${dragOverGroupId === group.id ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/50'} ${group.isCollapsed ? 'w-1/5' : 'w-full'} mb-2`}
+                                                    className={`border-2 rounded-lg transition-all ${dragOverGroupId === group.id ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700/50'} ${group.isCollapsed ? 'w-full' : 'w-full col-span-full'} mb-2`}
                                                     style={{ 
                                                         borderColor: group.isCollapsed ? group.color : undefined,
                                                         marginLeft: depth > 0 ? `${depth * 16}px` : undefined
@@ -1156,10 +1156,10 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                         }} 
                                                         style={{ backgroundColor: group.color + '20' }}
                                                     >
-                                                        <div className="flex items-center gap-2 flex-1">
+                                                        <div className="flex items-center gap-0 flex-1">
                                                             {depth < 5 && <GripVertical size={12} className="text-slate-600" />}
                                                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
-                                                            <input 
+                                                            {group.isCollapsed ? <span className="text-xs font-bold text-slate-200">{group.name}</span> :   <input 
                                                                 type="text" 
                                                                 value={group.name} 
                                                                 onChange={(e) => { 
@@ -1167,10 +1167,11 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                     onUpdateGroup(group.id, { name: e.target.value }); 
                                                                 }} 
                                                                 onClick={(e) => e.stopPropagation()} 
-                                                                className="bg-transparent text-xs font-bold text-slate-200 border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 outline-none flex-1" 
+                                                                className="bg-transparent text-xs font-bold text-slate-200 border border-transparent hover:border-slate-600 focus:border-purple-500 rounded px-1 outline-none" 
                                                             />
+                                                            }
                                                             {!group.isCollapsed && <span className="text-[10px] text-slate-500">({groupModules.length}m + {childGroups.length}g)</span>}
-                                                            {group.isCollapsed && group.displayOutput && (<span className="text-[20px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
+                                                            {group.isCollapsed && group.displayOutput && (<span className="text-[12px] text-cyan-300 font-mono ml-2">{getGroupDisplayValue(group)}</span>)}
                                                          </div>
                                                         <div className="flex items-center gap-1">
                                                             <button 
@@ -1255,7 +1256,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             );
                                         };
                                         
-                                        return topLevelGroups.map(group => renderGroup(group, 0));
+                                        //return topLevelGroups.map(group => renderGroup(group, 0));
+
+                                        return (
+                                            <div className="grid grid-cols-6 gap-0 m-0 p-0">   
+                                                {topLevelGroups.map(group => renderGroup(group, 0))}
+                                            </div>
+                                        );
                                     })()}
 
                                     {/* Ungrouped Modules */}
@@ -1274,7 +1281,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                                     {/* Create Group Button */}
                                     {modules.length > 0 && (
-                                        <div className="mt-2 flex gap-2">
+                                        <div className="mt-2 flex gap-2 fixed bottom-0 ">
                                             <button 
                                                 onClick={onAddGroup} 
                                                 className="w-full p-2 bg-green-600 hover:bg-green-500 text-white text-xs rounded flex items-center justify-center gap-2"
