@@ -978,7 +978,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             const renderModule = (module: FlightComputerModule) => (
                                 <div 
                                     key={module.id} 
-                                    className={`bg-slate-800/30 border rounded-lg p-3 transition-all hover:border-slate-600 cursor-move w-1/4 h-1/4 ${
+                                    className={`bg-slate-800/30 border rounded-lg p-3 transition-all hover:border-slate-600 cursor-move ${
                                         draggedModuleId === module.id ? 'opacity-50' : ''
                                     }`}
                                     style={{ borderColor: module.color + '50' }}
@@ -1111,11 +1111,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                                             {/* Group Content */}
                                             {!group.isCollapsed && (
-                                                <div className="p-2 space-y-2">
+                                                <div className="p-2">
                                                     {groupModules.length === 0 ? (
                                                         <div className="text-center py-4 text-slate-500 text-[10px] italic">Drag modules here</div>
                                                     ) : (
-                                                        groupModules.map(module => renderModule(module))
+                                                        <div className="grid grid-cols-4 gap-2">
+                                                            {groupModules.map(module => renderModule(module))}
+                                                        </div>
                                                     )}
                                                     
                                                     {/* Display Output Selector */}
@@ -1141,7 +1143,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             onDrop={() => { if (draggedModuleId) { onMoveModuleToGroup(draggedModuleId, null); setDraggedModuleId(null); setDragOverGroupId(null); } }}
                                         >
                                             <div className="text-[10px] text-slate-500 uppercase mb-2 px-1">Ungrouped Modules</div>
-                                            <div className="space-y-2">
+                                            <div className="grid grid-cols-4 gap-2">
                                                 {ungroupedModules.map(module => renderModule(module))}
                                             </div>
                                         </div>
