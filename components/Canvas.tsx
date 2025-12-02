@@ -995,7 +995,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 };
 
                 // --- 1. Pairwise Force Vectors (Red) ---
-                const FORCE_SCALE = 1.5; 
+                const FORCE_SCALE = scale*20; 
                 const dx = bodyB.position.x - bodyA.position.x;
                 const dy = bodyB.position.y - bodyA.position.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
@@ -1024,7 +1024,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 drawNetVector(observerBodyIds.b, bx, by);
 
                 // --- 3. Velocity Vectors (Green) ---
-                const VELOCITY_SCALE = 15; 
+                const VELOCITY_SCALE = scale*20; 
                 const drawVelocityVector = (bodyId: string, startX: number, startY: number) => {
                     const body = bodies.find(b => b.id === bodyId);
                     if (!body) return;

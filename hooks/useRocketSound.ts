@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Body } from '../types';
 
 export const useRocketSound = (bodies: Body[]) => {
@@ -16,88 +16,121 @@ export const useRocketSound = (bodies: Body[]) => {
     const prevRocketIdsRef = useRef<Set<string>>(new Set()); // Track which rockets existed last frame
     const prevLandedStatusRef = useRef<Map<string, boolean>>(new Map()); // rocketId -> was landed
 
-    // Initialize Audio Context
+    const [audioState, setAudioState] = useState<AudioContextState | 'uninitialized'>('uninitialized');
+
+    const [isReady, setIsReady] = useState(false);
+
+    // Initialize Audio Context lazily on user interaction
     useEffect(() => {
         const initAudio = () => {
             if (isInitializedRef.current) {
-                // Ensure it's running if already initialized
+                // If already initialized, just ensure it's running
                 if (audioContextRef.current?.state === 'suspended') {
                     audioContextRef.current.resume().then(() => {
-                        console.log('AudioContext resumed successfully');
+                        console.log('AudioContext resumed via interaction');
+                        setAudioState('running');
                     });
                 }
                 return;
             }
-            
+
             const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
             if (!AudioContextClass) return;
 
+            // Create context ONLY after user interaction
             const ctx = new AudioContextClass();
             audioContextRef.current = ctx;
+            setAudioState(ctx.state);
 
-            // Create White Noise Buffer
-            const bufferSize = ctx.sampleRate * 2; // 2 seconds buffer
-            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
+            // Update state listener
+            ctx.addEventListener('statechange', () => {
+                setAudioState(ctx.state);
+            });
+
+            // 1. Resume if suspended (just in case)
+            if (ctx.state === 'suspended') {
+                ctx.resume();
             }
 
-            // Create Nodes
-            const noise = ctx.createBufferSource();
-            noise.buffer = buffer;
-            noise.loop = true;
-            noiseNodeRef.current = noise;
-
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 300; // 300Hz rumble
-            filter.Q.value = 1;
-            filterNodeRef.current = filter;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0; // Start silent
-            gainNodeRef.current = gain;
-
-            // Connect
-            noise.connect(filter);
-            filter.connect(gain);
-            gain.connect(ctx.destination);
-
-            noise.start();
-            isInitializedRef.current = true;
-            console.log('Audio System Initialized via User Interaction');
-        };
-
-        // Initialize on first interaction
-        const handleInteraction = () => {
-            initAudio();
-            // Once initialized and running, we can remove listeners
-            if (audioContextRef.current?.state === 'running') {
-                window.removeEventListener('click', handleInteraction);
-                window.removeEventListener('keydown', handleInteraction);
-                window.removeEventListener('touchstart', handleInteraction);
+            // 2. Play silent buffer (iOS unlock)
+            try {
+                const buffer = ctx.createBuffer(1, 1, 22050);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.start(0);
+            } catch (e) {
+                // Ignore
             }
+
+            // 3. Create Audio Nodes
+            try {
+                const bufferSize = ctx.sampleRate * 2;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                noise.loop = true;
+                noiseNodeRef.current = noise;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 600;
+                filter.Q.value = 1;
+                filterNodeRef.current = filter;
+
+                const gain = ctx.createGain();
+                gain.gain.value = 0;
+                gainNodeRef.current = gain;
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+
+                noise.start();
+                isInitializedRef.current = true;
+                setIsReady(true);
+                console.log('Audio System Initialized & Ready');
+            } catch (e) {
+                console.error('Failed to init audio nodes:', e);
+            }
+
+            // Remove listeners
+            ['click', 'keydown', 'touchstart', 'touchend'].forEach(event => 
+                window.removeEventListener(event, initAudio, { capture: true })
+            );
         };
 
-        window.addEventListener('click', handleInteraction);
-        window.addEventListener('keydown', handleInteraction);
-        window.addEventListener('touchstart', handleInteraction);
+        // Add listeners
+        ['click', 'keydown', 'touchstart', 'touchend'].forEach(event => 
+            window.addEventListener(event, initAudio, { capture: true })
+        );
 
         return () => {
-            window.removeEventListener('click', handleInteraction);
-            window.removeEventListener('keydown', handleInteraction);
-            window.removeEventListener('touchstart', handleInteraction);
+             ['click', 'keydown', 'touchstart', 'touchend'].forEach(event => 
+                window.removeEventListener(event, initAudio, { capture: true })
+            );
             if (audioContextRef.current) {
                 audioContextRef.current.close();
             }
         };
     }, []);
 
+    const resumeAudio = () => {
+        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume();
+        }
+    };
+
     // Beep sound generator
     const playBeep = (count: number = 1) => {
-        if (!audioContextRef.current) return;
+        if (!audioContextRef.current || !isReady) return;
         
+        console.log(`Playing beep: ${count} times`);
         const ctx = audioContextRef.current;
         const now = ctx.currentTime;
         
@@ -125,7 +158,8 @@ export const useRocketSound = (bodies: Body[]) => {
 
     // Landing sound - Pneumatic hiss + Mechanical thud
     const playLandingSound = () => {
-        if (!audioContextRef.current) return;
+        if (!audioContextRef.current || !isReady) return;
+        console.log('Playing landing sound');
         
         const ctx = audioContextRef.current;
         const now = ctx.currentTime;
@@ -180,7 +214,8 @@ export const useRocketSound = (bodies: Body[]) => {
 
     // Crash sound - harsh noise burst
     const playCrashSound = () => {
-        if (!audioContextRef.current) return;
+        if (!audioContextRef.current || !isReady) return;
+        console.log('Playing crash sound');
         
         const ctx = audioContextRef.current;
         const now = ctx.currentTime;
@@ -215,7 +250,7 @@ export const useRocketSound = (bodies: Body[]) => {
 
     // Update sound based on thrust and detect events
     useEffect(() => {
-        if (!gainNodeRef.current || !audioContextRef.current) return;
+        if (!gainNodeRef.current || !audioContextRef.current || !isReady) return;
 
         // Check if ANY rocket is thrusting
         const rockets = bodies.filter(b => b.isRocket);
@@ -223,9 +258,14 @@ export const useRocketSound = (bodies: Body[]) => {
             rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001)
         );
 
-        const targetGain = isThrusting ? 0.4 : 0; 
+        const targetGain = isThrusting ? 0.5 : 0; 
         const currentTime = audioContextRef.current.currentTime;
         
+        // Only log if gain changes significantly
+        if (Math.abs(gainNodeRef.current.gain.value - targetGain) > 0.1) {
+             console.log(`Audio Update: Thrusting=${isThrusting}, TargetGain=${targetGain}`);
+        }
+
         // Smooth transition
         gainNodeRef.current.gain.setTargetAtTime(targetGain, currentTime, 0.1);
 
@@ -328,5 +368,7 @@ export const useRocketSound = (bodies: Body[]) => {
             }
         });
         
-    }, [bodies]);
+    }, [bodies, isReady]);
+    
+    return { audioState, resumeAudio };
 };

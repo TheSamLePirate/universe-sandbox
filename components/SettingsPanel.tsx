@@ -15,6 +15,8 @@ interface SettingsPanelProps {
     onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
     use3D: boolean;
     setUse3D: (use3D: boolean) => void;
+    audioState: AudioContextState | 'uninitialized';
+    onEnableAudio: () => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
@@ -27,7 +29,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     onExport,
     onImport,
     use3D,
-    setUse3D
+    setUse3D,
+    audioState,
+    onEnableAudio
 }) => {
     const [activeTab, setActiveTab] = useState<'visuals' | 'physics' | 'api'>('visuals');
     const [apiKey, setApiKey] = useState<string>(() => {
@@ -150,6 +154,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${use3D ? 'left-6' : 'left-1'}`} />
                                     </div>
                                 </label>
+                            </div>
+
+                            {/* Audio Status */}
+                            <div className="bg-slate-800 p-3 rounded-lg mb-4 flex items-center justify-between border border-slate-700">
+                                <div className="flex items-center gap-2">
+                                    <Activity size={16} className={audioState === 'running' ? 'text-green-400' : 'text-orange-400'} />
+                                    <span className="text-sm text-slate-300">Audio Status</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-xs font-mono px-2 py-1 rounded ${
+                                        audioState === 'running' ? 'bg-green-500/20 text-green-300' : 
+                                        audioState === 'suspended' ? 'bg-orange-500/20 text-orange-300' : 
+                                        'bg-slate-700 text-slate-400'
+                                    }`}>
+                                        {audioState.toUpperCase()}
+                                    </span>
+                                    {audioState === 'suspended' && (
+                                        <button 
+                                            onClick={onEnableAudio}
+                                            className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
+                                        >
+                                            Enable
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-4">

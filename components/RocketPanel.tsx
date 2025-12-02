@@ -479,11 +479,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
     const [showTelemetry, setShowTelemetry] = useState(true);
 
-    useEffect(() => {
-        if (!isMobile) {
-            setIsCollapsed(true);
-        }
-    }, [isMobile]);
+    
 
     // Helper function to format time
     const formatTime = (totalSeconds: number): string => {
@@ -1737,7 +1733,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                         <input type="range" min="0.001" max="1.0" step="0.001" value={physicsConfig.timeStep} onChange={(e) => onUpdatePhysicsConfig({ timeStep: Number(e.target.value) })} className="w-full accent-indigo-500 bg-slate-700 h-1 rounded-lg" />
                                     </div>
 
-                                    {/* Visualizations */}
+                                    {/* Visualizations
                                     <div className="space-y-2 pt-4 border-t border-slate-700">
                                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2"><Eye size={12} /> Visualizations</h4>
                                         <button 
@@ -1754,7 +1750,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <span className="flex items-center gap-2"><TrendingUp size={14} /> Transfer Window</span>
                                             <span className="text-[10px]">{showTransferWindow ? 'ON' : 'OFF'}</span>
                                         </button>
-                                    </div>
+                                    </div> */}
                                 </div>
                             )}
                         </div>
@@ -2818,7 +2814,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-700">
+                                {/* <div className="pt-4 border-t border-slate-700">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Eye size={12} /> Visualizations</h4>
                                     
                                     <div className="space-y-2">
@@ -2842,7 +2838,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <span className="text-[10px]">{showTransferWindow ? 'ON' : 'OFF'}</span>
                                         </button>
                                     </div>
-                                </div>
+                                </div> */}
 
                                 <div className="pt-4 border-t border-slate-700">
                                     <button onClick={onToggleFollow} className={`w-full py-2 rounded text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isFollowing ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>

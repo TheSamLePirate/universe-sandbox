@@ -36,7 +36,7 @@ const App: React.FC = () => {
   const [bodies, setBodies] = useState<Body[]>(defaultPreset.bodies);
   
   // Enable Rocket Sound
-  useRocketSound(bodies);
+  const { audioState, resumeAudio } = useRocketSound(bodies);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [isRunning, setIsRunning] = useState(false); // Default to false
   const [speed, setSpeed] = useState(1.0);
@@ -1969,11 +1969,16 @@ const App: React.FC = () => {
             physicsConfig={physicsConfig}
             setPhysicsConfig={setPhysicsConfig}
             onClose={() => setShowSettings(false)}
-            onReset={handleResetSettings}
+            onReset={() => {
+                setVisualConfig(DEFAULT_VISUAL_CONFIG);
+                setPhysicsConfig(DEFAULT_PHYSICS_CONFIG);
+            }}
             onExport={handleExportState}
             onImport={handleImportState}
             use3D={use3D}
             setUse3D={setUse3D}
+            audioState={audioState}
+            onEnableAudio={resumeAudio}
           />
       )}
 
