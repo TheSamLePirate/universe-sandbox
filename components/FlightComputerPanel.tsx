@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup, RendezvousSolution, Maneuver } from '../types';
 import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload, Video, Calculator } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
-import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput } from '../services/orbitalMath';
+import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
 
 interface FlightComputerPanelProps {
@@ -48,7 +48,7 @@ const InputSelector: React.FC<{
     bodies: Body[];
     modules: FlightComputerModule[];
     currentModuleId: string;
-    allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean')[];
+    allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean' | 'string')[];
 }> = ({ label, value, onChange, bodies, modules, currentModuleId, allowedTypes = ['body', 'module_output'] }) => {
     const [mode, setMode] = useState<'body' | 'module'>('body');
 
@@ -140,6 +140,10 @@ const InputSelector: React.FC<{
                             if (m.type === 'selector') {
                                 options.push(<option key={`${m.id}:body`} value={`${m.id}:body`}>{m.name || 'Selector'} - Body</option>);
                             }
+                            // Add Body By Module
+                            if (m.type === 'body_by') {
+                                options.push(<option key={`${m.id}:body`} value={`${m.id}:body`}>{m.name || 'Body By'} - Body</option>);
+                            }
                         }
                         
                         // Scalar Outputs
@@ -169,6 +173,20 @@ const InputSelector: React.FC<{
                             if (m.type === 'maths') {
                                 options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Maths'} - Result</option>);
                             }
+                            if (m.type === 'body_info') {
+                                options.push(<option key={`${m.id}:mass`} value={`${m.id}:mass`}>{m.name || 'Body Info'} - Mass</option>);
+                                options.push(<option key={`${m.id}:radius`} value={`${m.id}:radius`}>{m.name || 'Body Info'} - Radius</option>);
+                                options.push(<option key={`${m.id}:pos_x`} value={`${m.id}:pos_x`}>{m.name || 'Body Info'} - Pos X</option>);
+                                options.push(<option key={`${m.id}:pos_y`} value={`${m.id}:pos_y`}>{m.name || 'Body Info'} - Pos Y</option>);
+                                options.push(<option key={`${m.id}:vel_x`} value={`${m.id}:vel_x`}>{m.name || 'Body Info'} - Vel X</option>);
+                                options.push(<option key={`${m.id}:vel_y`} value={`${m.id}:vel_y`}>{m.name || 'Body Info'} - Vel Y</option>);
+                                options.push(<option key={`${m.id}:angle`} value={`${m.id}:angle`}>{m.name || 'Body Info'} - Angle</option>);
+                                options.push(<option key={`${m.id}:thrust_x`} value={`${m.id}:thrust_x`}>{m.name || 'Body Info'} - Thrust X</option>);
+                                options.push(<option key={`${m.id}:thrust_y`} value={`${m.id}:thrust_y`}>{m.name || 'Body Info'} - Thrust Y</option>);
+                                options.push(<option key={`${m.id}:fuel`} value={`${m.id}:fuel`}>{m.name || 'Body Info'} - Fuel</option>);
+                                options.push(<option key={`${m.id}:max_fuel`} value={`${m.id}:max_fuel`}>{m.name || 'Body Info'} - Max Fuel</option>);
+                                options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
+                            }
                         }
                         
                         // Boolean Outputs
@@ -184,6 +202,26 @@ const InputSelector: React.FC<{
                             }
                             if (m.type === 'button') {
                                 options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Button'} - State</option>);
+                            }
+                        }
+                        
+                        // String Outputs
+                        if (allowedTypes.includes('string')) {
+                            if (m.type === 'body_info') {
+                                options.push(<option key={`${m.id}:name`} value={`${m.id}:name`}>{m.name || 'Body Info'} - Name</option>);
+                                options.push(<option key={`${m.id}:id`} value={`${m.id}:id`}>{m.name || 'Body Info'} - ID</option>);
+                                options.push(<option key={`${m.id}:mass`} value={`${m.id}:mass`}>{m.name || 'Body Info'} - Mass</option>);
+                                options.push(<option key={`${m.id}:radius`} value={`${m.id}:radius`}>{m.name || 'Body Info'} - Radius</option>);
+                                options.push(<option key={`${m.id}:pos_x`} value={`${m.id}:pos_x`}>{m.name || 'Body Info'} - Pos X</option>);
+                                options.push(<option key={`${m.id}:pos_y`} value={`${m.id}:pos_y`}>{m.name || 'Body Info'} - Pos Y</option>);
+                                options.push(<option key={`${m.id}:vel_x`} value={`${m.id}:vel_x`}>{m.name || 'Body Info'} - Vel X</option>);
+                                options.push(<option key={`${m.id}:vel_y`} value={`${m.id}:vel_y`}>{m.name || 'Body Info'} - Vel Y</option>);
+                                options.push(<option key={`${m.id}:angle`} value={`${m.id}:angle`}>{m.name || 'Body Info'} - Angle</option>);
+                                options.push(<option key={`${m.id}:fuel`} value={`${m.id}:fuel`}>{m.name || 'Body Info'} - Fuel</option>);
+                                options.push(<option key={`${m.id}:max_fuel`} value={`${m.id}:max_fuel`}>{m.name || 'Body Info'} - Max Fuel</option>);
+                                options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
+                                options.push(<option key={`${m.id}:landed_on`} value={`${m.id}:landed_on`}>{m.name || 'Body Info'} - Landed On</option>);
+                                options.push(<option key={`${m.id}:sas_mode`} value={`${m.id}:sas_mode`}>{m.name || 'Body Info'} - SAS Mode</option>);
                             }
                         }
                         
@@ -463,9 +501,10 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:result` });
             return value !== null ? `${value.toFixed(2)}` : '---';
         }
-        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
-            const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
-            return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+        // String outputs from body_info
+        if (module.type === 'body_info') {
+            const value = resolveStringInput({ type: 'module_output', value: `${module.id}:${outputKey}` }, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
+            return value || '---';
         }
         if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
             const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
@@ -1576,6 +1615,170 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     </div>
                 );
 
+            case 'body_info':
+                const bodyInfoInput = getInput(module, 'target');
+                const targetBody = bodyInfoInput ? resolveInput(bodyInfoInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined) : null;
+                const bodyData = targetBody && 'mass' in targetBody ? targetBody as Body : null;
+                
+                return (
+                    <div className="mt-2 space-y-2">
+                        <div className="space-y-1">
+                            <InputSelector label="Target Body/Ship" value={bodyInfoInput} onChange={(input) => updateInput(module.id, 'target', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['body', 'module_output']} />
+                        </div>
+                        
+                        {bodyData ? (
+                            <div className="pt-2 border-t border-slate-700/50 space-y-1 text-xs">
+                                <div className="grid grid-cols-2 gap-1">
+                                    <span className="text-slate-400">Name:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.name}</span>
+                                    
+                                    <span className="text-slate-400">Mass:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.mass.toFixed(2)}</span>
+                                    
+                                    <span className="text-slate-400">Radius:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.radius.toFixed(2)}</span>
+                                    
+                                    <span className="text-slate-400">Pos X:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.position.x.toFixed(2)}</span>
+                                    
+                                    <span className="text-slate-400">Pos Y:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.position.y.toFixed(2)}</span>
+                                    
+                                    <span className="text-slate-400">Vel X:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.velocity.x.toFixed(2)}</span>
+                                    
+                                    <span className="text-slate-400">Vel Y:</span>
+                                    <span className="text-slate-200 font-mono">{bodyData.velocity.y.toFixed(2)}</span>
+                                    
+                                    {bodyData.isRocket && (
+                                        <>
+                                            {bodyData.angle !== undefined && (
+                                                <>
+                                                    <span className="text-slate-400">Angle:</span>
+                                                    <span className="text-slate-200 font-mono">{(bodyData.angle * 180 / Math.PI).toFixed(1)}°</span>
+                                                </>
+                                            )}
+                                            
+                                            {bodyData.thrust && (
+                                                <>
+                                                    <span className="text-slate-400">Thrust X:</span>
+                                                    <span className="text-slate-200 font-mono">{bodyData.thrust.x.toFixed(3)}</span>
+                                                    
+                                                    <span className="text-slate-400">Thrust Y:</span>
+                                                    <span className="text-slate-200 font-mono">{bodyData.thrust.y.toFixed(3)}</span>
+                                                </>
+                                            )}
+                                            
+                                            {bodyData.fuel !== undefined && (
+                                                <>
+                                                    <span className="text-slate-400">Fuel:</span>
+                                                    <span className="text-slate-200 font-mono">{bodyData.fuel.toFixed(1)} / {bodyData.maxFuel?.toFixed(1) || 'N/A'}</span>
+                                                </>
+                                            )}
+                                            
+                                            {bodyData.dryMass !== undefined && (
+                                                <>
+                                                    <span className="text-slate-400">Dry Mass:</span>
+                                                    <span className="text-slate-200 font-mono">{bodyData.dryMass.toFixed(2)}</span>
+                                                </>
+                                            )}
+                                            
+                                            {bodyData.landedOnBodyId && (
+                                                <>
+                                                    <span className="text-slate-400">Landed On:</span>
+                                                    <span className="text-slate-200 font-mono">{bodies.find(b => b.id === bodyData.landedOnBodyId)?.name || 'Unknown'}</span>
+                                                </>
+                                            )}
+                                            
+                                            {bodyData.sasMode && (
+                                                <>
+                                                    <span className="text-slate-400">SAS Mode:</span>
+                                                    <span className="text-slate-200 font-mono">{bodyData.sasMode}</span>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-xs text-slate-500 italic">No body selected</div>
+                        )}
+                    </div>
+                );
+
+            case 'body_by':
+                const bodyByMode = module.bodyByMode || 'id';
+                const bodyByInput = getInput(module, 'value');
+                const bodyByDirectValue = module.bodyByValue || '';
+                
+                // Resolve the value either from input or direct entry
+                let searchValue = '';
+                if (bodyByInput) {
+                    const resolvedValue = resolveStringInput(bodyByInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
+                    searchValue = resolvedValue || '';
+                } else {
+                    searchValue = bodyByDirectValue;
+                }
+                
+                const foundBody = bodyByMode === 'id' 
+                    ? bodies.find(b => b.id === searchValue)
+                    : bodies.find(b => b.name.toLowerCase() === searchValue.toLowerCase());
+                
+                return (
+                    <div className="mt-2 space-y-2">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">Mode</label>
+                            <select
+                                value={bodyByMode}
+                                onChange={(e) => onUpdateModule(module.id, { bodyByMode: e.target.value as 'id' | 'name' })}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                            >
+                                <option value="id">By ID</option>
+                                <option value="name">By Name</option>
+                            </select>
+                        </div>
+                        
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">
+                                {bodyByMode === 'id' ? 'Body ID' : 'Body Name'}
+                            </label>
+                            {bodyByInput ? (
+                                <div className="flex gap-1">
+                                    <InputSelector label="" value={bodyByInput} onChange={(input) => updateInput(module.id, 'value', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['string', 'module_output']} />
+                                    <button onClick={() => updateInput(module.id, 'value', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-1">
+                                    <input
+                                        type="text"
+                                        value={bodyByDirectValue}
+                                        onChange={(e) => onUpdateModule(module.id, { bodyByValue: e.target.value })}
+                                        placeholder={bodyByMode === 'id' ? 'Enter body ID...' : 'Enter body name...'}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                                    />
+                                    <button onClick={() => updateInput(module.id, 'value', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {foundBody ? (
+                            <div className="pt-2 border-t border-slate-700/50 text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-green-400">✓</span>
+                                    <span className="text-slate-200">Found: <span className="font-bold">{foundBody.name}</span></span>
+                                </div>
+                            </div>
+                        ) : searchValue ? (
+                            <div className="pt-2 border-t border-slate-700/50 text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-red-400">✗</span>
+                                    <span className="text-slate-400">No body found</span>
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+                );
+
             default:
                 return null;
         }
@@ -1696,6 +1899,18 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Calculator size={14} className="text-white" /> Maths
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('body_info'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Activity size={14} className="text-white" /> Body Info
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('body_by'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-slate-600/20 hover:border-slate-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Globe size={14} className="text-white" /> Body By
                             </button>
                         </div>
                     )}
@@ -2017,6 +2232,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                             if (m.type === 'maneuver_executor') options.push(<option key={`${m.id}:progress`} value={`${m.id}:progress`}>{m.name || 'Executor'} - Progress</option>);
                                                                             if (m.type === 'button') options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Button'} - State</option>);
                                                                             if (m.type === 'maths') options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Maths'} - Result</option>);
+                                                                            if (m.type === 'body_info') {
+                                                                                options.push(<option key={`${m.id}:name`} value={`${m.id}:name`}>{m.name || 'Body Info'} - Name</option>);
+                                                                                options.push(<option key={`${m.id}:id`} value={`${m.id}:id`}>{m.name || 'Body Info'} - ID</option>);
+                                                                                options.push(<option key={`${m.id}:mass`} value={`${m.id}:mass`}>{m.name || 'Body Info'} - Mass</option>);
+                                                                                options.push(<option key={`${m.id}:fuel`} value={`${m.id}:fuel`}>{m.name || 'Body Info'} - Fuel</option>);
+                                                                                options.push(<option key={`${m.id}:landed_on`} value={`${m.id}:landed_on`}>{m.name || 'Body Info'} - Landed On</option>);
+                                                                            }
                                                                             return options; 
                                                                         })}
                                                                     </select>

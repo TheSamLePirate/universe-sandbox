@@ -208,9 +208,9 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by';
 
-export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
+export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
 export interface FlightComputerInput {
     type: FlightComputerInputType;
@@ -291,6 +291,8 @@ export interface FlightComputerModule {
     mathOperator?: 'add' | 'subtract' | 'multiply' | 'divide';
     mathValueA?: number;
     mathValueB?: number;
+    bodyByMode?: 'id' | 'name';
+    bodyByValue?: string;
 }
 
 export interface ModuleGroup {

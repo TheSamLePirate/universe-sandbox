@@ -133,7 +133,28 @@ export const resolveInput = (
             if (!rendezvous) return null;
             if (outputKey === 'position') return rendezvous.point;
         } else if (module.type === 'selector' && outputKey === 'body') {
-            return bodies.find(b => b.id === module.selectorBodyId) || null;
+            const bodyId = module.selectorBodyId;
+            if (!bodyId) return null;
+            return bodies.find(b => b.id === bodyId) || null;
+        } else if (module.type === 'body_by' && outputKey === 'body') {
+            const mode = module.bodyByMode || 'id';
+            
+            // Try to resolve from input first, then fall back to direct value
+            let value = '';
+            if (module.inputs?.value) {
+                const resolved = resolveStringInput(module.inputs.value, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                value = resolved || '';
+            } else {
+                value = module.bodyByValue || '';
+            }
+            
+            if (!value) return null;
+            
+            if (mode === 'id') {
+                return bodies.find(b => b.id === value) || null;
+            } else {
+                return bodies.find(b => b.name.toLowerCase() === value.toLowerCase()) || null;
+            }
         }
     }
     
@@ -265,6 +286,31 @@ export const resolveScalarInput = (
             if (outputKey === 'progress') {
                 return module.maneuverExecutorProgress ?? 0;
             }
+        } else if (module.type === 'body_info') {
+            const bodyInput = module.inputs?.target;
+            if (!bodyInput) return null;
+            
+            const body = resolveInput(bodyInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            if (!body || !('mass' in body)) return null;
+            
+            const bodyData = body as Body;
+            
+            // Return numeric properties as scalars
+            switch (outputKey) {
+                case 'mass': return bodyData.mass;
+                case 'radius': return bodyData.radius;
+                case 'pos_x': return bodyData.position.x;
+                case 'pos_y': return bodyData.position.y;
+                case 'vel_x': return bodyData.velocity.x;
+                case 'vel_y': return bodyData.velocity.y;
+                case 'angle': return bodyData.angle ? (bodyData.angle * 180 / Math.PI) : null;
+                case 'thrust_x': return bodyData.thrust ? bodyData.thrust.x : null;
+                case 'thrust_y': return bodyData.thrust ? bodyData.thrust.y : null;
+                case 'fuel': return bodyData.fuel ?? null;
+                case 'max_fuel': return bodyData.maxFuel ?? null;
+                case 'dry_mass': return bodyData.dryMass ?? null;
+                default: return null;
+            }
         } else if (module.type === 'maths' && outputKey === 'result') {
             // Use direct scalar values if no input is connected, otherwise resolve from input
             const valA = module.inputs?.valueA 
@@ -344,5 +390,54 @@ export const resolveBooleanInput = (
 
         }
     }
+    return null;
+};
+
+export const resolveStringInput = (
+    input: FlightComputerInput | undefined,
+    bodies: Body[],
+    modules: FlightComputerModule[],
+    gravitationalConstant: number,
+    rendezvousSolutions?: Record<string, RendezvousSolution>
+): string | null => {
+    if (!input) return null;
+
+    if (input.type === 'module_output') {
+        const [moduleId, outputKey] = input.value.split(':');
+        const module = modules.find(m => m.id === moduleId);
+        if (!module) return null;
+
+        if (module.type === 'body_info') {
+            const bodyInput = module.inputs?.target;
+            if (!bodyInput) return null;
+            
+            const body = resolveInput(bodyInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            if (!body || !('mass' in body)) return null;
+            
+            const bodyData = body as Body;
+            
+            // Return specific property based on outputKey
+            switch (outputKey) {
+                case 'name': return bodyData.name;
+                case 'id': return bodyData.id;
+                case 'mass': return bodyData.mass.toString();
+                case 'radius': return bodyData.radius.toString();
+                case 'pos_x': return bodyData.position.x.toString();
+                case 'pos_y': return bodyData.position.y.toString();
+                case 'vel_x': return bodyData.velocity.x.toString();
+                case 'vel_y': return bodyData.velocity.y.toString();
+                case 'angle': return bodyData.angle ? (bodyData.angle * 180 / Math.PI).toString() : '';
+                case 'thrust_x': return bodyData.thrust ? bodyData.thrust.x.toString() : '';
+                case 'thrust_y': return bodyData.thrust ? bodyData.thrust.y.toString() : '';
+                case 'fuel': return bodyData.fuel !== undefined ? bodyData.fuel.toString() : '';
+                case 'max_fuel': return bodyData.maxFuel !== undefined ? bodyData.maxFuel.toString() : '';
+                case 'dry_mass': return bodyData.dryMass !== undefined ? bodyData.dryMass.toString() : '';
+                case 'landed_on': return bodyData.landedOnBodyId || '';
+                case 'sas_mode': return bodyData.sasMode || '';
+                default: return null;
+            }
+        }
+    }
+    
     return null;
 };
