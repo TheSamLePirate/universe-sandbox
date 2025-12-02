@@ -163,6 +163,17 @@ const App: React.FC = () => {
           newModule.thrustBurstDeltaVRadial = 0;
           newModule.thrustBurstCompleted = true;
       }
+      if (type === 'maneuver_executor') {
+          newModule.maneuverExecutorType = 'burn';
+          newModule.maneuverExecutorThrust = 0.01;
+          newModule.maneuverExecutorDuration = 2;
+          newModule.maneuverExecutorAngleDeg = 0;
+          newModule.maneuverExecutorDeltaVPrograde = 0;
+          newModule.maneuverExecutorDeltaVRadial = 0;
+          newModule.maneuverExecutorAltitudeDirection = 'ascending';
+          newModule.maneuverExecutorStatus = 'idle';
+          newModule.maneuverExecutorProgress = 0;
+      }
       setFlightComputerModules(prev => [...prev, newModule]);
   };
 
@@ -351,11 +362,17 @@ const App: React.FC = () => {
       rendezvousSolutionMapRef.current = map;
   }, [rendezvousPoints]);
 
+  const maneuverExecutorTriggerStateRef = useRef<Map<string, { queue: boolean; execute: boolean }>>(new Map());
   const thrustBurstTriggerStateRef = useRef<Map<string, boolean>>(new Map());
   const thrustBurstRuntimeRef = useRef<Map<string, { remainingTime: number; totalDuration: number; perSecondVector: Vector2D; forceVector: Vector2D; deltaVector: Vector2D; rocketId: string; elapsed: number }>>(new Map());
 
   useEffect(() => {
       const activeIds = new Set(flightComputerModules.map(m => m.id));
+      Array.from(maneuverExecutorTriggerStateRef.current.keys()).forEach(id => {
+          if (!activeIds.has(id)) {
+              maneuverExecutorTriggerStateRef.current.delete(id);
+          }
+      });
       Array.from(thrustBurstRuntimeRef.current.keys()).forEach(id => {
           if (!activeIds.has(id)) {
               thrustBurstRuntimeRef.current.delete(id);
@@ -384,6 +401,213 @@ const App: React.FC = () => {
           return changed ? next : prev;
       });
   }, []);
+
+  const applyManeuverExecutorModules = useCallback((bodiesSnapshot: Body[]) => {
+      const modules = flightComputerModulesRef.current;
+      if (!modules.length) return bodiesSnapshot;
+
+      const moduleUpdates: Record<string, Partial<FlightComputerModule>> = {};
+      const queueUpdate = (module: FlightComputerModule, patch: Partial<FlightComputerModule>) => {
+          const existing = moduleUpdates[module.id] || {};
+          let changed = false;
+          Object.entries(patch).forEach(([key, value]) => {
+              if ((module as any)[key] !== value || existing[key as keyof FlightComputerModule] !== value) {
+                  (existing as any)[key] = value;
+                  changed = true;
+              }
+          });
+          if (changed) {
+              moduleUpdates[module.id] = existing;
+          }
+      };
+
+      const gConst = physicsConfigRef.current.gravitationalConstant;
+      const rendezvousMap = rendezvousSolutionMapRef.current;
+
+      const buildManeuverFromModule = (module: FlightComputerModule): Maneuver | null => {
+          const type = module.maneuverExecutorType || 'burn';
+          const maneuversId = `fc_exec_${module.id}_${Date.now()}`;
+          const base: Maneuver = {
+              id: maneuversId,
+              type: type as Maneuver['type'],
+              thrust: 0,
+              duration: 0,
+              angleOffset: 0,
+              progress: 0,
+              status: 'pending'
+          };
+
+          switch (type) {
+              case 'burn':
+                  base.thrust = module.maneuverExecutorThrust ?? 0;
+                  base.duration = module.maneuverExecutorDuration ?? 0;
+                  base.angleOffset = ((module.maneuverExecutorAngleDeg ?? 0) * Math.PI) / 180;
+                  return base;
+              case 'wait':
+                  base.duration = module.maneuverExecutorDuration ?? 0;
+                  return base;
+              case 'rotate':
+                  base.param = Number(module.maneuverExecutorParam ?? 0);
+                  return base;
+              case 'sas':
+                  base.param = (module.maneuverExecutorParam as string) || 'prograde';
+                  base.parentBodyId = module.maneuverExecutorParentBodyId || module.referenceBodyId;
+                  return base;
+              case 'auto_circularize':
+              case 'auto_land':
+                  base.targetBodyId = module.maneuverExecutorTargetBodyId || module.targetBodyId;
+                  return base.targetBodyId ? base : null;
+              case 'auto_transfer':
+              case 'wait_for_transfer':
+              case 'auto_intercept':
+                  base.targetBodyId = module.maneuverExecutorTargetBodyId || module.targetBodyId;
+                  base.parentBodyId = module.maneuverExecutorParentBodyId || module.referenceBodyId;
+                  if (!base.targetBodyId || !base.parentBodyId) return null;
+                  if (type === 'wait_for_transfer') {
+                      base.param = Number(module.maneuverExecutorParam ?? 1);
+                  }
+                  if (type === 'auto_intercept') {
+                      base.param = Number(module.maneuverExecutorParam ?? 30);
+                  }
+                  return base;
+              case 'wait_for_altitude':
+                  const altitude = Number(module.maneuverExecutorParam ?? 0);
+                  if (!altitude) return null;
+                  base.param = `${altitude}:${module.maneuverExecutorAltitudeDirection || 'ascending'}`;
+                  base.parentBodyId = module.maneuverExecutorParentBodyId || module.referenceBodyId;
+                  return base.parentBodyId ? base : null;
+              case 'burn_until_altitude':
+                  const targetAlt = Number(module.maneuverExecutorParam ?? 0);
+                  if (!targetAlt) return null;
+                  base.param = targetAlt;
+                  base.parentBodyId = module.maneuverExecutorParentBodyId || module.referenceBodyId;
+                  base.thrust = module.maneuverExecutorThrust ?? 0;
+                  base.angleOffset = ((module.maneuverExecutorAngleDeg ?? 0) * Math.PI) / 180;
+                  return base.parentBodyId ? base : null;
+              case 'manual_node':
+                  base.timeFromNow = module.maneuverExecutorDuration ?? 0;
+                  base.deltaVPrograde = module.maneuverExecutorDeltaVPrograde ?? 0;
+                  base.deltaVRadial = module.maneuverExecutorDeltaVRadial ?? 0;
+                  base.parentBodyId = module.maneuverExecutorParentBodyId || module.referenceBodyId;
+                  return base;
+              case 'change_simulation_speed':
+                  base.param = Number(module.maneuverExecutorParam ?? 1);
+                  return base;
+              default:
+                  return base;
+          }
+      };
+
+      modules.forEach(module => {
+          if (module.type !== 'maneuver_executor') {
+              return;
+          }
+
+          const state = maneuverExecutorTriggerStateRef.current.get(module.id) || { queue: false, execute: false };
+
+          if (!module.isEnabled) {
+              if (module.maneuverExecutorStatus !== 'idle' || module.maneuverExecutorProgress) {
+                  queueUpdate(module, { maneuverExecutorStatus: 'idle', maneuverExecutorProgress: 0, maneuverExecutorActiveManeuverId: undefined });
+              }
+              maneuverExecutorTriggerStateRef.current.set(module.id, { queue: false, execute: false });
+              return;
+          }
+
+          const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+          const rocketEntity = resolveInput(rocketInput, bodiesSnapshot, modules, gConst, rendezvousMap);
+          if (!rocketEntity || !('id' in rocketEntity)) {
+              queueUpdate(module, { maneuverExecutorStatus: 'idle', maneuverExecutorProgress: 0, maneuverExecutorActiveManeuverId: undefined });
+              maneuverExecutorTriggerStateRef.current.set(module.id, { queue: false, execute: false });
+              return;
+          }
+
+          const rocketIndex = bodiesSnapshot.findIndex(b => b.id === rocketEntity.id);
+          if (rocketIndex === -1) {
+              queueUpdate(module, { maneuverExecutorStatus: 'idle', maneuverExecutorProgress: 0, maneuverExecutorActiveManeuverId: undefined });
+              maneuverExecutorTriggerStateRef.current.set(module.id, { queue: false, execute: false });
+              return;
+          }
+
+          const rocket = bodiesSnapshot[rocketIndex];
+          if (!rocket.isRocket) {
+              queueUpdate(module, { maneuverExecutorStatus: 'idle', maneuverExecutorProgress: 0, maneuverExecutorActiveManeuverId: undefined });
+              maneuverExecutorTriggerStateRef.current.set(module.id, { queue: false, execute: false });
+              return;
+          }
+
+          const queueSignal = resolveBooleanInput(module.inputs?.queueTrigger, bodiesSnapshot, modules, gConst, rendezvousMap) ?? false;
+          const executeSignal = resolveBooleanInput(module.inputs?.executeTrigger, bodiesSnapshot, modules, gConst, rendezvousMap) ?? false;
+          const queueRising = queueSignal && !state.queue;
+          const executeRising = executeSignal && !state.execute;
+          maneuverExecutorTriggerStateRef.current.set(module.id, { queue: queueSignal, execute: executeSignal });
+
+          const enqueueManeuver = (updateLastRequestId?: number) => {
+              const newManeuver = buildManeuverFromModule(module);
+              if (newManeuver) {
+                  rocket.maneuvers = rocket.maneuvers ? [...rocket.maneuvers, newManeuver] : [newManeuver];
+                  queueUpdate(module, {
+                      maneuverExecutorActiveManeuverId: newManeuver.id,
+                      maneuverExecutorStatus: 'queued',
+                      maneuverExecutorProgress: 0,
+                      ...(updateLastRequestId ? { maneuverExecutorLastRequestId: updateLastRequestId } : {})
+                  });
+                  return true;
+              } else {
+                  queueUpdate(module, {
+                      maneuverExecutorStatus: 'idle',
+                      maneuverExecutorProgress: 0,
+                      ...(updateLastRequestId ? { maneuverExecutorLastRequestId: updateLastRequestId } : {})
+                  });
+                  return false;
+              }
+          };
+
+          const executeMissionPlan = () => {
+              if (rocket.maneuvers && rocket.maneuvers.some(m => m.status === 'pending')) {
+                  rocket.maneuvers = rocket.maneuvers.map(m => m.status === 'pending' ? { ...m, status: 'active' as const } : m);
+              }
+          };
+
+          if (module.isEnabled && queueRising) {
+              enqueueManeuver();
+          }
+
+          if (module.isEnabled && executeRising) {
+              executeMissionPlan();
+          }
+
+          const requestId = module.maneuverExecutorRequestId;
+          const lastRequest = module.maneuverExecutorLastRequestId;
+          if (module.isEnabled && requestId && requestId !== lastRequest) {
+              enqueueManeuver(requestId);
+          }
+
+          const activeId = module.maneuverExecutorActiveManeuverId;
+          if (activeId && rocket.maneuvers) {
+              const maneuver = rocket.maneuvers.find(m => m.id === activeId);
+              if (maneuver) {
+                  const status = maneuver.status === 'completed' ? 'completed' : maneuver.status === 'active' ? 'running' : 'queued';
+                  const progress = maneuver.progress || 0;
+                  const patch: Partial<FlightComputerModule> = {};
+                  if (module.maneuverExecutorStatus !== status) patch.maneuverExecutorStatus = status;
+                  if ((module.maneuverExecutorProgress ?? 0) !== progress) patch.maneuverExecutorProgress = progress;
+                  if (maneuver.status === 'completed') {
+                      patch.maneuverExecutorActiveManeuverId = undefined;
+                  }
+                  if (Object.keys(patch).length) queueUpdate(module, patch);
+              } else if (module.maneuverExecutorStatus !== 'idle') {
+                  queueUpdate(module, { maneuverExecutorStatus: 'idle', maneuverExecutorProgress: 0, maneuverExecutorActiveManeuverId: undefined });
+              }
+          }
+      });
+
+      const updateIds = Object.keys(moduleUpdates);
+      if (updateIds.length) {
+          setFlightComputerModules(prev => prev.map(m => moduleUpdates[m.id] ? { ...m, ...moduleUpdates[m.id] } : m));
+      }
+
+      return bodiesSnapshot;
+  }, [setFlightComputerModules]);
 
   const applyThrustBurstModules = useCallback((bodiesSnapshot: Body[], dt: number) => {
       const modules = flightComputerModulesRef.current;
@@ -828,6 +1052,7 @@ const App: React.FC = () => {
           thrust: body.thrust ? { ...body.thrust } : undefined
       }));
 
+      applyManeuverExecutorModules(bodiesForSimulation);
       applyThrustBurstModules(bodiesForSimulation, dt);
 
       const physicsResult = updatePhysics(
@@ -1009,7 +1234,7 @@ const App: React.FC = () => {
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
-  }, [applyThrustBurstModules, isRunning, speed]);
+  }, [applyManeuverExecutorModules, applyThrustBurstModules, isRunning, speed]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -1806,6 +2031,17 @@ const App: React.FC = () => {
                newModule.thrustBurstDeltaVRadial = 0;
                newModule.thrustBurstCompleted = true;
            }
+           if (newModule.type === 'maneuver_executor') {
+               newModule.maneuverExecutorType = 'burn';
+               newModule.maneuverExecutorThrust = 0.01;
+               newModule.maneuverExecutorDuration = 2;
+               newModule.maneuverExecutorAngleDeg = 0;
+               newModule.maneuverExecutorDeltaVPrograde = 0;
+               newModule.maneuverExecutorDeltaVRadial = 0;
+               newModule.maneuverExecutorAltitudeDirection = 'ascending';
+               newModule.maneuverExecutorStatus = 'idle';
+               newModule.maneuverExecutorProgress = 0;
+           }
            
            setFlightComputerModules(prev => [...prev, newModule]);
 
@@ -1932,6 +2168,14 @@ const App: React.FC = () => {
                       deltaVRadial: module.thrustBurstDeltaVRadial || 0,
                       duration: module.thrustBurstDuration || 0,
                       ready: module.thrustBurstCompleted ?? true
+                  };
+              }
+              if (module.type === 'maneuver_executor') {
+                  moduleData.maneuverExecutor = {
+                      maneuverType: module.maneuverExecutorType,
+                      status: module.maneuverExecutorStatus || 'idle',
+                      progress: module.maneuverExecutorProgress ?? 0,
+                      target: module.maneuverExecutorTargetBodyId || module.targetBodyId || null
                   };
               }
               

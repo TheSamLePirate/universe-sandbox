@@ -208,7 +208,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector';
 
@@ -217,6 +217,8 @@ export interface FlightComputerInput {
     value: string; // ID for body, "moduleId:outputKey" for module output, or JSON string for vector
     label?: string; // Display name
 }
+
+export type AltitudeDirection = 'ascending' | 'descending';
 
 export type ComparisonOperator = '>' | '<' | '=' | '>=' | '<=';
 export type LogicOperator = 'AND' | 'OR' | 'NOR' | 'NAND' | 'XOR' | 'XNOR' | 'NOT';
@@ -260,6 +262,23 @@ export interface FlightComputerModule {
     thrustBurstDeltaVPrograde?: number;
     thrustBurstDeltaVRadial?: number;
     thrustBurstCompleted?: boolean;
+
+    // Maneuver Executor Config
+    maneuverExecutorType?: Maneuver['type'];
+    maneuverExecutorParam?: number | string;
+    maneuverExecutorThrust?: number;
+    maneuverExecutorDuration?: number;
+    maneuverExecutorAngleDeg?: number;
+    maneuverExecutorTargetBodyId?: string;
+    maneuverExecutorParentBodyId?: string;
+    maneuverExecutorDeltaVPrograde?: number;
+    maneuverExecutorDeltaVRadial?: number;
+    maneuverExecutorAltitudeDirection?: AltitudeDirection;
+    maneuverExecutorRequestId?: number;
+    maneuverExecutorLastRequestId?: number;
+    maneuverExecutorActiveManeuverId?: string;
+    maneuverExecutorStatus?: 'idle' | 'queued' | 'running' | 'completed';
+    maneuverExecutorProgress?: number;
     
     // Grouping (cosmetic only)
     groupId?: string | null; // ID of the group this module belongs to, null = ungrouped

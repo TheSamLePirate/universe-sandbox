@@ -259,6 +259,10 @@ export const resolveScalarInput = (
                 default:
                     return null;
             }
+        } else if (module.type === 'maneuver_executor') {
+            if (outputKey === 'progress') {
+                return module.maneuverExecutorProgress ?? 0;
+            }
         }
     }
     
