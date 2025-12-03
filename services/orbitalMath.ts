@@ -106,11 +106,6 @@ export const resolveInput = (
         // Recursively resolve module output
         // For now, let's handle specific module types we know about
         if (module.type === 'orbit_info') {
-            // We need to re-calculate the orbit info to get the point
-            // This might be expensive if done every frame, but okay for now
-            const primaryId = module.inputs?.primary?.value;
-            const referenceId = module.inputs?.reference?.value;
-            
             // Resolve inputs for that module first
             let primaryInput = module.inputs?.primary;
             if (!primaryInput && module.primaryBodyId) primaryInput = { type: 'body', value: module.primaryBodyId };
@@ -121,6 +116,13 @@ export const resolveInput = (
             const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             
+            if (outputKey === 'primary_body') {
+                return primary;
+            }
+            if (outputKey === 'reference_body') {
+                return reference && 'mass' in reference ? (reference as Body) : null;
+            }
+
             if (primary && reference && 'mass' in reference) { // Reference must be a Body
                  const info = calculateOrbitInfo(primary, reference as Body, gravitationalConstant);
                  if (info) {
@@ -128,10 +130,42 @@ export const resolveInput = (
                      if (outputKey === 'pa_point') return info.paPoint || null;
                  }
             }
+        } else if (module.type === 'transfer_window') {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            if (outputKey === 'primary_body') {
+                return resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
+            if (outputKey === 'reference_body') {
+                return resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
+            if (outputKey === 'target_body') {
+                return resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
         } else if (module.type === 'rendezvous_tracker') {
             const rendezvous = rendezvousSolutions?.[module.id];
+            if (outputKey === 'primary_body') {
+                const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+                return resolveInput(rocketInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
+            if (outputKey === 'target_body') {
+                const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+                return resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
             if (!rendezvous) return null;
             if (outputKey === 'position') return rendezvous.point;
+        } else if ((module.type === 'track_distance' || module.type === 'track_velocity') && (outputKey === 'primary_body' || outputKey === 'target_body')) {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            if (outputKey === 'primary_body') {
+                return resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
+            if (outputKey === 'target_body') {
+                return resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
         } else if (module.type === 'selector' && outputKey === 'body') {
             const bodyId = module.selectorBodyId;
             if (!bodyId) return null;

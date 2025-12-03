@@ -51,17 +51,31 @@ const InputSelector: React.FC<{
     allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean' | 'string')[];
 }> = ({ label, value, onChange, bodies, modules, currentModuleId, allowedTypes = ['body', 'module_output'] }) => {
     const [mode, setMode] = useState<'body' | 'module'>('body');
+    const bodyAllowed = allowedTypes.includes('body');
+    const moduleOutputsAllowed = allowedTypes.includes('module_output');
+    const scalarAllowed = allowedTypes.includes('scalar');
+    const booleanAllowed = allowedTypes.includes('boolean');
+    const stringAllowed = allowedTypes.includes('string');
+    const moduleSelectorEnabled = moduleOutputsAllowed || scalarAllowed || booleanAllowed || stringAllowed;
 
-    // Initialize mode based on current value
+    // Initialize / sync mode based on current value, but keep user choice when empty
     useEffect(() => {
-        if (value?.type === 'module_output') {
+        if (value?.type === 'module_output' && moduleSelectorEnabled) {
             setMode('module');
-        } else if (value?.type === 'body') {
-            setMode('body');
-        } else if (allowedTypes.includes('scalar') && !allowedTypes.includes('body')) {
-             setMode('module'); // Force module mode if body not allowed (e.g. for scalar inputs)
+            return;
         }
-    }, [value, allowedTypes]);
+        if (value?.type === 'body' && bodyAllowed) {
+            setMode('body');
+            return;
+        }
+        if (!value) {
+            if (!bodyAllowed && moduleSelectorEnabled) {
+                setMode('module');
+            } else if (bodyAllowed && !moduleSelectorEnabled) {
+                setMode('body');
+            }
+        }
+    }, [value?.type, bodyAllowed, moduleSelectorEnabled]);
 
     const availableModules = modules.filter(m => m.id !== currentModuleId);
 
@@ -69,7 +83,7 @@ const InputSelector: React.FC<{
         <div className="space-y-1">
             <div className="flex justify-between items-center">
                 <label className="text-[9px] text-slate-500 uppercase">{label}</label>
-                {allowedTypes.includes('body') && allowedTypes.includes('module_output') && (
+                {bodyAllowed && moduleSelectorEnabled && (
                     <div className="flex bg-slate-800 rounded p-0.5">
                         <button 
                             onClick={() => setMode('body')}
@@ -87,7 +101,7 @@ const InputSelector: React.FC<{
                 )}
             </div>
             
-            {mode === 'body' && allowedTypes.includes('body') ? (
+            {mode === 'body' && bodyAllowed ? (
                 <select 
                     value={value?.type === 'body' ? value.value : ''}
                     onChange={(e) => onChange({ type: 'body', value: e.target.value, label: bodies.find(b => b.id === e.target.value)?.name })}
@@ -98,7 +112,7 @@ const InputSelector: React.FC<{
                         <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                 </select>
-            ) : (
+            ) : moduleSelectorEnabled ? (
                 <select 
                     value={value?.type === 'module_output' ? value.value : ''}
                     onChange={(e) => {
@@ -133,9 +147,23 @@ const InputSelector: React.FC<{
                             if (m.type === 'orbit_info') {
                                 options.push(<option key={`${m.id}:pe_point`} value={`${m.id}:pe_point`}>{m.name || 'Orbit'} - Periapsis Point</option>);
                                 options.push(<option key={`${m.id}:pa_point`} value={`${m.id}:pa_point`}>{m.name || 'Orbit'} - Apoapsis Point</option>);
+                                options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{m.name || 'Orbit'} - Subject Body</option>);
+                                options.push(<option key={`${m.id}:reference_body`} value={`${m.id}:reference_body`}>{m.name || 'Orbit'} - Reference Body</option>);
+                            }
+                            if (m.type === 'transfer_window') {
+                                options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{m.name || 'Transfer'} - Subject Body</option>);
+                                options.push(<option key={`${m.id}:reference_body`} value={`${m.id}:reference_body`}>{m.name || 'Transfer'} - Reference Body</option>);
+                                options.push(<option key={`${m.id}:target_body`} value={`${m.id}:target_body`}>{m.name || 'Transfer'} - Target Body</option>);
                             }
                             if (m.type === 'rendezvous_tracker') {
                                 options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Rendezvous'} - Position</option>);
+                                options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{m.name || 'Rendezvous'} - Rocket Body</option>);
+                                options.push(<option key={`${m.id}:target_body`} value={`${m.id}:target_body`}>{m.name || 'Rendezvous'} - Target Body</option>);
+                            }
+                            if (m.type === 'track_distance' || m.type === 'track_velocity') {
+                                const labelBase = m.name || (m.type === 'track_distance' ? 'Distance' : 'Velocity');
+                                options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{labelBase} - From Body</option>);
+                                options.push(<option key={`${m.id}:target_body`} value={`${m.id}:target_body`}>{labelBase} - To Body</option>);
                             }
                             if (m.type === 'selector') {
                                 options.push(<option key={`${m.id}:body`} value={`${m.id}:body`}>{m.name || 'Selector'} - Body</option>);
@@ -228,7 +256,7 @@ const InputSelector: React.FC<{
                         return options;
                     })}
                 </select>
-            )}
+            ) : null}
         </div>
     );
 };
