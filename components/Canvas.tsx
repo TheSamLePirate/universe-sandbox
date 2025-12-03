@@ -1,8 +1,7 @@
-
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
-import { calculateTransferInfo, resolveInput, resolveStringInput, resolveBooleanInput } from '@/services/orbitalMath';
+import { resolveInput, resolveStringInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
 
 interface CanvasProps {
   bodies: Body[];
@@ -971,36 +970,8 @@ const Canvas: React.FC<CanvasProps> = ({
         } else if (module.type === 'transfer_window') {
             if (!primary || !reference || !target) return;
             
-            const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-            const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-            const a_transfer = (r1 + r2) / 2;
-            const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-            const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-            const travelTime = period_transfer / 2;
-
-            const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
-            const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
-            const h = tPos.x * tVel.y - tPos.y * tVel.x;
-            const direction = h >= 0 ? 1 : -1;
-
-            const targetMotion = direction * (360 / period_target) * travelTime;
-            const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
-            
-            const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-            const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
-
-            let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
-            while (currentPhase > 180) currentPhase -= 360;
-            while (currentPhase < -180) currentPhase += 360;
-
-            let requiredPhaseDeg = 180 - targetMotion;
-            while (requiredPhaseDeg > 180) requiredPhaseDeg -= 360;
-            while (requiredPhaseDeg < -180) requiredPhaseDeg += 360;
-
-            const diff = Math.abs(currentPhase - requiredPhaseDeg);
-            const isAligned = diff < 5 || Math.abs(diff - 360) < 5;
-
-            const idealTargetAngle = primaryAngle + requiredPhaseRad;
+            // Use shared calculation
+            const transferInfo = calculateTransferInfo(primary, reference, target, physicsConfig.gravitationalConstant);
             
             const px = cx + reference.position.x * scale;
             const py = cy + reference.position.y * scale;
@@ -1008,34 +979,76 @@ const Canvas: React.FC<CanvasProps> = ({
             const primaryY = cy + primary.position.y * scale;
             const targetX = cx + target.position.x * scale;
             const targetY = cy + target.position.y * scale;
+
+            // Ideal position for target (where it should be for transfer)
+            // We can calculate this from the required phase
+            // requiredPhase is angle(target) - angle(primary)
+            // So angle(target_ideal) = angle(primary) + requiredPhase
+            const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
+            const idealTargetAngle = primaryAngle + transferInfo.requiredPhase;
+            
+            const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
             const idealX = cx + (reference.position.x + Math.cos(idealTargetAngle) * r2) * scale;
             const idealY = cy + (reference.position.y + Math.sin(idealTargetAngle) * r2) * scale;
 
             if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(primaryX) && Number.isFinite(primaryY) && Number.isFinite(targetX) && Number.isFinite(targetY)) {
+                
+                // 1. Draw the Window Wedge (-5 to +5 degrees from ideal)
+                const windowSizeRad = 5 * Math.PI / 180;
+                const startAngle = idealTargetAngle - windowSizeRad;
+                const endAngle = idealTargetAngle + windowSizeRad;
+                
                 ctx.beginPath();
                 ctx.moveTo(px, py);
-                ctx.lineTo(primaryX, primaryY);
-                ctx.lineTo(targetX, targetY);
+                ctx.arc(px, py, r2 * scale, startAngle, endAngle);
                 ctx.closePath();
-                ctx.fillStyle = isAligned ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.1)';
+                
+                // Color logic
+                const isReady = transferInfo.ready;
+                const baseColor = module.color;
+                
+                // Helper to convert hex to rgba
+                const hexToRgba = (hex: string, alpha: number) => {
+                    const r = parseInt(hex.slice(1, 3), 16);
+                    const g = parseInt(hex.slice(3, 5), 16);
+                    const b = parseInt(hex.slice(5, 7), 16);
+                    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                };
+                
+                // Pulsing green if ready, otherwise module color
+                let fillColor = hexToRgba(baseColor, 0.30); 
+                let strokeColor = baseColor;
+                
+                if (isReady) {
+                    const pulse = 0.3 + Math.sin(time * 8) * 0.2; // Fast pulse
+                    fillColor = `rgba(34, 197, 94, ${pulse})`; // Green
+                    strokeColor = '#22c55e';
+                }
+
+                ctx.fillStyle = fillColor;
                 ctx.fill();
+                
+                // 2. Draw the 0-degree error line (White line at ideal angle)
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(idealX, idealY);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([2, 2]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 3. Draw current alignment lines
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(primaryX, primaryY); // Line to primary
                 ctx.strokeStyle = module.color;
                 ctx.lineWidth = 1;
                 ctx.setLineDash([6, 4]);
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                ctx.beginPath();
-                ctx.moveTo(px, py);
-                ctx.lineTo(idealX, idealY);
-                ctx.strokeStyle = module.color;
-                ctx.globalAlpha = 0.4;
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-
-                ctx.font = 'bold 10px sans-serif';
-                ctx.fillStyle = module.color;
-                ctx.fillText(isAligned ? 'Window' : 'Aligning', px + 10, py - 10);
+                
             }
         } else if (module.type === 'marker') {
             const inputs = module.inputs || {};
