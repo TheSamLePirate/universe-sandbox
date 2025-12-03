@@ -435,6 +435,9 @@ export const resolveBooleanInput = (
         } else if (module.type === 'custom_script' && outputKey === 'result') {
             const res = module.customScriptLastResult;
             return typeof res === 'boolean' ? res : null;
+        } else if (module.type === 'custom_script' && outputKey === 'state') {
+            // Default to true (finished) if undefined
+            return module.customScriptAsyncState ?? true;
         }
     }
     return null;

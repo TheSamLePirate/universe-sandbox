@@ -300,6 +300,8 @@ export interface FlightComputerModule {
     customScriptInputsCount?: number;
     customScriptLastResult?: any; // Store the result of the last execution
     customScriptLogs?: string[]; // Store last few logs
+    customScriptMode?: 'sync' | 'async';
+    customScriptAsyncState?: boolean; // true = finished/ready, false = pending/running
 }
 
 export interface ModuleGroup {

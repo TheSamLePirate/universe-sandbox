@@ -245,6 +245,7 @@ const InputSelector: React.FC<{
                                 if (m.customScriptOutputType === 'boolean') {
                                     options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Boolean)</option>);
                                 }
+                                options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Script'} - State (Ready)</option>);
                             }
                         }
                         
@@ -334,6 +335,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const followModuleTriggerStateRef = useRef<Map<string, boolean>>(new Map());
     const buttonResetTriggerStateRef = useRef<Map<string, boolean>>(new Map());
     const scriptLogsRef = useRef<Map<string, string[]>>(new Map());
+    const asyncScriptRunningRef = useRef<Map<string, boolean>>(new Map());
 
     // --- Follow Module & Button Reset Logic & Custom Script ---
     useEffect(() => {
@@ -345,6 +347,9 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         });
         Array.from(buttonResetTriggerStateRef.current.keys()).forEach(id => {
             if (!activeIds.has(id)) buttonResetTriggerStateRef.current.delete(id);
+        });
+        Array.from(asyncScriptRunningRef.current.keys()).forEach(id => {
+            if (!activeIds.has(id)) asyncScriptRunningRef.current.delete(id);
         });
         // Note: Script logs are kept in ref to avoid re-renders, but we might want to clean up if module removed
 
@@ -390,8 +395,14 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 const triggerInput = module.inputs?.trigger;
                 // Default to false if not connected
                 const shouldRun = resolveBooleanInput(triggerInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+                const mode = module.customScriptMode || 'sync';
 
                 if (shouldRun) {
+                    // Check async running state
+                    if (mode === 'async') {
+                        if (asyncScriptRunningRef.current.get(module.id)) return; // Already running
+                    }
+
                     // Resolve all inputs
                     const inputs = [];
                     const count = module.customScriptInputsCount ?? 2;
@@ -441,50 +452,93 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         }
                     };
 
-                    try {
-                        // Execute Code
-                        // Wrap in a function to return result
-                        const func = new Function('input', 'console', `
-                            try {
-                                ${module.customScriptCode}
-                            } catch (e) {
-                                console.error(e.message);
-                                return null;
-                            }
-                        `);
-                        
-                        const result = func(inputs, mockConsole);
-
-                        // Only update if changed to avoid render loop?
-                        // But we need to update logs too.
-                        // And we need to avoid infinite updates if result is referentially different (like a new object).
-                        
-                        // Simple equality check
-                        const prevResult = module.customScriptLastResult;
-                        const resultChanged = JSON.stringify(result) !== JSON.stringify(prevResult);
-                        
-                        // Update logs if they are different or if it's been a while? 
-                        // Updating logs every frame will kill performance.
-                        // Let's store logs in ref and only update module state if logs changed significantly or result changed.
-                        
-                        const prevLogs = scriptLogsRef.current.get(module.id) || [];
-                        const logsChanged = JSON.stringify(logs) !== JSON.stringify(prevLogs);
-                        
-                        if (resultChanged || logsChanged) {
-                            scriptLogsRef.current.set(module.id, logs);
-                            onUpdateModule(module.id, { 
-                                customScriptLastResult: result,
-                                customScriptLogs: logs.slice(-5) // Keep last 5 logs for UI
-                            });
+                    if (mode === 'async') {
+                        // ASYNC EXECUTION
+                        asyncScriptRunningRef.current.set(module.id, true);
+                        if (module.customScriptAsyncState !== false) {
+                            onUpdateModule(module.id, { customScriptAsyncState: false });
                         }
-                    } catch (e: any) {
-                        const errorLog = `Exec Error: ${e.message}`;
-                        const prevLogs = scriptLogsRef.current.get(module.id) || [];
-                        if (!prevLogs.includes(errorLog)) {
-                            scriptLogsRef.current.set(module.id, [errorLog]);
-                            onUpdateModule(module.id, { customScriptLogs: [errorLog] });
+
+                        // We can't define AsyncFunction directly in TS/ES5 safely without polyfills or tricks, 
+                        // but new Function with 'async' works if environment supports it (modern browsers do).
+                        // Alternative: (async () => {}).constructor
+                        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
+                        (async () => {
+                            try {
+                                const func = new AsyncFunction('input', 'console', `
+                                    try {
+                                        ${module.customScriptCode}
+                                    } catch (e) {
+                                        console.error(e.message);
+                                        throw e;
+                                    }
+                                `);
+                                
+                                const result = await func(inputs, mockConsole);
+                                
+                                // On completion
+                                scriptLogsRef.current.set(module.id, logs);
+                                onUpdateModule(module.id, { 
+                                    customScriptLastResult: result,
+                                    customScriptLogs: logs.slice(-5),
+                                    customScriptAsyncState: true
+                                });
+                            } catch (e: any) {
+                                const errorLog = `Async Error: ${e.message}`;
+                                logs.push(errorLog);
+                                scriptLogsRef.current.set(module.id, logs);
+                                onUpdateModule(module.id, { 
+                                    customScriptLogs: logs.slice(-5),
+                                    customScriptAsyncState: true
+                                });
+                            } finally {
+                                asyncScriptRunningRef.current.set(module.id, false);
+                            }
+                        })();
+
+                    } else {
+                        // SYNC EXECUTION
+                        try {
+                            // Execute Code
+                            // Wrap in a function to return result
+                            const func = new Function('input', 'console', `
+                                try {
+                                    ${module.customScriptCode}
+                                } catch (e) {
+                                    console.error(e.message);
+                                    return null;
+                                }
+                            `);
+                            
+                            const result = func(inputs, mockConsole);
+
+                            // Only update if changed to avoid render loop
+                            const prevResult = module.customScriptLastResult;
+                            const resultChanged = JSON.stringify(result) !== JSON.stringify(prevResult);
+                            const prevLogs = scriptLogsRef.current.get(module.id) || [];
+                            const logsChanged = JSON.stringify(logs) !== JSON.stringify(prevLogs);
+                            
+                            if (resultChanged || logsChanged) {
+                                scriptLogsRef.current.set(module.id, logs);
+                                onUpdateModule(module.id, { 
+                                    customScriptLastResult: result,
+                                    customScriptLogs: logs.slice(-5), // Keep last 5 logs for UI
+                                    customScriptAsyncState: true // Always true for sync
+                                });
+                            }
+                        } catch (e: any) {
+                            const errorLog = `Exec Error: ${e.message}`;
+                            const prevLogs = scriptLogsRef.current.get(module.id) || [];
+                            if (!prevLogs.includes(errorLog)) {
+                                scriptLogsRef.current.set(module.id, [errorLog]);
+                                onUpdateModule(module.id, { customScriptLogs: [errorLog], customScriptAsyncState: true });
+                            }
                         }
                     }
+                } else {
+                    // If not running and async was running, reset? No, state is persistent.
+                    // But if sync, we might want to clear output? Nah, keep last result.
                 }
             }
         });
@@ -1957,14 +2011,16 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             case 'custom_script':
                 const inputsCount = module.customScriptInputsCount ?? 2;
                 const outputType = module.customScriptOutputType ?? 'scalar';
+                const scriptMode = module.customScriptMode || 'sync';
                 const scriptResult = module.customScriptLastResult;
+                const isReady = module.customScriptAsyncState ?? true;
 
                 return (
                     <div className="mt-2 space-y-3">
                         {/* Configuration */}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <div>
-                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Inputs Count</label>
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Inputs</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -1975,16 +2031,27 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Output Type</label>
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Type</label>
                                 <select
                                     value={outputType}
                                     onChange={(e) => onUpdateModule(module.id, { customScriptOutputType: e.target.value as any })}
                                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
                                 >
-                                    <option value="scalar">Scalar (Number)</option>
+                                    <option value="scalar">Scalar</option>
                                     <option value="boolean">Boolean</option>
                                     <option value="string">String</option>
-                                    <option value="vector">Vector / Body</option>
+                                    <option value="vector">Vector</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Mode</label>
+                                <select
+                                    value={scriptMode}
+                                    onChange={(e) => onUpdateModule(module.id, { customScriptMode: e.target.value as any })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                >
+                                    <option value="sync">Sync (Realtime)</option>
+                                    <option value="async">Async (Promise)</option>
                                 </select>
                             </div>
                         </div>
@@ -2024,11 +2091,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                         {/* Code Editor */}
                         <div>
-                            <label className="text-[9px] text-slate-500 uppercase block mb-1">Script (JavaScript)</label>
+                            <label className="text-[9px] text-slate-500 uppercase block mb-1">
+                                Script ({scriptMode === 'async' ? 'Async Function Body' : 'Function Body'})
+                            </label>
                             <textarea
                                 value={module.customScriptCode || ''}
                                 onChange={(e) => onUpdateModule(module.id, { customScriptCode: e.target.value })}
-                                placeholder="// return input[1] * 2;"
+                                placeholder={scriptMode === 'async' ? "// const data = await fetch(...);\n// return data.value;" : "// return input[1] * 2;"}
                                 className="w-full h-24 bg-slate-950 border border-slate-700 rounded p-2 text-xs font-mono text-green-400 outline-none resize-y"
                                 spellCheck={false}
                             />
@@ -2038,7 +2107,14 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         <div className="bg-slate-950 rounded p-2 border border-slate-800 font-mono text-[10px]">
                             <div className="flex justify-between items-center mb-1 border-b border-slate-800 pb-1">
                                 <span className="text-slate-500 uppercase">Console</span>
-                                <span className="text-slate-500 uppercase">Result</span>
+                                <div className="flex items-center gap-2">
+                                    {scriptMode === 'async' && (
+                                        <span className={`text-[9px] uppercase font-bold ${isReady ? 'text-green-500' : 'text-yellow-500 animate-pulse'}`}>
+                                            {isReady ? 'READY' : 'RUNNING...'}
+                                        </span>
+                                    )}
+                                    <span className="text-slate-500 uppercase">Result</span>
+                                </div>
                             </div>
                             <div className="flex gap-2 h-16">
                                 {/* Log Area */}
