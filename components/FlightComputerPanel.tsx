@@ -365,6 +365,20 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
     const resolveBooleanValue = (input?: FlightComputerInput) =>
         resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+
+    // Helper to check if a module is effectively active
+    const isModuleActive = (module: FlightComputerModule) => {
+        if (!module.isEnabled) return false;
+        const activateInput = module.inputs?.activate;
+        if (!activateInput) return true; // Default to true if no input connected
+        
+        // Resolve input
+        const activeSignal = resolveBooleanInput(activateInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+        
+        // If input is connected but resolves to null (e.g. invalid target), default to false for safety? 
+        // Or default to true? Let's default to false if signal is missing but input is defined.
+        return activeSignal ?? true; 
+    };
     
     // Audio Context for Beep Module
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -394,7 +408,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
         modules.forEach(module => {
             // Follow Module
-            if (module.type === 'follow' && module.isEnabled && onSetFollowingBody) {
+            if (module.type === 'follow' && isModuleActive(module) && onSetFollowingBody) {
                 const triggerValue = resolveBooleanInput(module.inputs?.trigger, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                 const shouldFollow = triggerValue ?? false;
                 const wasFollowing = followModuleTriggerStateRef.current.get(module.id) || false;
@@ -429,7 +443,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             }
 
             // Custom Script Execution
-            if (module.type === 'custom_script' && module.isEnabled && module.customScriptCode) {
+            if (module.type === 'custom_script' && isModuleActive(module) && module.customScriptCode) {
                 // Resolve Activate Input (Trigger)
                 const triggerInput = module.inputs?.trigger;
                 // Default to false if not connected
@@ -662,7 +676,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     // Beep Module Logic Loop
     useEffect(() => {
         modules.forEach(module => {
-            if (module.type === 'beep' && module.isEnabled) {
+            if (module.type === 'beep' && isModuleActive(module)) {
                 const input = resolveBooleanValue(module.inputs?.primary);
                 const mode = module.beepTriggerMode || 'rising';
                 const pitch = module.beepPitch || 800;
@@ -1969,8 +1983,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 onClick={queueExecutor}
-                                disabled={!canExecute || !module.isEnabled}
-                                className={`w-full py-2 text-xs font-bold rounded flex items-center justify-center gap-1 ${canExecute && module.isEnabled ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                                disabled={!canExecute || !isModuleActive(module)}
+                                className={`w-full py-2 text-xs font-bold rounded flex items-center justify-center gap-1 ${canExecute && isModuleActive(module) ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                             >
                                 <Play size={12} /> Execute
                             </button>
@@ -2656,6 +2670,36 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                         </div>
                                     </div>
 
+                                    {/* Activation Input (Global) */}
+                                    <div className="mb-2 pb-2 border-b border-slate-700/30">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-[9px] text-slate-500 uppercase">Activation Signal</label>
+                                            <span className={`text-[9px] font-bold ${isModuleActive(module) ? 'text-green-500' : 'text-slate-600'}`}>
+                                                {isModuleActive(module) ? 'ACTIVE' : 'STANDBY'}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <InputSelector 
+                                                label="" 
+                                                value={getInput(module, 'activate')} 
+                                                onChange={(input) => updateInput(module.id, 'activate', input)} 
+                                                bodies={bodies} 
+                                                modules={modules} 
+                                                currentModuleId={module.id} 
+                                                allowedTypes={['boolean', 'module_output']} 
+                                            />
+                                            {getInput(module, 'activate') && (
+                                                <button 
+                                                    onClick={() => updateInput(module.id, 'activate', undefined)} 
+                                                    className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30"
+                                                    title="Remove Activation Input"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {/* Body Selectors */}
                                     <div className="grid grid-cols-2 gap-2 mb-2" draggable={false}>
                                         {/* Orbit Info */}
@@ -2748,7 +2792,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                     </div>
 
                                     {/* Data Display */}
-                                    {module.isEnabled && (
+                                    {isModuleActive(module) && (
                                         <div className="border-t border-slate-700/30 pt-2" draggable={false}>
                                             {renderModuleContent(module)}
                                         </div>
