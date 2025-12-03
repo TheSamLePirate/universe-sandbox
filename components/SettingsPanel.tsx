@@ -349,6 +349,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     Lower = More precise, Slower. Higher = Faster, Less stable.
                                 </div>
                             </div>
+
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-slate-400">Time Reverse Duration</span>
+                                    <span className="text-blue-300 font-mono">{physicsConfig.timeReverseDuration?.toFixed(1) || 4.0}s</span>
+                                </div>
+                                <input 
+                                    type="range" min="1.0" max="10.0" step="0.5"
+                                    value={physicsConfig.timeReverseDuration || 4.0}
+                                    onChange={(e) => updatePhysics('timeReverseDuration', Number(e.target.value))}
+                                    className="w-full accent-blue-500 bg-slate-700 h-1 rounded-lg appearance-none"
+                                />
+                            </div>
                          </div>
                     )}
 

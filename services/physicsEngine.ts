@@ -422,11 +422,20 @@ export const updatePhysics = (
                               const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
                               const mu = gConst * refParent.mass;
                               
+                              // Calculate angular momentum to determine direction (prograde vs retrograde)
+                              const tVel = { x: target.velocity.x - refParent.velocity.x, y: target.velocity.y - refParent.velocity.y };
+                              const h = tPos.x * tVel.y - tPos.y * tVel.x;
+                              const direction = h >= 0 ? 1 : -1;
+
                               const a_transfer = (r1 + r2) / 2;
                               const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
-                              const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
+                              
+                              // Use signed omega to account for retrograde motion (e.g. time reverse)
+                              const omega_target = direction * Math.sqrt(mu / Math.pow(r2, 3));
                               const angle_change = omega_target * t_transfer;
                               
+                              // PI - angle_change works for both prograde and retrograde 
+                              // because PI and -PI are congruent modulo 2PI
                               let requiredPhase = Math.PI - angle_change;
                               while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
                               while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
@@ -1291,4 +1300,13 @@ export const solveLambert = (
     };
 
     return { v1, v2 };
+};
+
+export const reverseTime = (bodies: Body[]): Body[] => {
+    return bodies.map(body => ({
+        ...body,
+        velocity: { x: -body.velocity.x, y: -body.velocity.y },
+        trail: [], 
+        thrust: body.thrust ? { x: -body.thrust.x, y: -body.thrust.y } : undefined 
+    }));
 };

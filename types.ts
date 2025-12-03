@@ -117,6 +117,7 @@ export interface PhysicsConfig {
     gravitationalConstant: number; // Default 0.5
     collisions: boolean; // Default true
     timeStep: number; // Default 0.5
+    timeReverseDuration: number; // Default 4.0
 }
 
 export interface SimulationSaveData {

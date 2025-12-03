@@ -223,7 +223,17 @@ export const calculateTransferInfo = (
     const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (gravitationalConstant * reference.mass));
     
     const travelTime = period_transfer / 2;
-    const targetMotion = (360 / period_target) * travelTime;
+    
+    // Determine direction (prograde vs retrograde)
+    const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
+    const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
+    const h = tPos.x * tVel.y - tPos.y * tVel.x;
+    const direction = h >= 0 ? 1 : -1;
+
+    const targetMotion = direction * (360 / period_target) * travelTime;
+    
+    // 180 - targetMotion works for both prograde and retrograde
+    // because 180 and -180 are congruent modulo 360
     const requiredPhase = 180 - targetMotion;
     
     let normalizedRequired = requiredPhase;

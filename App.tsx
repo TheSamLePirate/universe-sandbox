@@ -15,7 +15,7 @@ import Assistant from './components/Assistant';
 import MusicPanel from './components/MusicPanel';
 import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
-import { updatePhysics, predictSystemTrajectories } from './services/physicsEngine';
+import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine';
 import { resolveInput, resolveScalarInput, resolveBooleanInput } from './services/orbitalMath';
 import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup, RendezvousSolution } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
@@ -139,6 +139,20 @@ const App: React.FC = () => {
   const predictionBodyIdsRef = useRef(predictionBodyIds);
   const rocketTargetBodyIdRef = useRef(rocketTargetBodyId);
   const rocketParentBodyIdRef = useRef(rocketParentBodyId);
+
+  const timeReverseStateRef = useRef<{
+      active: boolean;
+      startTime: number;
+      duration: number;
+      initialSpeed: number;
+      phase: 'decelerate' | 'accelerate';
+  }>({
+      active: false,
+      startTime: 0,
+      duration: 4,
+      initialSpeed: 1,
+      phase: 'decelerate'
+  });
 
   // Flight Computer State
   const [flightComputerModules, setFlightComputerModules] = useState<FlightComputerModule[]>([]);
@@ -1045,6 +1059,43 @@ const App: React.FC = () => {
         lastFpsTimeRef.current = time;
     }
 
+    // Time Reverse Logic
+    if (timeReverseStateRef.current.active) {
+        const { startTime, duration, initialSpeed, phase } = timeReverseStateRef.current;
+        const elapsed = (time - startTime) / 1000; // seconds
+        const halfDuration = duration / 2;
+        
+        if (phase === 'decelerate') {
+            const progress = Math.min(1, elapsed / halfDuration);
+            // Ease out cubic
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+            // Actually linear is requested: "slow down time for 2 sec"
+            // Let's stick to linear for simplicity as requested "transition on 4 secondes"
+            const newSpeed = initialSpeed * (1 - progress);
+            setSpeed(newSpeed);
+            
+            if (progress >= 1) {
+                // Switch to accelerate
+                timeReverseStateRef.current.phase = 'accelerate';
+                timeReverseStateRef.current.startTime = time; // Reset start time for next phase
+                
+                // Reverse Physics
+                const reversedBodies = reverseTime(bodiesRef.current);
+                bodiesRef.current = reversedBodies;
+                setBodies(reversedBodies);
+            }
+        } else if (phase === 'accelerate') {
+            const progress = Math.min(1, elapsed / halfDuration);
+            const newSpeed = initialSpeed * progress;
+            setSpeed(newSpeed);
+            
+            if (progress >= 1) {
+                timeReverseStateRef.current.active = false;
+                setSpeed(initialSpeed);
+            }
+        }
+    }
+
     if (lastTimeRef.current !== undefined && isRunning) {
       const dt = physicsConfigRef.current.timeStep * speed; 
       simulationTimeRef.current += dt;
@@ -1484,7 +1535,7 @@ const App: React.FC = () => {
           setPredictionPaths([]);
           simulationTimeRef.current = 0; // Reset clock for preset
           if (id !== 'imported_save') {
-             setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.5 });
+             setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.5, timeReverseDuration: 4.0 });
           }
           setTimeout(() => setIsRunning(true), 100);
       }
@@ -1525,6 +1576,18 @@ const App: React.FC = () => {
       const updated = bodies.map(b => b.id === id ? { ...b, ...updates } : b);
       setBodies(updated);
       bodiesRef.current = updated;
+  };
+
+  const handleTimeReverse = () => {
+      if (timeReverseStateRef.current.active) return;
+      
+      timeReverseStateRef.current = {
+          active: true,
+          startTime: performance.now(),
+          duration: physicsConfigRef.current.timeReverseDuration || 4.0,
+          initialSpeed: speed,
+          phase: 'decelerate'
+      };
   };
 
   const handleSpawnRocket = (parentBodyName?: string) => {
@@ -2529,6 +2592,7 @@ const App: React.FC = () => {
         isRunning={isRunning} 
         onTogglePlay={() => setIsRunning(!isRunning)} 
         onReset={handleReset}
+        onTimeReverse={handleTimeReverse}
         speed={speed}
         onSpeedChange={setSpeed}
         onZoom={(factor) => handleZoom(factor)} // Passed wrapped

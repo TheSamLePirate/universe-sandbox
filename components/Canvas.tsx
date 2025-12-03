@@ -919,36 +919,87 @@ const Canvas: React.FC<CanvasProps> = ({
              const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
              const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
              const travelTime = period_transfer / 2;
-             const targetMotion = (360 / period_target) * travelTime;
+
+             // Determine direction (prograde vs retrograde)
+             const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
+             const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
+             const h = tPos.x * tVel.y - tPos.y * tVel.x;
+             const direction = h >= 0 ? 1 : -1;
+
+             const targetMotion = direction * (360 / period_target) * travelTime;
              const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
              
              const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-             const idealTargetAngle = primaryAngle + requiredPhaseRad;
-             const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
-             const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
+             const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
 
+             // Calculate current phase difference
+             let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
+             while (currentPhase > 180) currentPhase -= 360;
+             while (currentPhase < -180) currentPhase += 360;
+
+             let requiredPhaseDeg = 180 - targetMotion;
+             while (requiredPhaseDeg > 180) requiredPhaseDeg -= 360;
+             while (requiredPhaseDeg < -180) requiredPhaseDeg += 360;
+
+             const diff = Math.abs(currentPhase - requiredPhaseDeg);
+             const isAligned = diff < 5 || Math.abs(diff - 360) < 5;
+
+             const idealTargetAngle = primaryAngle + requiredPhaseRad;
+             
+             // Draw Sector
              const px = cx + reference.position.x * scale;
              const py = cy + reference.position.y * scale;
              const bx = cx + primary.position.x * scale;
              const by = cy + primary.position.y * scale;
-             const ix = cx + idealX * scale;
-             const iy = cy + idealY * scale;
+             
+             const sectorRadius = r2 * scale;
+             const sectorWidth = 5 * Math.PI / 180; // 5 degrees in radians
+             
+             if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(sectorRadius)) {
+                 ctx.beginPath();
+                 ctx.moveTo(px, py);
+                 ctx.arc(px, py, sectorRadius, idealTargetAngle - sectorWidth/2, idealTargetAngle + sectorWidth/2);
+                 ctx.closePath();
+                 
+                 const baseColor = isAligned ? '#4ade80' : module.color; // Green if aligned
+                 ctx.fillStyle = baseColor;
+                 ctx.globalAlpha = 0.2;
+                 ctx.fill();
+                 
+                 ctx.strokeStyle = baseColor;
+                 ctx.globalAlpha = 0.8;
+                 ctx.lineWidth = 1;
+                 ctx.stroke();
 
-             ctx.setLineDash([5, 5]);
-             ctx.lineWidth = 1;
-             
-             // Line to Primary
-             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by);
-             ctx.strokeStyle = module.color; ctx.globalAlpha = 0.4; ctx.stroke();
-             
-             // Line to Ideal Position
-             ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ix, iy);
-             ctx.strokeStyle = module.color; ctx.globalAlpha = 0.4; ctx.stroke();
-             
-             ctx.fillStyle = module.color; ctx.font = '10px monospace';
-             ctx.fillText('WINDOW', ix + 5, iy + 5);
-             
-             ctx.setLineDash([]); ctx.globalAlpha = 1.0;
+                 // Draw Line to Primary
+                 ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by);
+                 ctx.strokeStyle = module.color; ctx.globalAlpha = 0.3; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+
+                 // Draw 0-degree center line (Perfect Alignment)
+                 const centerLx = px + Math.cos(idealTargetAngle) * sectorRadius;
+                 const centerLy = py + Math.sin(idealTargetAngle) * sectorRadius;
+                 
+                 ctx.beginPath();
+                 ctx.moveTo(px, py);
+                 ctx.lineTo(centerLx, centerLy);
+                 ctx.strokeStyle = '#ffffff';
+                 ctx.lineWidth = 1.5;
+                 ctx.globalAlpha = 0.9;
+                 ctx.stroke();
+
+                 // Label
+                 const labelRadius = sectorRadius + 20;
+                 const lx = px + Math.cos(idealTargetAngle) * labelRadius;
+                 const ly = py + Math.sin(idealTargetAngle) * labelRadius;
+                 
+                 ctx.fillStyle = baseColor; 
+                 ctx.font = 'bold 11px monospace';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillText(isAligned ? 'WINDOW OPEN' : 'TRANSFER WINDOW', lx, ly);
+                 
+                 ctx.globalAlpha = 1.0;
+             }
         }
     });
 

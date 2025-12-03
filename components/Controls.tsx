@@ -1,7 +1,7 @@
 
 
 import React from 'react';
-import { Play, Pause, RefreshCw, ZoomIn, ZoomOut, Plus, List, Grid, Settings, MessageSquare, Hammer, Glasses, Target, CircleDashed, Rocket, Menu, X } from 'lucide-react';
+import { Play, Pause, RefreshCw, ZoomIn, ZoomOut, Plus, List, Grid, Settings, MessageSquare, Hammer, Glasses, Target, CircleDashed, Rocket, Menu, X, Rewind } from 'lucide-react';
 import { Preset } from '../types';
 import useIsMobile from '../hooks/useIsMobile';
 import { useState } from 'react';
@@ -10,6 +10,7 @@ interface ControlsProps {
   isRunning: boolean;
   onTogglePlay: () => void;
   onReset: () => void;
+  onTimeReverse: () => void;
   speed: number;
   onSpeedChange: (val: number) => void;
   onZoom: (delta: number) => void;
@@ -40,6 +41,7 @@ const Controls: React.FC<ControlsProps> = ({
   isRunning,
   onTogglePlay,
   onReset,
+  onTimeReverse,
   speed,
   onSpeedChange,
   onZoom,
@@ -83,6 +85,13 @@ const Controls: React.FC<ControlsProps> = ({
                         {isRunning ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
                     </button>
                     
+                    <button 
+                        onClick={onTimeReverse}
+                        className="p-3 rounded-full hover:bg-slate-800 text-slate-300"
+                    >
+                        <Rewind size={24} />
+                    </button>
+
                     <button 
                         onClick={onReset}
                         className="p-3 rounded-full hover:bg-slate-800 text-slate-300"
@@ -260,6 +269,14 @@ const Controls: React.FC<ControlsProps> = ({
           {isRunning ? <Pause size={20} fill="white" /> : <Play size={20} fill="white" />}
         </button>
         
+        <button 
+          onClick={onTimeReverse}
+          className="p-3 rounded-full hover:bg-slate-700 transition-colors text-slate-300"
+          title="Reverse Time"
+        >
+          <Rewind size={20} />
+        </button>
+
         <button 
           onClick={onReset}
           className="p-3 rounded-full hover:bg-slate-700 transition-colors text-slate-300"

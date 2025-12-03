@@ -29,7 +29,8 @@ export const DEFAULT_VISUAL_CONFIG: VisualConfig = {
 export const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
     gravitationalConstant: 0.5,
     collisions: true,
-    timeStep: 0.008
+    timeStep: 0.008,
+    timeReverseDuration: 4.0
 };
 
 export const createBody = (
