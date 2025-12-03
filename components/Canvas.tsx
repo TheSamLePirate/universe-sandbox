@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
+import { calculateTransferInfo } from '@/services/orbitalMath';
 
 interface CanvasProps {
   bodies: Body[];
@@ -913,6 +914,9 @@ const Canvas: React.FC<CanvasProps> = ({
                 }
             }
         } else if (module.type === 'transfer_window' && target) {
+
+            //This is the correct way to calculate the transfer window and show the sector
+
              const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
              const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
              const a_transfer = (r1 + r2) / 2;
@@ -945,6 +949,8 @@ const Canvas: React.FC<CanvasProps> = ({
              const isAligned = diff < 5 || Math.abs(diff - 360) < 5;
 
              const idealTargetAngle = primaryAngle + requiredPhaseRad;
+
+             //const transferInfo = calculateTransferInfo(primary, reference, target, physicsConfig.gravitationalConstant);
              
              // Draw Sector
              const px = cx + reference.position.x * scale;

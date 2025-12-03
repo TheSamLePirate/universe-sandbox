@@ -48,7 +48,7 @@ const InputSelector: React.FC<{
     bodies: Body[];
     modules: FlightComputerModule[];
     currentModuleId: string;
-    allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean' | 'string')[];
+    allowedTypes?: ('body' | 'module_output' | 'scalar' | 'boolean' | 'string' | 'vector')[];
 }> = ({ label, value, onChange, bodies, modules, currentModuleId, allowedTypes = ['body', 'module_output'] }) => {
     const [mode, setMode] = useState<'body' | 'module'>('body');
     const bodyAllowed = allowedTypes.includes('body');
@@ -56,7 +56,8 @@ const InputSelector: React.FC<{
     const scalarAllowed = allowedTypes.includes('scalar');
     const booleanAllowed = allowedTypes.includes('boolean');
     const stringAllowed = allowedTypes.includes('string');
-    const moduleSelectorEnabled = moduleOutputsAllowed || scalarAllowed || booleanAllowed || stringAllowed;
+    const vectorAllowed = allowedTypes.includes('vector');
+    const moduleSelectorEnabled = moduleOutputsAllowed || scalarAllowed || booleanAllowed || stringAllowed || vectorAllowed;
 
     // Initialize / sync mode based on current value, but keep user choice when empty
     useEffect(() => {
@@ -143,7 +144,7 @@ const InputSelector: React.FC<{
                         const options = [];
                         
                         // Vector/Point Outputs
-                        if (!allowedTypes.includes('scalar')) {
+                        if (!scalarAllowed || vectorAllowed) {
                             if (m.type === 'orbit_info') {
                                 options.push(<option key={`${m.id}:pe_point`} value={`${m.id}:pe_point`}>{m.name || 'Orbit'} - Periapsis Point</option>);
                                 options.push(<option key={`${m.id}:pa_point`} value={`${m.id}:pa_point`}>{m.name || 'Orbit'} - Apoapsis Point</option>);
@@ -154,6 +155,9 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{m.name || 'Transfer'} - Subject Body</option>);
                                 options.push(<option key={`${m.id}:reference_body`} value={`${m.id}:reference_body`}>{m.name || 'Transfer'} - Reference Body</option>);
                                 options.push(<option key={`${m.id}:target_body`} value={`${m.id}:target_body`}>{m.name || 'Transfer'} - Target Body</option>);
+                                options.push(<option key={`${m.id}:insertion_point`} value={`${m.id}:insertion_point`}>{m.name || 'Transfer'} - Insertion Point</option>);
+                                options.push(<option key={`${m.id}:intercept_point`} value={`${m.id}:intercept_point`}>{m.name || 'Transfer'} - Intercept Target</option>);
+                                options.push(<option key={`${m.id}:intercept_point_transfer`} value={`${m.id}:intercept_point_transfer`}>{m.name || 'Transfer'} - Transfer Apoapsis</option>);
                             }
                             if (m.type === 'rendezvous_tracker') {
                                 options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Rendezvous'} - Position</option>);
@@ -193,6 +197,18 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis Alt</option>);
                                 options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>);
                             }
+                            if (m.type === 'transfer_window') {
+                                options.push(<option key={`${m.id}:error`} value={`${m.id}:error`}>{m.name || 'Transfer'} - Phase Error (°)</option>);
+                                options.push(<option key={`${m.id}:wait_time`} value={`${m.id}:wait_time`}>{m.name || 'Transfer'} - Wait Time (s)</option>);
+                                options.push(<option key={`${m.id}:transfer_time`} value={`${m.id}:transfer_time`}>{m.name || 'Transfer'} - Transfer Time (s)</option>);
+                                options.push(<option key={`${m.id}:arrival_time`} value={`${m.id}:arrival_time`}>{m.name || 'Transfer'} - Arrival Time (s)</option>);
+                                options.push(<option key={`${m.id}:current_phase`} value={`${m.id}:current_phase`}>{m.name || 'Transfer'} - Current Phase (rad)</option>);
+                                options.push(<option key={`${m.id}:required_phase`} value={`${m.id}:required_phase`}>{m.name || 'Transfer'} - Required Phase (rad)</option>);
+                                options.push(<option key={`${m.id}:error_angle`} value={`${m.id}:error_angle`}>{m.name || 'Transfer'} - Error Angle (rad)</option>);
+                                options.push(<option key={`${m.id}:insertion_angle`} value={`${m.id}:insertion_angle`}>{m.name || 'Transfer'} - Insertion Angle (rad)</option>);
+                                options.push(<option key={`${m.id}:intercept_angle_target`} value={`${m.id}:intercept_angle_target`}>{m.name || 'Transfer'} - Target Angle (rad)</option>);
+                                options.push(<option key={`${m.id}:intercept_angle_transfer`} value={`${m.id}:intercept_angle_transfer`}>{m.name || 'Transfer'} - Transfer Angle (rad)</option>);
+                            }
                             if (m.type === 'rendezvous_tracker') {
                                 options.push(<option key={`${m.id}:time`} value={`${m.id}:time`}>{m.name || 'Rendezvous'} - Time</option>);
                                 options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Rendezvous'} - Distance</option>);
@@ -229,6 +245,9 @@ const InputSelector: React.FC<{
                         
                         // Boolean Outputs
                         if (allowedTypes.includes('boolean')) {
+                            if (m.type === 'transfer_window') {
+                                options.push(<option key={`${m.id}:ready`} value={`${m.id}:ready`}>{m.name || 'Transfer'} - Ready</option>);
+                            }
                             if (m.type === 'notify') {
                                 options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>);
                             }
@@ -731,6 +750,33 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:time` });
             return value !== null ? formatTime(value) : '---';
         }
+        if (outputKey === 'error') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:error` });
+            return value !== null ? `${value.toFixed(1)}°` : '---';
+        }
+        if (outputKey === 'wait_time') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:wait_time` });
+            return value !== null ? `${value.toFixed(1)} s` : '---';
+        }
+        if (outputKey === 'transfer_time') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:transfer_time` });
+            return value !== null ? `${value.toFixed(1)} s` : '---';
+        }
+        if (outputKey === 'arrival_time') {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:arrival_time` });
+            return value !== null ? `${value.toFixed(1)} s` : '---';
+        }
+        if ([
+            'current_phase',
+            'required_phase',
+            'error_angle',
+            'insertion_angle',
+            'intercept_angle_target',
+            'intercept_angle_transfer'
+        ].includes(outputKey)) {
+            const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
+            return value !== null ? `${(value * 180 / Math.PI).toFixed(1)}°` : '---';
+        }
         if (outputKey === 'delta_v_total' || outputKey === 'delta_v_prograde' || outputKey === 'delta_v_radial') {
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? `${value.toFixed(1)} m/s` : '---';
@@ -769,9 +815,15 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             const value = resolveStringInput({ type: 'module_output', value: `${module.id}:${outputKey}` }, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
             return value || '---';
         }
-        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state') {
+        if (outputKey === 'triggered' || outputKey === 'result' || outputKey === 'done' || outputKey === 'state' || outputKey === 'ready') {
             const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
             return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+        }
+        if (['insertion_point', 'intercept_point', 'intercept_point_transfer'].includes(outputKey)) {
+            const point = resolveVectorInputValue({ type: 'module_output', value: `${module.id}:${outputKey}` });
+            if (!point) return '---';
+            if ('name' in point) return point.name;
+            return `(${point.x.toFixed(1)}, ${point.y.toFixed(1)})`;
         }
         if (outputKey === 'body') {
             const body = resolveVectorInputValue({ type: 'module_output', value: `${module.id}:body` });
@@ -909,11 +961,20 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                  />
                                  <div 
                                     className={`absolute top-0 bottom-0 w-1 ${transferData.ready ? 'bg-green-500' : 'bg-orange-500'}`}
-                                    style={{ left: `${Math.min(100, Math.max(0, 50 + (transferData.currentPhase - transferData.requiredPhase)))}%` }}
+                                    style={{ left: `${Math.min(100, Math.max(0, 50 + (transferData.error)))}%` }}
                                  />
                              </div>
                              <div className="text-[9px] font-mono w-8 text-right text-slate-400">
                                  {transferData.error.toFixed(0)}°
+                             </div>
+                             <div className="text-[9px] font-mono w-8 text-right text-slate-400">
+                                 {transferData.waitTime.toFixed(0)}s
+                             </div>
+                             <div className="text-[9px] font-mono w-8 text-right text-slate-400">
+                                 {transferData.transferTime.toFixed(0)}s
+                             </div>
+                             <div className="text-[9px] font-mono w-8 text-right text-slate-400">
+                                 {transferData.arrivalTime.toFixed(0)}s
                              </div>
                          </div>
                     </div>
@@ -2117,7 +2178,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                         bodies={bodies} 
                                         modules={modules} 
                                         currentModuleId={module.id}
-                                        allowedTypes={['body', 'module_output', 'scalar', 'boolean', 'string']}
+                                        allowedTypes={['body', 'module_output', 'scalar', 'boolean', 'string', 'vector']}
                                     />
                                 </div>
                             ))}
@@ -2621,6 +2682,22 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                                 options.push(<option key={`${m.id}:apoapsis`} value={`${m.id}:apoapsis`}>{m.name || 'Orbit'} - Apoapsis</option>); 
                                                                                 options.push(<option key={`${m.id}:period`} value={`${m.id}:period`}>{m.name || 'Orbit'} - Period</option>); 
                                                                             } 
+                                                                            if (m.type === 'transfer_window') {
+                                                                                options.push(<option key={`${m.id}:error`} value={`${m.id}:error`}>{m.name || 'Transfer'} - Phase Error</option>);
+                                                                                options.push(<option key={`${m.id}:wait_time`} value={`${m.id}:wait_time`}>{m.name || 'Transfer'} - Wait Time</option>);
+                                                                                options.push(<option key={`${m.id}:transfer_time`} value={`${m.id}:transfer_time`}>{m.name || 'Transfer'} - Transfer Time</option>);
+                                                                                options.push(<option key={`${m.id}:arrival_time`} value={`${m.id}:arrival_time`}>{m.name || 'Transfer'} - Arrival Time</option>);
+                                                                                options.push(<option key={`${m.id}:current_phase`} value={`${m.id}:current_phase`}>{m.name || 'Transfer'} - Current Phase</option>);
+                                                                                options.push(<option key={`${m.id}:required_phase`} value={`${m.id}:required_phase`}>{m.name || 'Transfer'} - Required Phase</option>);
+                                                                                options.push(<option key={`${m.id}:error_angle`} value={`${m.id}:error_angle`}>{m.name || 'Transfer'} - Error Angle</option>);
+                                                                                options.push(<option key={`${m.id}:insertion_angle`} value={`${m.id}:insertion_angle`}>{m.name || 'Transfer'} - Insertion Angle</option>);
+                                                                                options.push(<option key={`${m.id}:intercept_angle_target`} value={`${m.id}:intercept_angle_target`}>{m.name || 'Transfer'} - Target Angle</option>);
+                                                                                options.push(<option key={`${m.id}:intercept_angle_transfer`} value={`${m.id}:intercept_angle_transfer`}>{m.name || 'Transfer'} - Transfer Angle</option>);
+                                                                                options.push(<option key={`${m.id}:ready`} value={`${m.id}:ready`}>{m.name || 'Transfer'} - Ready</option>);
+                                                                                options.push(<option key={`${m.id}:insertion_point`} value={`${m.id}:insertion_point`}>{m.name || 'Transfer'} - Insertion Point</option>);
+                                                                                options.push(<option key={`${m.id}:intercept_point`} value={`${m.id}:intercept_point`}>{m.name || 'Transfer'} - Intercept Point</option>);
+                                                                                options.push(<option key={`${m.id}:intercept_point_transfer`} value={`${m.id}:intercept_point_transfer`}>{m.name || 'Transfer'} - Transfer Point</option>);
+                                                                            }
                                                                             if (m.type === 'rendezvous_tracker') {
                                                                                 options.push(<option key={`${m.id}:time`} value={`${m.id}:time`}>{m.name || 'Rendezvous'} - Time</option>);
                                                                                 options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Rendezvous'} - Distance</option>);

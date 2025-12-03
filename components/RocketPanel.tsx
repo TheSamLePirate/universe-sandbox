@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo ,useEffect} from 'react';
 import { Rocket, Play, Plus, Trash2, Crosshair, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, Compass, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Disc, Square, Save, Download, Upload, CheckCircle2, Sliders, Settings, Radio, ArrowRightLeft, ChevronDown } from 'lucide-react';
 import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
 import useIsMobile from '../hooks/useIsMobile';
+import { calculateTransferInfo } from '@/services/orbitalMath';
 
 interface RocketPanelProps {
     onClose: () => void;
@@ -1643,38 +1644,17 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                         }
                                                         
                                                         if (target && refParent) {
-                                                            const rPos = { x: selectedRocket.position.x - refParent.position.x, y: selectedRocket.position.y - refParent.position.y };
-                                                            const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
-                                                            const angle1 = Math.atan2(rPos.y, rPos.x);
-                                                            const angle2 = Math.atan2(tPos.y, tPos.x);
-                                                            let currentPhase = angle2 - angle1;
-                                                            while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
-                                                            while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
-                                                            
-                                                            const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
-                                                            const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
-                                                            const mu = physicsConfig.gravitationalConstant * refParent.mass;
-                                                            const a_transfer = (r1 + r2) / 2;
-                                                            const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
-                                                            const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
-                                                            const angle_change = omega_target * t_transfer;
-                                                            let requiredPhase = Math.PI - angle_change;
-                                                            while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
-                                                            while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
-                                                            
-                                                            let diff = Math.abs(currentPhase - requiredPhase);
-                                                            if (diff > Math.PI) diff = 2 * Math.PI - diff;
-                                                            const diffDeg = diff * 180 / Math.PI;
+                                                            const transferInfo= calculateTransferInfo(selectedRocket,refParent, target, physicsConfig.gravitationalConstant);
                                                             const targetError = parseFloat(String(m.param)) || 0.5;
                                                             
                                                             // Progress bar: inverse of error (closer to 0 error = more progress)
                                                             // From 100deg to 0deg
-                                                            progressPercent =100 - Math.min(100,diffDeg);
-                                                            progressInfo = `${diffDeg.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
+                                                            progressPercent =100 - Math.min(100,transferInfo.error);
+                                                            progressInfo = `${transferInfo.error.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
                                                             progressBar = (
                                                                 <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                     <div 
-                                                                        className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
+                                                                        className={`h-full transition-all duration-100 ${transferInfo.error < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
                                                                         style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                     />
                                                                 </div>
@@ -2644,38 +2624,17 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                                     }
                                                     
                                                     if (target && refParent) {
-                                                        const rPos = { x: selectedRocket.position.x - refParent.position.x, y: selectedRocket.position.y - refParent.position.y };
-                                                        const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
-                                                        const angle1 = Math.atan2(rPos.y, rPos.x);
-                                                        const angle2 = Math.atan2(tPos.y, tPos.x);
-                                                        let currentPhase = angle2 - angle1;
-                                                        while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
-                                                        while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
-                                                        
-                                                        const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
-                                                        const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
-                                                        const mu = physicsConfig.gravitationalConstant * refParent.mass;
-                                                        const a_transfer = (r1 + r2) / 2;
-                                                        const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
-                                                        const omega_target = Math.sqrt(mu / Math.pow(r2, 3));
-                                                        const angle_change = omega_target * t_transfer;
-                                                        let requiredPhase = Math.PI - angle_change;
-                                                        while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
-                                                        while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
-                                                        
-                                                        let diff = Math.abs(currentPhase - requiredPhase);
-                                                        if (diff > Math.PI) diff = 2 * Math.PI - diff;
-                                                        const diffDeg = diff * 180 / Math.PI;
+                                                        const transferInfo = calculateTransferInfo(selectedRocket, refParent, target, physicsConfig.gravitationalConstant);
                                                         const targetError = parseFloat(String(m.param)) || 0.5;
                                                         
                                                         // Progress bar: inverse of error (closer to 0 error = more progress)
                                                         // Cap at 10 degrees for visual purposes
-                                                        progressPercent = 100-Math.min(100, diffDeg);
-                                                        progressInfo = `${diffDeg.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
+                                                        //progressPercent = 100-Math.min(100, transferInfo.error);
+                                                        progressInfo = `${transferInfo.error.toFixed(2)}° error - ${progressPercent.toFixed(0)}%`;
                                                         progressBar = (
                                                             <div className="w-full bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
                                                                 <div 
-                                                                    className={`h-full transition-all duration-100 ${diffDeg < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
+                                                                    className={`h-full transition-all duration-100 ${transferInfo.error < targetError ? 'bg-green-500' : 'bg-orange-500'}`}
                                                                     style={{ width: `${progressPercent.toFixed(0)}%` }}
                                                                 />
                                                             </div>

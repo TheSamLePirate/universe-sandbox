@@ -16,7 +16,7 @@ import MusicPanel from './components/MusicPanel';
 import FlightComputerPanel from './components/FlightComputerPanel';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine';
-import { resolveInput, resolveScalarInput, resolveBooleanInput } from './services/orbitalMath';
+import { resolveInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from './services/orbitalMath';
 import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup, RendezvousSolution } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
@@ -2180,27 +2180,25 @@ const App: React.FC = () => {
               
               // Calculate transfer window data if this is a transfer_window module
               if (module.type === 'transfer_window' && rocket && ref && target) {
-                  const primaryAngle = Math.atan2(rocket.position.y - ref.position.y, rocket.position.x - ref.position.x);
-                  const targetAngle = Math.atan2(target.position.y - ref.position.y, target.position.x - ref.position.x);
+
+                const transferWindowData = calculateTransferInfo(
+                  rocket,
+                  ref,
+                  target,
+                  physicsConfig.gravitationalConstant,                  
+                );
                   
-                  let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
-                  while (currentPhase > 180) currentPhase -= 360;
-                  while (currentPhase < -180) currentPhase += 360;
-                  
-                  const r1 = Math.sqrt(Math.pow(rocket.position.x - ref.position.x, 2) + Math.pow(rocket.position.y - ref.position.y, 2));
-                  const r2 = Math.sqrt(Math.pow(target.position.x - ref.position.x, 2) + Math.pow(target.position.y - ref.position.y, 2));
-                  const mu = physicsConfig.gravitationalConstant * ref.mass;
-                  const transferTime = Math.PI * Math.sqrt(Math.pow((r1 + r2) / 2, 3) / mu);
-                  const targetAngularVelocity = Math.sqrt(mu / Math.pow(r2, 3));
-                  const requiredPhase = 180 - (targetAngularVelocity * transferTime * 180 / Math.PI);
-                  const error = Math.abs(currentPhase - requiredPhase);
                   
                   moduleData.transferData = {
-                      currentPhase: currentPhase,
-                      requiredPhase: requiredPhase,
-                      error: error,
-                      ready: error < 5.0,
-                      transferTime: transferTime
+                      currentPhase: transferWindowData.currentPhase,
+                      requiredPhase: transferWindowData.requiredPhase,
+                      error: transferWindowData.error,
+                      ready: transferWindowData.error < 5.0,
+                      transferTime: transferWindowData.transferTime,
+                      insertionPoint: transferWindowData.insertionPoint,
+                      interceptionPoint: transferWindowData.interceptPoint,
+                      waitTime: transferWindowData.waitTime,
+                      arrivalTime: transferWindowData.arrivalTime,
                   };
               }
               

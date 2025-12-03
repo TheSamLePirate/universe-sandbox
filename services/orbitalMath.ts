@@ -135,14 +135,38 @@ export const resolveInput = (
             const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
             const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
 
+            const resolvedPrimary = primaryInput ? resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions) : null;
+            const resolvedReference = referenceInput ? resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions) : null;
+            const resolvedTarget = targetInput ? resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions) : null;
+
             if (outputKey === 'primary_body') {
-                return resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                return resolvedPrimary;
             }
             if (outputKey === 'reference_body') {
-                return resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                return resolvedReference;
             }
             if (outputKey === 'target_body') {
-                return resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                return resolvedTarget;
+            }
+
+            if (
+                resolvedPrimary &&
+                resolvedReference &&
+                resolvedTarget &&
+                'mass' in resolvedPrimary &&
+                'mass' in resolvedReference &&
+                'mass' in resolvedTarget
+            ) {
+                const transferData = calculateTransferInfo(
+                    resolvedPrimary as Body,
+                    resolvedReference as Body,
+                    resolvedTarget as Body,
+                    gravitationalConstant
+                );
+
+                if (outputKey === 'insertion_point') return transferData.insertionPoint;
+                if (outputKey === 'intercept_point') return transferData.interceptPoint;
+                if (outputKey === 'intercept_point_transfer') return transferData.interceptPointTransfer;
             }
         } else if (module.type === 'rendezvous_tracker') {
             const rendezvous = rendezvousSolutions?.[module.id];
@@ -202,47 +226,128 @@ export const resolveInput = (
     return null;
 };
 
+
+
+const normalizeAngleDeg = (d: number) => {
+  d = ((d + 180) % 360 + 360) % 360 - 180; // [-180, 180)
+  if (d === -180) d = 180; // optional: map -180 to +180
+  return d;
+};
+
+type Vec2 = { x: number; y: number };
+
+const TAU = 2 * Math.PI;
+
+const normalizeAngleRad = (a: number) => {
+  a = ((a + Math.PI) % TAU + TAU) % TAU - Math.PI; // [-π, π)
+  if (a === -Math.PI) a = Math.PI;
+  return a;
+};
+
+const sign = (v: number) => (v >= 0 ? 1 : -1);
+
+const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
+const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y });
+const scale = (v: Vec2, s: number): Vec2 => ({ x: v.x * s, y: v.y * s });
+const fromPolar = (r: number, ang: number): Vec2 => ({ x: r * Math.cos(ang), y: r * Math.sin(ang) });
+const angleOf = (v: Vec2) => Math.atan2(v.y, v.x);
+const crossZ = (r: Vec2, v: Vec2) => r.x * v.y - r.y * v.x;
+
 export const calculateTransferInfo = (
-    primary: Body, 
-    reference: Body, 
-    target: Body,
-    gravitationalConstant: number
+  primary: Body,
+  reference: Body,
+  target: Body,
+  gravitationalConstant: number
 ) => {
-    // Phase Angle Calculation
-    const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-    const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
-    
-    let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
-    while (currentPhase > 180) currentPhase -= 360;
-    while (currentPhase < -180) currentPhase += 360;
+  const rPos = sub(primary.position, reference.position);
+  const tPos = sub(target.position, reference.position);
 
-    const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-    const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-    const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (gravitationalConstant * reference.mass));
-    const a_transfer = (r1 + r2) / 2;
-    const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (gravitationalConstant * reference.mass));
-    
-    const travelTime = period_transfer / 2;
-    
-    // Determine direction (prograde vs retrograde)
-    const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
-    const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
-    const h = tPos.x * tVel.y - tPos.y * tVel.x;
-    const direction = h >= 0 ? 1 : -1;
+  const angle1 = angleOf(rPos);
+  const angle2 = angleOf(tPos);
 
-    const targetMotion = direction * (360 / period_target) * travelTime;
-    
-    // 180 - targetMotion works for both prograde and retrograde
-    // because 180 and -180 are congruent modulo 360
-    const requiredPhase = 180 - targetMotion;
-    
-    let normalizedRequired = requiredPhase;
-    while (normalizedRequired > 180) normalizedRequired -= 360;
-    while (normalizedRequired < -180) normalizedRequired += 360;
+  const currentPhase = normalizeAngleRad(angle2 - angle1);
 
-    const error = Math.abs(currentPhase - normalizedRequired);
-    
-    return { currentPhase, requiredPhase: normalizedRequired, error, ready: error < 5 };
+  const r1 = Math.hypot(rPos.x, rPos.y);
+  const r2 = Math.hypot(tPos.x, tPos.y);
+  const mu = gravitationalConstant * reference.mass;
+
+  // directions (sign of angular momentum)
+  const pVel = sub(primary.velocity, reference.velocity);
+  const tVel = sub(target.velocity, reference.velocity);
+  const dirP = sign(crossZ(rPos, pVel));
+  const dirT = sign(crossZ(tPos, tVel));
+
+  // Hohmann transfer
+  const a_transfer = (r1 + r2) / 2;
+  const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+
+  // mean motions (circular)
+  const omega_primary = dirP * Math.sqrt(mu / Math.pow(r1, 3));
+  const omega_target = dirT * Math.sqrt(mu / Math.pow(r2, 3));
+
+  // required phase at burn time
+  const angle_change = omega_target * t_transfer;
+  const requiredPhase = normalizeAngleRad(Math.PI - angle_change);
+
+  // signed smallest angle current -> required
+  const errorAngle = normalizeAngleRad(requiredPhase - currentPhase);
+
+  // ---- NEW: wait time until insertion (burn) ----
+  const omega_rel = omega_target - omega_primary; // d/dt(angle2-angle1)
+  const eps = 1e-12;
+
+  let waitTime = 0;
+  if (Math.abs(omega_rel) < eps) {
+    // essentially locked phase; only "now" works (or never), keep 0
+    waitTime = 0;
+  } else {
+    // solve: (currentPhase + omega_rel * t) == requiredPhase  (mod 2π)
+    // => omega_rel * t == errorAngle (mod 2π)
+    waitTime = errorAngle / omega_rel;
+
+    const periodRel = TAU / Math.abs(omega_rel);
+    while (waitTime < 0) waitTime += periodRel;
+    // optional: pick earliest positive solution already satisfied by loop
+  }
+
+  // insertion angle (future primary angle at burn time)
+  const insertionAngle = normalizeAngleRad(angle1 + omega_primary * waitTime);
+  const insertionPointRel = fromPolar(r1, insertionAngle);
+  const insertionPoint = add(reference.position, insertionPointRel);
+
+  // arrival time
+  const arrivalTime = waitTime + t_transfer;
+
+  // interception point = target future position at arrival
+  const interceptAngleTarget = normalizeAngleRad(angle2 + omega_target * arrivalTime);
+  const interceptPointTargetRel = fromPolar(r2, interceptAngleTarget);
+  const interceptPoint = add(reference.position, interceptPointTargetRel);
+
+  // same point but predicted from transfer ellipse geometry (apoapsis)
+  const interceptAngleTransfer = normalizeAngleRad(insertionAngle + dirT * Math.PI);
+  const interceptPointTransfer = add(reference.position, fromPolar(r2, interceptAngleTransfer));
+  const errorAngleDeg = normalizeAngleDeg((errorAngle * 180) / Math.PI);
+
+  return {
+    currentPhase,
+    requiredPhase,
+    errorAngle, // rad
+    ready: Math.abs((errorAngle * 180) / Math.PI) < 5,
+    error: errorAngleDeg,
+
+
+    transferTime: t_transfer,
+    waitTime,
+    arrivalTime,
+
+    insertionAngle,              // rad
+    interceptAngleTarget,        // rad
+    interceptAngleTransfer,      // rad
+
+    insertionPoint,              // world coords
+    interceptPoint,              // world coords (propagated target)
+    interceptPointTransfer,      // world coords (transfer apoapsis)
+  };
 };
 
 export const calculateDistance = (obj1: Body | Vector2D, obj2: Body | Vector2D): number => {
@@ -313,6 +418,49 @@ export const resolveScalarInput = (
                      if (outputKey === 'periapsis') return info.periapsis;
                      if (outputKey === 'apoapsis') return info.apoapsis;
                      if (outputKey === 'period') return info.period;
+                 }
+            }
+        } else if (module.type === 'transfer_window') {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const target = resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
+            if (
+                primary &&
+                reference &&
+                target &&
+                'mass' in primary &&
+                'mass' in reference &&
+                'mass' in target
+            ) {
+                 const transferData = calculateTransferInfo(primary as Body, reference as Body, target as Body, gravitationalConstant);
+                 switch (outputKey) {
+                     case 'error':
+                         return transferData.error;
+                     case 'wait_time':
+                         return transferData.waitTime;
+                     case 'transfer_time':
+                         return transferData.transferTime;
+                     case 'arrival_time':
+                         return transferData.arrivalTime;
+                     case 'current_phase':
+                         return transferData.currentPhase;
+                     case 'required_phase':
+                         return transferData.requiredPhase;
+                     case 'error_angle':
+                         return transferData.errorAngle;
+                     case 'insertion_angle':
+                         return transferData.insertionAngle;
+                     case 'intercept_angle_target':
+                         return transferData.interceptAngleTarget;
+                     case 'intercept_angle_transfer':
+                         return transferData.interceptAngleTransfer;
+                     default:
+                         return null;
                  }
             }
         } else if (module.type === 'rendezvous_tracker') {
@@ -418,6 +566,27 @@ export const resolveBooleanInput = (
                 }
             }
             return false;
+        } else if (module.type === 'transfer_window' && outputKey === 'ready') {
+            const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const referenceInput = module.inputs?.reference || (module.referenceBodyId ? { type: 'body', value: module.referenceBodyId } : undefined);
+            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+
+            const primary = resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const reference = resolveInput(referenceInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const target = resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
+            if (
+                primary &&
+                reference &&
+                target &&
+                'mass' in primary &&
+                'mass' in reference &&
+                'mass' in target
+            ) {
+                const transferData = calculateTransferInfo(primary as Body, reference as Body, target as Body, gravitationalConstant);
+                return transferData.ready;
+            }
+            return null;
         } else if (module.type === 'logic_gate' && outputKey === 'result') {
             // Recursive resolution for Logic Gate
             const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, gravitationalConstant, rendezvousSolutions);

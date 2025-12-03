@@ -1,6 +1,7 @@
 
 
 import { Body, Vector2D, Particle, PhysicsResult, SASMode, SystemEvent } from '../types';
+import { calculateTransferInfo } from './orbitalMath';
 
 // Reduced softening for better accuracy at close range (allows tighter slingshots)
 const SOFTENING = 0.15; 
@@ -397,6 +398,8 @@ export const updatePhysics = (
                       }
                       // Handle wait_for_transfer
                       else if (m.type === 'wait_for_transfer') {
+
+                        //This is the correct way to calculate the transfer and set to completed
                           const target = currentBodies.find(b => b.id === m.targetBodyId);
                           let refParent = currentBodies.find(b => b.id === m.parentBodyId);
                           
@@ -407,6 +410,8 @@ export const updatePhysics = (
                           
                           if (target && refParent) {
                               // Calculate current phase angle
+                              //The correct One for transfer window
+
                               const rPos = { x: updatedBody.position.x - refParent.position.x, y: updatedBody.position.y - refParent.position.y };
                               const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
                               
@@ -439,12 +444,32 @@ export const updatePhysics = (
                               let requiredPhase = Math.PI - angle_change;
                               while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
                               while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+
+
                               
                               // Check if within error margin
                               // Use a very tight margin for precision
                               const errorMargin = 0.5 * Math.PI / 180; // 0.5 degrees
                               let diff = Math.abs(currentPhase - requiredPhase);
                               if (diff > Math.PI) diff = 2 * Math.PI - diff;
+
+                              //every 2 sec console log diff
+                              
+                              //console.log(diff);
+
+                              //m.progress = Math.max(0, Math.min(1, 1 - (diff / errorMargin)));
+                            const transferInfo=calculateTransferInfo(updatedBody, refParent,target,gConst);
+                            diff=Math.abs(transferInfo.errorAngle);
+                            const error=Math.abs(transferInfo.error);
+
+
+                            //map error that is between 0 and 180 from 1 to 0 (0 -> 1, 180 -> 0)
+                            const progress = 1 - diff / Math.PI;
+                            m.progress = Math.max(0, Math.min(0.99, progress));
+                              
+
+
+                              
                               
                               if (diff < errorMargin) {
                                   m.status = 'completed';
