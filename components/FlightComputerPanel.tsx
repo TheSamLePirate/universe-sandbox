@@ -221,7 +221,7 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
                             }
                             if (m.type === 'custom_script') {
-                                if (m.customScriptOutputType === 'scalar') {
+                                if (!m.customScriptOutputType || m.customScriptOutputType === 'scalar') {
                                     options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Number)</option>);
                                 }
                             }
@@ -654,6 +654,27 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         if (outputKey === 'result' && module.type === 'maths') {
             const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:result` });
             return value !== null ? `${value.toFixed(2)}` : '---';
+        }
+        if (outputKey === 'result' && module.type === 'custom_script') {
+            const outputType = module.customScriptOutputType || 'scalar';
+            if (outputType === 'scalar') {
+                const value = resolveScalarValue({ type: 'module_output', value: `${module.id}:result` });
+                return value !== null ? `${value.toFixed(2)}` : '---';
+            }
+            if (outputType === 'boolean') {
+                const value = resolveBooleanValue({ type: 'module_output', value: `${module.id}:result` });
+                return value !== null ? (value ? 'TRUE' : 'FALSE') : '---';
+            }
+            if (outputType === 'string') {
+                const value = resolveStringInput({ type: 'module_output', value: `${module.id}:result` }, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
+                return value || '---';
+            }
+            if (outputType === 'vector') {
+                 const value = resolveVectorInputValue({ type: 'module_output', value: `${module.id}:result` });
+                 if (!value) return '---';
+                 if ('name' in value) return value.name;
+                 return `(${value.x.toFixed(1)}, ${value.y.toFixed(1)})`;
+            }
         }
         // String outputs from body_info
         if (module.type === 'body_info') {
@@ -2509,6 +2530,18 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                                                 options.push(<option key={`${m.id}:mass`} value={`${m.id}:mass`}>{m.name || 'Body Info'} - Mass</option>);
                                                                                 options.push(<option key={`${m.id}:fuel`} value={`${m.id}:fuel`}>{m.name || 'Body Info'} - Fuel</option>);
                                                                                 options.push(<option key={`${m.id}:landed_on`} value={`${m.id}:landed_on`}>{m.name || 'Body Info'} - Landed On</option>);
+                                                                            }
+                                                                            if (m.type === 'custom_script') {
+                                                                                const outputType = m.customScriptOutputType || 'scalar';
+                                                                                if (outputType === 'scalar') {
+                                                                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Number)</option>);
+                                                                                } else if (outputType === 'boolean') {
+                                                                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Boolean)</option>);
+                                                                                } else if (outputType === 'string') {
+                                                                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (String)</option>);
+                                                                                } else if (outputType === 'vector') {
+                                                                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Vector)</option>);
+                                                                                }
                                                                             }
                                                                             return options; 
                                                                         })}
