@@ -189,6 +189,13 @@ export const resolveInput = (
             } else {
                 return bodies.find(b => b.name.toLowerCase() === value.toLowerCase()) || null;
             }
+        } else if (module.type === 'custom_script' && outputKey === 'result') {
+            const res = module.customScriptLastResult;
+            // Return only if it looks like a body or vector
+            if (res && typeof res === 'object' && 'x' in res && 'y' in res) {
+                return res as Vector2D | Body;
+            }
+            return null;
         }
     }
     
@@ -361,6 +368,9 @@ export const resolveScalarInput = (
                 case 'divide': return valB !== 0 ? valA / valB : 0;
                 default: return 0;
             }
+        } else if (module.type === 'custom_script' && outputKey === 'result') {
+            const res = module.customScriptLastResult;
+            return typeof res === 'number' ? res : null;
         }
     }
     
@@ -422,6 +432,9 @@ export const resolveBooleanInput = (
         } else if (module.type === 'button' && outputKey === 'state') {
             return module.buttonState ?? false;
 
+        } else if (module.type === 'custom_script' && outputKey === 'result') {
+            const res = module.customScriptLastResult;
+            return typeof res === 'boolean' ? res : null;
         }
     }
     return null;
@@ -470,6 +483,9 @@ export const resolveStringInput = (
                 case 'sas_mode': return bodyData.sasMode || '';
                 default: return null;
             }
+        } else if (module.type === 'custom_script' && outputKey === 'result') {
+            const res = module.customScriptLastResult;
+            return typeof res === 'string' ? res : null;
         }
     }
     

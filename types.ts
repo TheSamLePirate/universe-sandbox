@@ -208,7 +208,7 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -293,6 +293,13 @@ export interface FlightComputerModule {
     mathValueB?: number;
     bodyByMode?: 'id' | 'name';
     bodyByValue?: string;
+
+    // Custom Script Module Config
+    customScriptCode?: string;
+    customScriptOutputType?: 'scalar' | 'boolean' | 'string' | 'vector';
+    customScriptInputsCount?: number;
+    customScriptLastResult?: any; // Store the result of the last execution
+    customScriptLogs?: string[]; // Store last few logs
 }
 
 export interface ModuleGroup {

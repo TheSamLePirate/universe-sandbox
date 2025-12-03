@@ -172,6 +172,11 @@ const InputSelector: React.FC<{
                             if (m.type === 'body_by') {
                                 options.push(<option key={`${m.id}:body`} value={`${m.id}:body`}>{m.name || 'Body By'} - Body</option>);
                             }
+                            if (m.type === 'custom_script') {
+                                if (m.customScriptOutputType === 'vector') {
+                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Vector)</option>);
+                                }
+                            }
                         }
                         
                         // Scalar Outputs
@@ -215,6 +220,11 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:max_fuel`} value={`${m.id}:max_fuel`}>{m.name || 'Body Info'} - Max Fuel</option>);
                                 options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
                             }
+                            if (m.type === 'custom_script') {
+                                if (m.customScriptOutputType === 'scalar') {
+                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Number)</option>);
+                                }
+                            }
                         }
                         
                         // Boolean Outputs
@@ -230,6 +240,11 @@ const InputSelector: React.FC<{
                             }
                             if (m.type === 'button') {
                                 options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Button'} - State</option>);
+                            }
+                            if (m.type === 'custom_script') {
+                                if (m.customScriptOutputType === 'boolean') {
+                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Boolean)</option>);
+                                }
                             }
                         }
                         
@@ -250,6 +265,11 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
                                 options.push(<option key={`${m.id}:landed_on`} value={`${m.id}:landed_on`}>{m.name || 'Body Info'} - Landed On</option>);
                                 options.push(<option key={`${m.id}:sas_mode`} value={`${m.id}:sas_mode`}>{m.name || 'Body Info'} - SAS Mode</option>);
+                            }
+                            if (m.type === 'custom_script') {
+                                if (m.customScriptOutputType === 'string') {
+                                    options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (String)</option>);
+                                }
                             }
                         }
                         
@@ -313,8 +333,9 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const thrustBurstTriggerStateRef = useRef<Map<string, boolean>>(new Map());
     const followModuleTriggerStateRef = useRef<Map<string, boolean>>(new Map());
     const buttonResetTriggerStateRef = useRef<Map<string, boolean>>(new Map());
+    const scriptLogsRef = useRef<Map<string, string[]>>(new Map());
 
-    // --- Follow Module & Button Reset Logic ---
+    // --- Follow Module & Button Reset Logic & Custom Script ---
     useEffect(() => {
         const activeIds = new Set(modules.map(m => m.id));
         
@@ -325,6 +346,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         Array.from(buttonResetTriggerStateRef.current.keys()).forEach(id => {
             if (!activeIds.has(id)) buttonResetTriggerStateRef.current.delete(id);
         });
+        // Note: Script logs are kept in ref to avoid re-renders, but we might want to clean up if module removed
 
         modules.forEach(module => {
             // Follow Module
@@ -360,6 +382,110 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     }
                 }
                 buttonResetTriggerStateRef.current.set(module.id, shouldReset);
+            }
+
+            // Custom Script Execution
+            if (module.type === 'custom_script' && module.isEnabled && module.customScriptCode) {
+                // Resolve Activate Input (Trigger)
+                const triggerInput = module.inputs?.trigger;
+                // Default to false if not connected
+                const shouldRun = resolveBooleanInput(triggerInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+
+                if (shouldRun) {
+                    // Resolve all inputs
+                    const inputs = [];
+                    const count = module.customScriptInputsCount ?? 2;
+                    for (let i = 0; i < count; i++) {
+                        const key = `input_${i}`;
+                        const inputDef = module.inputs?.[key];
+                        
+                        let val: any = null;
+                        
+                        // Try resolving as scalar first (most common for math)
+                        const scalarVal = resolveScalarInput(inputDef, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                        if (scalarVal !== null) {
+                            val = scalarVal;
+                        } else {
+                            // Try boolean
+                            const boolVal = resolveBooleanInput(inputDef, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (boolVal !== null) {
+                                val = boolVal;
+                            } else {
+                                // Try string
+                                const stringVal = resolveStringInput(inputDef, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                                if (stringVal !== null) {
+                                    val = stringVal;
+                                } else {
+                                    // Try object/vector
+                                    const objVal = resolveInput(inputDef, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                                    if (objVal !== null) {
+                                        val = objVal;
+                                    }
+                                }
+                            }
+                        }
+                        inputs.push(val);
+                    }
+
+                    // Prepare Console Mock
+                    const logs: string[] = [];
+                    const mockConsole = {
+                        log: (...args: any[]) => {
+                            logs.push(args.map(a => String(a)).join(' '));
+                        },
+                        warn: (...args: any[]) => {
+                            logs.push('WARN: ' + args.map(a => String(a)).join(' '));
+                        },
+                        error: (...args: any[]) => {
+                            logs.push('ERROR: ' + args.map(a => String(a)).join(' '));
+                        }
+                    };
+
+                    try {
+                        // Execute Code
+                        // Wrap in a function to return result
+                        const func = new Function('input', 'console', `
+                            try {
+                                ${module.customScriptCode}
+                            } catch (e) {
+                                console.error(e.message);
+                                return null;
+                            }
+                        `);
+                        
+                        const result = func(inputs, mockConsole);
+
+                        // Only update if changed to avoid render loop?
+                        // But we need to update logs too.
+                        // And we need to avoid infinite updates if result is referentially different (like a new object).
+                        
+                        // Simple equality check
+                        const prevResult = module.customScriptLastResult;
+                        const resultChanged = JSON.stringify(result) !== JSON.stringify(prevResult);
+                        
+                        // Update logs if they are different or if it's been a while? 
+                        // Updating logs every frame will kill performance.
+                        // Let's store logs in ref and only update module state if logs changed significantly or result changed.
+                        
+                        const prevLogs = scriptLogsRef.current.get(module.id) || [];
+                        const logsChanged = JSON.stringify(logs) !== JSON.stringify(prevLogs);
+                        
+                        if (resultChanged || logsChanged) {
+                            scriptLogsRef.current.set(module.id, logs);
+                            onUpdateModule(module.id, { 
+                                customScriptLastResult: result,
+                                customScriptLogs: logs.slice(-5) // Keep last 5 logs for UI
+                            });
+                        }
+                    } catch (e: any) {
+                        const errorLog = `Exec Error: ${e.message}`;
+                        const prevLogs = scriptLogsRef.current.get(module.id) || [];
+                        if (!prevLogs.includes(errorLog)) {
+                            scriptLogsRef.current.set(module.id, [errorLog]);
+                            onUpdateModule(module.id, { customScriptLogs: [errorLog] });
+                        }
+                    }
+                }
             }
         });
     }, [modules, bodies, physicsConfig, onSetFollowingBody, rendezvousSolutionMap, onUpdateModule]);
@@ -1742,7 +1868,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 // Resolve the value either from input or direct entry
                 let searchValue = '';
                 if (bodyByInput) {
-                    const resolvedValue = resolveStringInput(bodyByInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousPoints ? Object.fromEntries(rendezvousPoints.map(r => [r.moduleId, r])) : undefined);
+                    const resolvedValue = resolveStringInput(bodyByInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                     searchValue = resolvedValue || '';
                 } else {
                     searchValue = bodyByDirectValue;
@@ -1807,8 +1933,119 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     </div>
                 );
 
+            case 'custom_script':
+                const inputsCount = module.customScriptInputsCount ?? 2;
+                const outputType = module.customScriptOutputType ?? 'scalar';
+                const scriptResult = module.customScriptLastResult;
+
+                return (
+                    <div className="mt-2 space-y-3">
+                        {/* Configuration */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Inputs Count</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    value={inputsCount}
+                                    onChange={(e) => onUpdateModule(module.id, { customScriptInputsCount: parseInt(e.target.value) || 1 })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Output Type</label>
+                                <select
+                                    value={outputType}
+                                    onChange={(e) => onUpdateModule(module.id, { customScriptOutputType: e.target.value as any })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                >
+                                    <option value="scalar">Scalar (Number)</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="string">String</option>
+                                    <option value="vector">Vector / Body</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Inputs List */}
+                        <div className="space-y-1 bg-slate-900/30 p-2 rounded border border-slate-800">
+                            <label className="text-[9px] text-slate-500 uppercase block mb-1">Inputs</label>
+                            
+                            {/* Trigger Input */}
+                            <div className="mb-2 pb-2 border-b border-slate-800">
+                                <InputSelector 
+                                    label="Run Trigger (True to Run)" 
+                                    value={module.inputs?.trigger} 
+                                    onChange={(input) => updateInput(module.id, 'trigger', input)} 
+                                    bodies={bodies} 
+                                    modules={modules} 
+                                    currentModuleId={module.id} 
+                                    allowedTypes={['boolean', 'module_output']}
+                                />
+                            </div>
+
+                            {/* Dynamic Data Inputs */}
+                            {Array.from({ length: inputsCount }).map((_, i) => (
+                                <div key={i}>
+                                    <InputSelector 
+                                        label={`input[${i}]`} 
+                                        value={module.inputs?.[`input_${i}`]} 
+                                        onChange={(input) => updateInput(module.id, `input_${i}`, input)} 
+                                        bodies={bodies} 
+                                        modules={modules} 
+                                        currentModuleId={module.id}
+                                        allowedTypes={['body', 'module_output', 'scalar', 'boolean', 'string']}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Code Editor */}
+                        <div>
+                            <label className="text-[9px] text-slate-500 uppercase block mb-1">Script (JavaScript)</label>
+                            <textarea
+                                value={module.customScriptCode || ''}
+                                onChange={(e) => onUpdateModule(module.id, { customScriptCode: e.target.value })}
+                                placeholder="// return input[1] * 2;"
+                                className="w-full h-24 bg-slate-950 border border-slate-700 rounded p-2 text-xs font-mono text-green-400 outline-none resize-y"
+                                spellCheck={false}
+                            />
+                        </div>
+
+                        {/* Console & Result */}
+                        <div className="bg-slate-950 rounded p-2 border border-slate-800 font-mono text-[10px]">
+                            <div className="flex justify-between items-center mb-1 border-b border-slate-800 pb-1">
+                                <span className="text-slate-500 uppercase">Console</span>
+                                <span className="text-slate-500 uppercase">Result</span>
+                            </div>
+                            <div className="flex gap-2 h-16">
+                                {/* Log Area */}
+                                <div className="flex-1 overflow-y-auto custom-scrollbar text-slate-400 whitespace-pre-wrap">
+                                    {module.customScriptLogs?.length ? (
+                                        module.customScriptLogs.map((log, i) => (
+                                            <div key={i} className={log.startsWith('ERROR') ? 'text-red-400' : log.startsWith('WARN') ? 'text-orange-400' : ''}>{log}</div>
+                                        ))
+                                    ) : (
+                                        <span className="italic opacity-50">No logs...</span>
+                                    )}
+                                </div>
+                                {/* Result Area */}
+                                <div className="w-24 border-l border-slate-800 pl-2 flex items-center justify-end text-right">
+                                    <span className="text-purple-300 font-bold">
+                                        {scriptResult !== undefined ? (
+                                            typeof scriptResult === 'object' ? JSON.stringify(scriptResult).slice(0, 20) + '...' : String(scriptResult)
+                                        ) : '---'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
             default:
                 return null;
+
         }
     };
 
@@ -1903,6 +2140,12 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-green-600/20 hover:border-green-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Play size={14} className="text-green-400" /> Maneuver Exec
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('custom_script'); setIsAdding(false); }}
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-pink-600/20 hover:border-pink-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Activity size={14} className="text-pink-400" /> Custom Script
                             </button>
                             <button 
                                 onClick={() => { onAddModule('button'); setIsAdding(false); }}
