@@ -438,6 +438,27 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         inputs.push(val);
                     }
 
+                    // Prepare Game Context
+                    const game = {
+                        bodies,
+                        modules,
+                        physicsConfig,
+                        rendezvousPoints,
+                        actions: {
+                            updateModule: onUpdateModule,
+                            addModule: onAddModule,
+                            removeModule: onRemoveModule,
+                            toggleModule: onToggleModule,
+                            setFollowingBody: onSetFollowingBody
+                        },
+                        helpers: {
+                            resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
+                            resolveScalar: (input: FlightComputerInput) => resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
+                            resolveBoolean: (input: FlightComputerInput) => resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
+                            resolveString: (input: FlightComputerInput) => resolveStringInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap)
+                        }
+                    };
+
                     // Prepare Console Mock
                     const logs: string[] = [];
                     const mockConsole = {
@@ -466,7 +487,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                         (async () => {
                             try {
-                                const func = new AsyncFunction('input', 'console', `
+                                const func = new AsyncFunction('input', 'console', 'game', `
                                     try {
                                         ${module.customScriptCode}
                                     } catch (e) {
@@ -475,7 +496,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                     }
                                 `);
                                 
-                                const result = await func(inputs, mockConsole);
+                                const result = await func(inputs, mockConsole, game);
                                 
                                 // On completion
                                 scriptLogsRef.current.set(module.id, logs);
@@ -502,7 +523,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         try {
                             // Execute Code
                             // Wrap in a function to return result
-                            const func = new Function('input', 'console', `
+                            const func = new Function('input', 'console', 'game', `
                                 try {
                                     ${module.customScriptCode}
                                 } catch (e) {
@@ -511,7 +532,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 }
                             `);
                             
-                            const result = func(inputs, mockConsole);
+                            const result = func(inputs, mockConsole, game);
 
                             // Only update if changed to avoid render loop
                             const prevResult = module.customScriptLastResult;
