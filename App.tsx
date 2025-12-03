@@ -300,7 +300,11 @@ const App: React.FC = () => {
               const newGroups: ModuleGroup[] = data.groups.map((g: ModuleGroup) => ({
                   ...g,
                   id: idMap.get(g.id)!,
-                  parentGroupId: g.parentGroupId ? (idMap.get(g.parentGroupId) || null) : null
+                  parentGroupId: g.parentGroupId ? (idMap.get(g.parentGroupId) || null) : null,
+                  displayOutput: g.displayOutput ? {
+                      ...g.displayOutput,
+                      moduleId: idMap.get(g.displayOutput.moduleId) || g.displayOutput.moduleId
+                  } : undefined
               }));
 
               // Update modules with new IDs
@@ -316,7 +320,7 @@ const App: React.FC = () => {
                       const newInputs: Record<string, FlightComputerInput> = {};
                       Object.entries(m.inputs).forEach(([key, input]) => {
                           // Check if this is a module reference (value format: "moduleId:outputKey")
-                          if (input.type === 'body') {
+                          if (input.type === 'module_output') {
                               const [moduleId, outputKey] = input.value.split(':');
                               if (outputKey) {
                                   // This is a module reference
