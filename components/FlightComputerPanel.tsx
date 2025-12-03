@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup, RendezvousSolution, Maneuver } from '../types';
-import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload, Video, Calculator } from 'lucide-react';
+import { Body, FlightComputerModule, FlightComputerModuleType, PhysicsConfig, Vector2D, FlightComputerInput, ModuleGroup, RendezvousSolution, Maneuver, MarkerShape } from '../types';
+import { Activity, X, Plus, ChevronDown, ChevronUp, Settings, Trash2, Play, Pause, Square, CheckSquare, Globe, Rocket, Navigation, Timer, Compass, Gauge, ArrowRight, Volume2, Mic, GripVertical, FolderPlus, Download, Upload, Video, Calculator, MapPin } from 'lucide-react';
 import useIsMobile from '../hooks/useIsMobile';
 import { calculateOrbitInfo, resolveInput, calculateTransferInfo, resolveScalarInput, calculateDistance, calculateRelativeSpeed, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
@@ -39,6 +39,14 @@ const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [
     { value: 'wait_for_altitude', label: 'Wait For Altitude' },
     { value: 'burn_until_altitude', label: 'Burn Until Altitude' },
     { value: 'change_simulation_speed', label: 'Change Sim Speed' }
+];
+
+const MARKER_SHAPE_OPTIONS: { value: MarkerShape; label: string }[] = [
+    { value: 'ring', label: 'Ring' },
+    { value: 'diamond', label: 'Diamond' },
+    { value: 'square', label: 'Square' },
+    { value: 'triangle', label: 'Triangle' },
+    { value: 'pin', label: 'Pin' }
 ];
 
 const InputSelector: React.FC<{
@@ -159,6 +167,9 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:intercept_point`} value={`${m.id}:intercept_point`}>{m.name || 'Transfer'} - Intercept Target</option>);
                                 options.push(<option key={`${m.id}:intercept_point_transfer`} value={`${m.id}:intercept_point_transfer`}>{m.name || 'Transfer'} - Transfer Apoapsis</option>);
                             }
+                            if (m.type === 'marker') {
+                                options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Marker'} - Position</option>);
+                            }
                             if (m.type === 'rendezvous_tracker') {
                                 options.push(<option key={`${m.id}:position`} value={`${m.id}:position`}>{m.name || 'Rendezvous'} - Position</option>);
                                 options.push(<option key={`${m.id}:primary_body`} value={`${m.id}:primary_body`}>{m.name || 'Rendezvous'} - Rocket Body</option>);
@@ -248,6 +259,10 @@ const InputSelector: React.FC<{
                             if (m.type === 'transfer_window') {
                                 options.push(<option key={`${m.id}:ready`} value={`${m.id}:ready`}>{m.name || 'Transfer'} - Ready</option>);
                             }
+                            if (m.type === 'marker') {
+                                options.push(<option key={`${m.id}:visible`} value={`${m.id}:visible`}>{m.name || 'Marker'} - Visible</option>);
+                                options.push(<option key={`${m.id}:pulse`} value={`${m.id}:pulse`}>{m.name || 'Marker'} - Pulse</option>);
+                            }
                             if (m.type === 'notify') {
                                 options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Notify'} - Triggered</option>);
                             }
@@ -285,6 +300,11 @@ const InputSelector: React.FC<{
                                 options.push(<option key={`${m.id}:dry_mass`} value={`${m.id}:dry_mass`}>{m.name || 'Body Info'} - Dry Mass</option>);
                                 options.push(<option key={`${m.id}:landed_on`} value={`${m.id}:landed_on`}>{m.name || 'Body Info'} - Landed On</option>);
                                 options.push(<option key={`${m.id}:sas_mode`} value={`${m.id}:sas_mode`}>{m.name || 'Body Info'} - SAS Mode</option>);
+                            }
+                            if (m.type === 'marker') {
+                                options.push(<option key={`${m.id}:title`} value={`${m.id}:title`}>{m.name || 'Marker'} - Title</option>);
+                                options.push(<option key={`${m.id}:description`} value={`${m.id}:description`}>{m.name || 'Marker'} - Description</option>);
+                                options.push(<option key={`${m.id}:color`} value={`${m.id}:color`}>{m.name || 'Marker'} - Color</option>);
                             }
                             if (m.type === 'custom_script') {
                                 if (m.customScriptOutputType === 'string') {
@@ -979,6 +999,171 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                          </div>
                     </div>
                  );
+
+            case 'marker':
+                const markerTitleInput = getInput(module, 'marker_title');
+                const markerDescriptionInput = getInput(module, 'marker_description');
+                const markerColorInput = getInput(module, 'marker_color');
+                const markerVisibleInput = getInput(module, 'marker_visible');
+                const markerPulseInput = getInput(module, 'marker_pulse');
+
+                const markerTitle = module.markerTitle ?? module.name ?? 'Marker';
+                const markerDescription = module.markerDescription ?? '';
+                const markerColorValue = module.markerColor || module.color || '#a855f7';
+
+                return (
+                    <div className="space-y-3 mt-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-slate-500 uppercase">Title</label>
+                                {markerTitleInput ? (
+                                    <div className="flex gap-1">
+                                        <InputSelector 
+                                            label=""
+                                            value={markerTitleInput}
+                                            onChange={(input) => updateInput(module.id, 'marker_title', input)}
+                                            bodies={bodies}
+                                            modules={modules}
+                                            currentModuleId={module.id}
+                                            allowedTypes={['string', 'module_output']}
+                                        />
+                                        <button onClick={() => updateInput(module.id, 'marker_title', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1">
+                                        <input
+                                            type="text"
+                                            value={markerTitle}
+                                            onChange={(e) => onUpdateModule(module.id, { markerTitle: e.target.value })}
+                                            className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                                        />
+                                        <button onClick={() => updateInput(module.id, 'marker_title', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-slate-500 uppercase">Shape</label>
+                                <select
+                                    value={module.markerShape || 'ring'}
+                                    onChange={(e) => onUpdateModule(module.id, { markerShape: e.target.value as MarkerShape })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
+                                >
+                                    {MARKER_SHAPE_OPTIONS.map(option => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 uppercase">Description</label>
+                            {markerDescriptionInput ? (
+                                <div className="flex gap-1">
+                                    <InputSelector 
+                                        label=""
+                                        value={markerDescriptionInput}
+                                        onChange={(input) => updateInput(module.id, 'marker_description', input)}
+                                        bodies={bodies}
+                                        modules={modules}
+                                        currentModuleId={module.id}
+                                        allowedTypes={['string', 'module_output']}
+                                    />
+                                    <button onClick={() => updateInput(module.id, 'marker_description', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-1">
+                                    <textarea
+                                        value={markerDescription}
+                                        onChange={(e) => onUpdateModule(module.id, { markerDescription: e.target.value })}
+                                        rows={2}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none resize-y"
+                                    />
+                                    <button onClick={() => updateInput(module.id, 'marker_description', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-slate-500 uppercase">Marker Color</label>
+                                {markerColorInput ? (
+                                    <div className="flex gap-1">
+                                        <InputSelector 
+                                            label=""
+                                            value={markerColorInput}
+                                            onChange={(input) => updateInput(module.id, 'marker_color', input)}
+                                            bodies={bodies}
+                                        modules={modules}
+                                            currentModuleId={module.id}
+                                            allowedTypes={['string', 'module_output']}
+                                        />
+                                        <button onClick={() => updateInput(module.id, 'marker_color', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            value={markerColorValue}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                onUpdateModule(module.id, { markerColor: value, color: value });
+                                            }}
+                                            className="w-10 h-8 rounded border border-slate-700/50 bg-slate-900/50"
+                                        />
+                                        <button onClick={() => updateInput(module.id, 'marker_color', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-slate-500 uppercase">Pulse Control</label>
+                                <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-slate-400">Pulse</span>
+                                    <button
+                                        onClick={() => onUpdateModule(module.id, { markerPulse: !(module.markerPulse ?? false) })}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${module.markerPulse ? 'bg-purple-600/30 text-purple-200' : 'bg-slate-800 text-slate-400'}`}
+                                    >
+                                        {module.markerPulse ? 'ON' : 'OFF'}
+                                    </button>
+                                </div>
+                                <InputSelector 
+                                    label=""
+                                    value={markerPulseInput}
+                                    onChange={(input) => updateInput(module.id, 'marker_pulse', input)}
+                                    bodies={bodies}
+                                    modules={modules}
+                                    currentModuleId={module.id}
+                                    allowedTypes={['boolean']}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 uppercase">Visibility</label>
+                            <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-slate-400">Active</span>
+                                <button
+                                    onClick={() => onUpdateModule(module.id, { markerVisible: !(module.markerVisible ?? true) })}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${(module.markerVisible ?? true) ? 'bg-green-600/30 text-green-200' : 'bg-slate-800 text-slate-400'}`}
+                                >
+                                    {(module.markerVisible ?? true) ? 'ON' : 'OFF'}
+                                </button>
+                            </div>
+                            <InputSelector 
+                                label=""
+                                value={markerVisibleInput}
+                                onChange={(input) => updateInput(module.id, 'marker_visible', input)}
+                                bodies={bodies}
+                                modules={modules}
+                                currentModuleId={module.id}
+                                allowedTypes={['boolean']}
+                            />
+                        </div>
+
+                        <div className="text-[9px] text-slate-500 italic">
+                            Send any body, ship, or vector into the marker input to visualize custom points. Titles, descriptions, colors, visibility, and pulsing can all be automated via module outputs.
+                        </div>
+                    </div>
+                );
 
             case 'rendezvous_tracker':
                 const rocketInput = getInput(module, 'primary');
@@ -2304,11 +2489,24 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 <Gauge size={14} className="text-yellow-400" /> Velocity
                             </button>
                             <button 
-                                onClick={() => { onAddModule('notify'); setIsAdding(false); }}
+                                onClick={() => { onAddModule('notify'); setIsAdding(false); }} 
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
                             >
                                 <Activity size={14} className="text-red-400" /> Notify
                             </button>
+                            <button 
+                                onClick={() => { onAddModule('logic_gate'); setIsAdding(false); }} 
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <Calculator size={14} className="text-purple-400" /> Logic Gate
+                            </button>
+                            <button 
+                                onClick={() => { onAddModule('marker'); setIsAdding(false); }} 
+                                className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
+                            >
+                                <MapPin size={14} className="text-pink-400" /> Marker
+                            </button>
+
                             <button 
                                 onClick={() => { onAddModule('logic_gate'); setIsAdding(false); }}
                                 className="flex items-center gap-2 p-2 rounded bg-slate-700/50 hover:bg-purple-600/20 hover:border-purple-500/50 border border-transparent transition-all text-xs text-slate-200"
@@ -2414,6 +2612,22 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                 className="w-2 h-2 rounded-full"
                                                 style={{ backgroundColor: module.color }}
                                             />
+                                            <input
+                                                type="color"
+                                                value={module.color || '#a855f7'}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    const nextColor = e.target.value;
+                                                    const updates: Partial<FlightComputerModule> = { color: nextColor };
+                                                    if (module.type === 'marker' && !(module.inputs?.marker_color)) {
+                                                        updates.markerColor = nextColor;
+                                                    }
+                                                    onUpdateModule(module.id, updates);
+                                                }}
+                                                className="w-5 h-5 rounded border border-slate-700/50 bg-slate-900/50 cursor-pointer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                draggable={false}
+                                            />
                                             <input 
                                                 type="text"
                                                 value={module.name || ''}
@@ -2480,6 +2694,19 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                         {/* Notify */}
                                         {module.type === 'notify' && (
                                             <div className="col-span-2 space-y-1"><InputSelector label="Monitored Value" value={getInput(module, 'primary')} onChange={(input) => updateInput(module.id, 'primary', input)} bodies={bodies} modules={modules} currentModuleId={module.id} allowedTypes={['scalar']} /></div>
+                                        )}
+                                        {module.type === 'marker' && (
+                                            <div className="col-span-2 space-y-1">
+                                                <InputSelector 
+                                                    label="Marker Target"
+                                                    value={getInput(module, 'position')}
+                                                    onChange={(input) => updateInput(module.id, 'position', input)}
+                                                    bodies={bodies}
+                                                    modules={modules}
+                                                    currentModuleId={module.id}
+                                                    allowedTypes={['body', 'module_output', 'vector']}
+                                                />
+                                            </div>
                                         )}
                                         {/* Logic Gate */}
                                         {module.type === 'logic_gate' && (

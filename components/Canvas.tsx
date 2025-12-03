@@ -1,8 +1,8 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule } from '../types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
-import { calculateTransferInfo } from '@/services/orbitalMath';
+import { calculateTransferInfo, resolveInput, resolveStringInput, resolveBooleanInput } from '@/services/orbitalMath';
 
 interface CanvasProps {
   bodies: Body[];
@@ -79,6 +79,23 @@ interface GravitationalWave {
     speed: number; // Expansion speed (World units per frame)
 }
 
+const sanitizeMarkerColor = (value?: string | null, fallback = '#ffffff') => {
+    if (!value) return fallback;
+    const trimmed = value.trim();
+    return /^#([0-9a-fA-F]{6})$/.test(trimmed) ? trimmed : fallback;
+};
+
+const getPulsePhase = (id: string) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash << 5) - hash + id.charCodeAt(i);
+        hash |= 0;
+    }
+    return (hash % 360) / 57.2958; // Convert degrees to radians-ish offset
+};
+
+const extractVector = (value: Body | Vector2D): Vector2D => ('position' in value ? value.position : value);
+
 // Helper for deterministic random based on string seed
 const seededRandom = (seed: string) => {
     let hash = 0;
@@ -125,8 +142,47 @@ const Canvas: React.FC<CanvasProps> = ({
   const [lastMousePos, setLastMousePos] = useState<Vector2D>({ x: 0, y: 0 });
   const wavesRef = useRef<GravitationalWave[]>([]);
 
+  const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution> | undefined>(() => {
+      if (!rendezvousPoints || rendezvousPoints.length === 0) return undefined;
+      const map: Record<string, RendezvousSolution> = {};
+      rendezvousPoints.forEach(point => {
+          map[point.moduleId] = {
+              moduleId: point.moduleId,
+              name: point.name,
+              color: point.color,
+              point: point.point,
+              timeToRendezvous: point.timeToRendezvous,
+              distance: point.distance,
+              deltaVPrograde: point.deltaVPrograde,
+              deltaVRadial: point.deltaVRadial,
+              totalDeltaV: point.totalDeltaV
+          };
+      });
+      return map;
+  }, [rendezvousPoints]);
+
+  const resolveMarkerVector = (input?: FlightComputerInput): Vector2D | null => {
+      if (!input) return null;
+      const resolved = resolveInput(input, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+      if (!resolved) return null;
+      return extractVector(resolved as Body | Vector2D);
+  };
+
+  const resolveMarkerStringValue = (input: FlightComputerInput | undefined, fallback: string): string => {
+      if (!input) return fallback;
+      const resolved = resolveStringInput(input, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+      return resolved ?? fallback;
+  };
+
+  const resolveMarkerBooleanValue = (input: FlightComputerInput | undefined, fallback: boolean): boolean => {
+      if (!input) return fallback;
+      const resolved = resolveBooleanInput(input, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+      return resolved ?? fallback;
+  };
+ 
   // Touch State Refs
   const touchRef = useRef<{
+
       lastX: number;
       lastY: number;
       lastDist: number;
@@ -868,13 +924,12 @@ const Canvas: React.FC<CanvasProps> = ({
     flightComputerModules.forEach(module => {
         if (!module.isEnabled) return;
 
-        const primary = bodies.find(b => b.id === module.primaryBodyId);
-        const reference = bodies.find(b => b.id === module.referenceBodyId);
-        const target = bodies.find(b => b.id === module.targetBodyId);
-
-        if (!primary || !reference) return;
+        const primary = module.primaryBodyId ? bodies.find(b => b.id === module.primaryBodyId) : null;
+        const reference = module.referenceBodyId ? bodies.find(b => b.id === module.referenceBodyId) : null;
+        const target = module.targetBodyId ? bodies.find(b => b.id === module.targetBodyId) : null;
 
         if (module.type === 'orbit_info') {
+            if (!primary || !reference) return;
             // Calculate and draw theoretical orbit
             const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
             const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);
@@ -913,101 +968,182 @@ const Canvas: React.FC<CanvasProps> = ({
                     ctx.beginPath(); ctx.arc(ax, ay, 2, 0, Math.PI * 2); ctx.fill();
                 }
             }
-        } else if (module.type === 'transfer_window' && target) {
+        } else if (module.type === 'transfer_window') {
+            if (!primary || !reference || !target) return;
+            
+            const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
+            const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
+            const a_transfer = (r1 + r2) / 2;
+            const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+            const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+            const travelTime = period_transfer / 2;
 
-            //This is the correct way to calculate the transfer window and show the sector
+            const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
+            const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
+            const h = tPos.x * tVel.y - tPos.y * tVel.x;
+            const direction = h >= 0 ? 1 : -1;
 
-             const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-             const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-             const a_transfer = (r1 + r2) / 2;
-             const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-             const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-             const travelTime = period_transfer / 2;
+            const targetMotion = direction * (360 / period_target) * travelTime;
+            const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
+            
+            const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
+            const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
 
-             // Determine direction (prograde vs retrograde)
-             const tPos = { x: target.position.x - reference.position.x, y: target.position.y - reference.position.y };
-             const tVel = { x: target.velocity.x - reference.velocity.x, y: target.velocity.y - reference.velocity.y };
-             const h = tPos.x * tVel.y - tPos.y * tVel.x;
-             const direction = h >= 0 ? 1 : -1;
+            let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
+            while (currentPhase > 180) currentPhase -= 360;
+            while (currentPhase < -180) currentPhase += 360;
 
-             const targetMotion = direction * (360 / period_target) * travelTime;
-             const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
-             
-             const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-             const targetAngle = Math.atan2(target.position.y - reference.position.y, target.position.x - reference.position.x);
+            let requiredPhaseDeg = 180 - targetMotion;
+            while (requiredPhaseDeg > 180) requiredPhaseDeg -= 360;
+            while (requiredPhaseDeg < -180) requiredPhaseDeg += 360;
 
-             // Calculate current phase difference
-             let currentPhase = (targetAngle - primaryAngle) * 180 / Math.PI;
-             while (currentPhase > 180) currentPhase -= 360;
-             while (currentPhase < -180) currentPhase += 360;
+            const diff = Math.abs(currentPhase - requiredPhaseDeg);
+            const isAligned = diff < 5 || Math.abs(diff - 360) < 5;
 
-             let requiredPhaseDeg = 180 - targetMotion;
-             while (requiredPhaseDeg > 180) requiredPhaseDeg -= 360;
-             while (requiredPhaseDeg < -180) requiredPhaseDeg += 360;
+            const idealTargetAngle = primaryAngle + requiredPhaseRad;
+            
+            const px = cx + reference.position.x * scale;
+            const py = cy + reference.position.y * scale;
+            const primaryX = cx + primary.position.x * scale;
+            const primaryY = cy + primary.position.y * scale;
+            const targetX = cx + target.position.x * scale;
+            const targetY = cy + target.position.y * scale;
+            const idealX = cx + (reference.position.x + Math.cos(idealTargetAngle) * r2) * scale;
+            const idealY = cy + (reference.position.y + Math.sin(idealTargetAngle) * r2) * scale;
 
-             const diff = Math.abs(currentPhase - requiredPhaseDeg);
-             const isAligned = diff < 5 || Math.abs(diff - 360) < 5;
+            if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(primaryX) && Number.isFinite(primaryY) && Number.isFinite(targetX) && Number.isFinite(targetY)) {
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(primaryX, primaryY);
+                ctx.lineTo(targetX, targetY);
+                ctx.closePath();
+                ctx.fillStyle = isAligned ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.1)';
+                ctx.fill();
+                ctx.strokeStyle = module.color;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([6, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
 
-             const idealTargetAngle = primaryAngle + requiredPhaseRad;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(idealX, idealY);
+                ctx.strokeStyle = module.color;
+                ctx.globalAlpha = 0.4;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
 
-             //const transferInfo = calculateTransferInfo(primary, reference, target, physicsConfig.gravitationalConstant);
-             
-             // Draw Sector
-             const px = cx + reference.position.x * scale;
-             const py = cy + reference.position.y * scale;
-             const bx = cx + primary.position.x * scale;
-             const by = cy + primary.position.y * scale;
-             
-             const sectorRadius = r2 * scale;
-             const sectorWidth = 5 * Math.PI / 180; // 5 degrees in radians
-             
-             if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(sectorRadius)) {
-                 ctx.beginPath();
-                 ctx.moveTo(px, py);
-                 ctx.arc(px, py, sectorRadius, idealTargetAngle - sectorWidth/2, idealTargetAngle + sectorWidth/2);
-                 ctx.closePath();
-                 
-                 const baseColor = isAligned ? '#4ade80' : module.color; // Green if aligned
-                 ctx.fillStyle = baseColor;
-                 ctx.globalAlpha = 0.2;
-                 ctx.fill();
-                 
-                 ctx.strokeStyle = baseColor;
-                 ctx.globalAlpha = 0.8;
-                 ctx.lineWidth = 1;
-                 ctx.stroke();
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillStyle = module.color;
+                ctx.fillText(isAligned ? 'Window' : 'Aligning', px + 10, py - 10);
+            }
+        } else if (module.type === 'marker') {
+            const inputs = module.inputs || {};
+            const positionInput = inputs.position || inputs.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const markerPos = resolveMarkerVector(positionInput);
+            if (!markerPos) return;
 
-                 // Draw Line to Primary
-                 ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by);
-                 ctx.strokeStyle = module.color; ctx.globalAlpha = 0.3; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
+            const screenX = cx + markerPos.x * scale;
+            const screenY = cy + markerPos.y * scale;
+            if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) return;
 
-                 // Draw 0-degree center line (Perfect Alignment)
-                 const centerLx = px + Math.cos(idealTargetAngle) * sectorRadius;
-                 const centerLy = py + Math.sin(idealTargetAngle) * sectorRadius;
-                 
-                 ctx.beginPath();
-                 ctx.moveTo(px, py);
-                 ctx.lineTo(centerLx, centerLy);
-                 ctx.strokeStyle = '#ffffff';
-                 ctx.lineWidth = 1.5;
-                 ctx.globalAlpha = 0.9;
-                 ctx.stroke();
+            const title = resolveMarkerStringValue(inputs.marker_title, module.markerTitle ?? module.name ?? 'Marker');
+            const description = resolveMarkerStringValue(inputs.marker_description, module.markerDescription ?? '');
+            const baseColor = module.markerColor || module.color || '#a855f7';
+            const resolvedColor = resolveMarkerStringValue(inputs.marker_color, baseColor);
+            const markerColor = sanitizeMarkerColor(resolvedColor, baseColor);
+            const isVisible = (module.markerVisible ?? true) && resolveMarkerBooleanValue(inputs.marker_visible, true);
+            if (!isVisible) return;
+            const shouldPulse = resolveMarkerBooleanValue(inputs.marker_pulse, module.markerPulse ?? false);
+            const shape = module.markerShape || 'ring';
+            const pulseScale = shouldPulse ? 1 + Math.sin(time * 3 + getPulsePhase(module.id)) * 0.25 : 1;
+            const size = 12 * pulseScale;
 
-                 // Label
-                 const labelRadius = sectorRadius + 20;
-                 const lx = px + Math.cos(idealTargetAngle) * labelRadius;
-                 const ly = py + Math.sin(idealTargetAngle) * labelRadius;
-                 
-                 ctx.fillStyle = baseColor; 
-                 ctx.font = 'bold 11px monospace';
-                 ctx.textAlign = 'center';
-                 ctx.textBaseline = 'middle';
-                 ctx.fillText(isAligned ? 'WINDOW OPEN' : 'TRANSFER WINDOW', lx, ly);
-                 
-                 ctx.globalAlpha = 1.0;
-             }
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.strokeStyle = markerColor;
+            ctx.fillStyle = markerColor;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.9;
+
+            const drawCrosshair = () => {
+                ctx.beginPath();
+                ctx.moveTo(-size * 1.4, 0);
+                ctx.lineTo(size * 1.4, 0);
+                ctx.moveTo(0, -size * 1.4);
+                ctx.lineTo(0, size * 1.4);
+                ctx.stroke();
+            };
+
+            switch (shape) {
+                case 'diamond':
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(size, 0);
+                    ctx.lineTo(0, size);
+                    ctx.lineTo(-size, 0);
+                    ctx.closePath();
+                    ctx.stroke();
+                    drawCrosshair();
+                    break;
+                case 'square':
+                    ctx.strokeRect(-size, -size, size * 2, size * 2);
+                    drawCrosshair();
+                    break;
+                case 'triangle':
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(size, size);
+                    ctx.lineTo(-size, size);
+                    ctx.closePath();
+                    ctx.stroke();
+                    drawCrosshair();
+                    break;
+                case 'pin':
+                    ctx.beginPath();
+                    ctx.arc(0, -size * 0.3, size * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(0, size);
+                    ctx.lineTo(-size * 0.4, 0);
+                    ctx.lineTo(size * 0.4, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                default:
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 0.9;
+                    drawCrosshair();
+                    break;
+            }
+
+            ctx.restore();
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 11px "JetBrains Mono", monospace';
+            ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(2, 6, 23, 0.85)';
+            ctx.fillStyle = '#f8fafc';
+            ctx.strokeText(title, screenX, screenY - size - 6);
+            ctx.fillText(title, screenX, screenY - size - 6);
+            if (description) {
+                ctx.font = '10px "JetBrains Mono", monospace';
+                ctx.textBaseline = 'top';
+                ctx.strokeText(description, screenX, screenY + size + 6);
+                ctx.fillText(description, screenX, screenY + size + 6);
+            }
+            ctx.restore();
         }
     });
+
 
     // --- OBSERVER MODE VISUALIZATION ---
     if (observerBodyIds.a && observerBodyIds.b) {

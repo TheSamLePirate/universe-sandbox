@@ -3,8 +3,9 @@ import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame, extend } from '@react-three/fiber';
 import { OrbitControls, Stars, Html, Line, Trail } from '@react-three/drei';
 import * as THREE from 'three';
-import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule } from '../types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution, MarkerShape } from '../types';
 import { calculateOrbitalPoints, calculateEllipsePoints, calculateForces } from '../services/physicsEngine';
+import { resolveInput, resolveStringInput, resolveBooleanInput } from '@/services/orbitalMath';
 
 interface Canvas3DProps {
   bodies: Body[];
@@ -73,6 +74,23 @@ const useGlowTexture = () => {
         return texture;
     }, []);
 };
+
+const sanitizeMarkerColor = (value?: string | null, fallback = '#ffffff') => {
+    if (!value) return fallback;
+    const trimmed = value.trim();
+    return /^#([0-9a-fA-F]{6})$/.test(trimmed) ? trimmed : fallback;
+};
+
+const getPulsePhase = (id: string) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash << 5) - hash + id.charCodeAt(i);
+        hash |= 0;
+    }
+    return (hash % 360) / 57.2958;
+};
+
+const extractVector = (value: Body | Vector2D): Vector2D => ('position' in value ? value.position : value);
 
 // --- HELPER COMPONENTS ---
 
@@ -719,24 +737,134 @@ const CoMOverlay: React.FC<{ coMData: CoMData | null, visualConfig: VisualConfig
 
 
 
+const Marker3D: React.FC<{ 
+    id: string;
+    point: Vector2D;
+    color: string;
+    shape: MarkerShape;
+    pulse: boolean;
+    title: string;
+    description?: string;
+}> = ({ id, point, color, shape, pulse, title, description }) => {
+    const groupRef = useRef<THREE.Group>(null);
+    const phase = useMemo(() => getPulsePhase(id), [id]);
+
+    useFrame(({ clock }) => {
+        if (!groupRef.current) return;
+        const scale = pulse ? 1 + Math.sin(clock.getElapsedTime() * 3 + phase) * 0.2 : 1;
+        groupRef.current.scale.set(scale, scale, scale);
+    });
+
+    const shapeElements = useMemo(() => {
+        const commonCross = (
+            <>
+                <Line points={[[-14, 0, 0], [14, 0, 0]]} color={color} lineWidth={1.5} />
+                <Line points={[[0, -14, 0], [0, 14, 0]]} color={color} lineWidth={1.5} />
+            </>
+        );
+
+        switch (shape) {
+            case 'diamond':
+                return (
+                    <>
+                        <Line points={[[0, -12, 0], [12, 0, 0], [0, 12, 0], [-12, 0, 0], [0, -12, 0]]} color={color} lineWidth={2} />
+                        {commonCross}
+                    </>
+                );
+            case 'square':
+                return (
+                    <>
+                        <Line points={[[-12, -12, 0], [12, -12, 0], [12, 12, 0], [-12, 12, 0], [-12, -12, 0]]} color={color} lineWidth={2} />
+                        {commonCross}
+                    </>
+                );
+            case 'triangle':
+                return (
+                    <>
+                        <Line points={[[0, -14, 0], [12, 12, 0], [-12, 12, 0], [0, -14, 0]]} color={color} lineWidth={2} />
+                        {commonCross}
+                    </>
+                );
+            case 'pin':
+                return (
+                    <>
+                        <mesh position={[0, -4, 0]}>
+                            <sphereGeometry args={[4, 16, 16]} />
+                            <meshBasicMaterial color={color} />
+                        </mesh>
+                        <mesh position={[0, 8, 0]} rotation={[0, 0, Math.PI]}>
+                            <coneGeometry args={[3, 12, 16]} />
+                            <meshBasicMaterial color={color} transparent opacity={0.85} />
+                        </mesh>
+                    </>
+                );
+            default:
+                return (
+                    <>
+                        <mesh>
+                            <ringGeometry args={[8, 10, 32]} />
+                            <meshBasicMaterial color={color} transparent opacity={0.8} side={THREE.DoubleSide} />
+                        </mesh>
+                        <mesh>
+                            <ringGeometry args={[5, 7, 32]} />
+                            <meshBasicMaterial color={color} transparent opacity={0.4} side={THREE.DoubleSide} />
+                        </mesh>
+                        {commonCross}
+                    </>
+                );
+        }
+    }, [color, shape]);
+
+    return (
+        <group ref={groupRef} position={[point.x, -point.y, 0]}>
+            {shapeElements}
+            <Html position={[0, -18, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }}>
+                <div className="px-2 py-1 rounded border border-slate-700 bg-slate-900/80 text-[10px] font-mono text-slate-100 whitespace-pre leading-tight">
+                    <div className="font-bold text-[11px]" style={{ color }}>{title}</div>
+                    {description && <div className="opacity-80">{description}</div>}
+                </div>
+            </Html>
+        </group>
+    );
+};
+
+
 const FlightComputerOverlay: React.FC<{ 
     modules: FlightComputerModule[];
     bodies: Body[];
     physicsConfig: PhysicsConfig;
-}> = ({ modules, bodies, physicsConfig }) => {
+    rendezvousSolutions?: Record<string, RendezvousSolution>;
+}> = ({ modules, bodies, physicsConfig, rendezvousSolutions }) => {
+    const resolveVectorInputValue = (input?: FlightComputerInput) => {
+        if (!input) return null;
+        const resolved = resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutions);
+        if (!resolved) return null;
+        return extractVector(resolved as Body | Vector2D);
+    };
+
+    const resolveMarkerString = (input: FlightComputerInput | undefined, fallback: string) => {
+        if (!input) return fallback;
+        const resolved = resolveStringInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutions);
+        return resolved ?? fallback;
+    };
+
+    const resolveMarkerBoolean = (input: FlightComputerInput | undefined, fallback: boolean) => {
+        if (!input) return fallback;
+        const resolved = resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutions);
+        return resolved ?? fallback;
+    };
+
     return (
         <group>
             {modules.map(module => {
                 if (!module.isEnabled) return null;
 
-                const primary = bodies.find(b => b.id === module.primaryBodyId);
-                const reference = bodies.find(b => b.id === module.referenceBodyId);
-                const target = bodies.find(b => b.id === module.targetBodyId);
-
-                if (!primary || !reference) return null;
+                const primary = module.primaryBodyId ? bodies.find(b => b.id === module.primaryBodyId) : null;
+                const reference = module.referenceBodyId ? bodies.find(b => b.id === module.referenceBodyId) : null;
+                const target = module.targetBodyId ? bodies.find(b => b.id === module.targetBodyId) : null;
 
                 if (module.type === 'orbit_info') {
-                    // Calculate and draw theoretical orbit
+                    if (!primary || !reference) return null;
                     const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
                     const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);
 
@@ -744,7 +872,7 @@ const FlightComputerOverlay: React.FC<{
                         <group key={module.id}>
                             {ellipsePoints.length > 0 && (
                                 <Line 
-                                    points={ellipsePoints.map(p => new THREE.Vector3(p.x, -p.y, 0))} // Negate Y
+                                    points={ellipsePoints.map(p => new THREE.Vector3(p.x, -p.y, 0))}
                                     color={module.color}
                                     lineWidth={1}
                                     dashed
@@ -764,30 +892,56 @@ const FlightComputerOverlay: React.FC<{
                             )}
                         </group>
                     );
-                } else if (module.type === 'transfer_window' && target) {
-                     const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-                     const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-                     const a_transfer = (r1 + r2) / 2;
-                     const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-                     const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-                     const travelTime = period_transfer / 2;
-                     const targetMotion = (360 / period_target) * travelTime;
-                     const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
-                     
-                     const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-                     const idealTargetAngle = primaryAngle + requiredPhaseRad;
-                     const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
-                     const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
+                } else if (module.type === 'transfer_window') {
+                    if (!primary || !reference || !target) return null;
+                    const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
+                    const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
+                    const a_transfer = (r1 + r2) / 2;
+                    const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+                    const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
+                    const travelTime = period_transfer / 2;
+                    const targetMotion = (360 / period_target) * travelTime;
+                    const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
+                    const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
+                    const idealTargetAngle = primaryAngle + requiredPhaseRad;
+                    const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
+                    const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
 
-                     return (
-                         <group key={module.id}>
+                    return (
+                        <group key={module.id}>
                             <Line points={[[reference.position.x, -reference.position.y, 0], [primary.position.x, -primary.position.y, 0]]} color={module.color} opacity={0.4} transparent dashed />
                             <Line points={[[reference.position.x, -reference.position.y, 0], [idealX, -idealY, 0]]} color={module.color} opacity={0.4} transparent dashed />
                             <Html position={[idealX, -idealY, 0]}>
                                 <div className="text-[8px] font-mono" style={{ color: module.color }}>WINDOW</div>
                             </Html>
-                         </group>
-                     );
+                        </group>
+                    );
+                } else if (module.type === 'marker') {
+                    const inputs = module.inputs || {};
+                    const positionInput = inputs.position || inputs.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+                    const point = resolveVectorInputValue(positionInput);
+                    if (!point) return null;
+
+                    const title = resolveMarkerString(inputs.marker_title, module.markerTitle ?? module.name ?? 'Marker');
+                    const description = resolveMarkerString(inputs.marker_description, module.markerDescription ?? '');
+                    const baseColor = module.markerColor || module.color || '#a855f7';
+                    const markerColor = sanitizeMarkerColor(resolveMarkerString(inputs.marker_color, baseColor), baseColor);
+                    const visible = (module.markerVisible ?? true) && resolveMarkerBoolean(inputs.marker_visible, true);
+                    if (!visible) return null;
+                    const pulse = resolveMarkerBoolean(inputs.marker_pulse, module.markerPulse ?? false);
+
+                    return (
+                        <Marker3D
+                            key={module.id}
+                            id={module.id}
+                            point={point}
+                            color={markerColor}
+                            shape={module.markerShape || 'ring'}
+                            pulse={pulse}
+                            title={title}
+                            description={description}
+                        />
+                    );
                 }
 
                 return null;
@@ -923,126 +1077,31 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
 
     // Initial Camera Setup to match 2D view
     useEffect(() => {
-        if (!followingBodyId && !followingCoM) {
-            // Calculate visible height at z=0 based on 2D scale
-            // 2D: height / scale = visible world height
-            // 3D: 2 * dist * tan(fov/2) = visible world height
-            // dist = (height / scale) / (2 * tan(fov/2))
-            
-            const fov = 50; // Default FOV for PerspectiveCamera
-            const dist = (height / scale) / (2 * Math.tan((fov * Math.PI) / 360));
-            
-            // Center in 2D is (-offset.x/scale, -offset.y/scale)
-            // In 3D we negate Y, so y becomes offset.y/scale
-            const centerX = -offset.x / scale;
-            const centerY = offset.y / scale; // -(-offset.y/scale)
-            
-            camera.position.set(centerX, centerY, dist);
-            camera.lookAt(centerX, centerY, 0);
-            camera.up.set(0, 1, 0); // Standard orientation
-            
-            if (controlsRef.current) {
-                controlsRef.current.target.set(centerX, centerY, 0);
-                controlsRef.current.update();
-            }
-        }
-    }, []); // Run once on mount
+        controlsRef.current?.update();
+    }, [controlsRef.current]);
 
-    useFrame(() => {
-        let targetPos: THREE.Vector3 | null = null;
-        let isContinuous = false;
-        let isRocketFollowing = false;
-        let rocketBody: Body | null = null;
-
-        if (followingBodyId) {
-            const body = bodies.find(b => b.id === followingBodyId);
-            if (body) {
-                targetPos = new THREE.Vector3(body.position.x, -body.position.y, 0); // Negate Y
-                isContinuous = previousFollowingId.current === followingBodyId;
-                
-                // Check if following a rocket
-                if (body.isRocket) {
-                    isRocketFollowing = true;
-                    rocketBody = body;
-                }
-            }
-        } else if (followingCoM && coMData) {
-            targetPos = new THREE.Vector3(coMData.refinedCoM.x, -coMData.refinedCoM.y, 0); // Negate Y
-            isContinuous = wasFollowingCoM.current;
-        }
-
-        if (targetPos && controlsRef.current) {
-            if (isRocketFollowing && rocketBody) {
-                // THIRD-PERSON ROCKET VIEW (Cockpit perspective)
-                const rocketAngle = -(rocketBody.angle || 0); // Negate for Y-flip
-                const cameraDistance = rocketBody.radius * 15; // Distance behind rocket
-                const cameraHeight = rocketBody.radius * 8; // Height above rocket
-                
-                // Position camera behind and above the rocket
-                const cameraX = rocketBody.position.x - Math.cos(rocketAngle) * cameraDistance;
-                const cameraY = -rocketBody.position.y - Math.sin(rocketAngle) * cameraDistance; // Negate Y
-                const cameraZ = cameraHeight;
-                
-                // Look-at point: ahead of the rocket
-                const lookAheadDistance = rocketBody.radius * 20;
-                const lookAtX = rocketBody.position.x + Math.cos(rocketAngle) * lookAheadDistance;
-                const lookAtY = -rocketBody.position.y + Math.sin(rocketAngle) * lookAheadDistance; // Negate Y
-                const lookAtZ = 0;
-                
-                // Set camera up vector to Z-axis to keep horizon level
-                camera.up.set(0, 0, 1);
-                
-                camera.position.set(cameraX, cameraY, cameraZ);
-                camera.lookAt(lookAtX, lookAtY, lookAtZ);
-                
-                // Update controls target to the look-at point
-                controlsRef.current.target.set(lookAtX, lookAtY, lookAtZ);
-                controlsRef.current.update();
-            } else {
-                // NORMAL FOLLOWING (for planets/stars/CoM)
-                if (isContinuous) {
-                    // Continuous following: Maintain relative camera position
-                    const currentTarget = controlsRef.current.target as THREE.Vector3;
-                    const delta = targetPos.clone().sub(currentTarget);
-                    camera.position.add(delta);
-                    controlsRef.current.target.copy(targetPos);
-                } else {
-                    // Just started following: Snap target
-                    controlsRef.current.target.copy(targetPos);
-                    
-                    // If following CoM, enforce vertical top-down view
-                    if (followingCoM) {
-                        const dist = camera.position.distanceTo(controlsRef.current.target);
-                        camera.position.set(targetPos.x, targetPos.y, dist); // Directly above
-                        camera.lookAt(targetPos);
-                        camera.up.set(0, 1, 0); // Reset orientation
-                    }
-                }
-            }
-        }
-
-        previousFollowingId.current = followingBodyId || null;
-        wasFollowingCoM.current = !!followingCoM;
-    });
-
-    // Handle background click for deselection or creation
-    const handleBackgroundClick = (event: any) => {
-        const worldX = event.point.x;
-        const worldY = event.point.y; // This is already negated in our coordinate system
-        
-        // Un-negate Y when converting back to screen coordinates
-        const screenX = (worldX * scale) + (width / 2 + offset.x);
-        const screenY = (-worldY * scale) + (height / 2 + offset.y); // Un-negate Y
-        
-        onCanvasClick(screenX, screenY);
-        
-        if (!isCreationMode) {
-             onSelectBody(null);
-        }
-    };
-
+    const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution> | undefined>(() => {
+        if (!rendezvousPoints || rendezvousPoints.length === 0) return undefined;
+        const map: Record<string, RendezvousSolution> = {};
+        rendezvousPoints.forEach(point => {
+            map[point.moduleId] = {
+                moduleId: point.moduleId,
+                name: point.name,
+                color: point.color,
+                point: point.point,
+                timeToRendezvous: point.timeToRendezvous,
+                distance: point.distance,
+                deltaVPrograde: point.deltaVPrograde,
+                deltaVRadial: point.deltaVRadial,
+                totalDeltaV: point.totalDeltaV
+            };
+        });
+        return map;
+    }, [rendezvousPoints]);
+ 
     return (
         <>
+
             {/* NO ambient light - pure darkness except for stars */}
 
             <ambientLight intensity={0} />
@@ -1130,6 +1189,7 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
                 modules={flightComputerModules}
                 bodies={bodies}
                 physicsConfig={physicsConfig}
+                rendezvousSolutions={rendezvousSolutionMap}
             />
 
             {/* Rocket Overlay (Legacy/Quick View) */}

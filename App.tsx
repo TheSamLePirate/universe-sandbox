@@ -21,8 +21,41 @@ import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig,
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
+ 
+const MODULE_COLOR_PALETTE = ['#a855f7', '#22d3ee', '#f97316', '#10b981', '#f43f5e', '#facc15', '#6366f1', '#ef4444', '#06b6d4', '#fb923c'];
+
+const sanitizeHexColor = (value?: string | null): string | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    return /^#([0-9a-fA-F]{6})$/.test(trimmed) ? trimmed : null;
+};
+
+const hslToHex = (h: number, s: number, l: number): string => {
+    s /= 100;
+    l /= 100;
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+        const color = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+        return Math.round(255 * color)
+            .toString(16)
+            .padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+};
+
+const getNextModuleColor = (existing: FlightComputerModule[], preferred?: string): string => {
+    const provided = sanitizeHexColor(preferred);
+    if (provided) return provided;
+    const used = new Set(existing.map(m => (m.color || '').toLowerCase()));
+    const paletteChoice = MODULE_COLOR_PALETTE.find(color => !used.has(color.toLowerCase()));
+    if (paletteChoice) return paletteChoice;
+    const hue = (existing.length * 47) % 360;
+    return hslToHex(hue, 70, 55);
+};
 
 const App: React.FC = () => {
+
   // --- State ---
   const isMobile = useIsMobile();
   const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
@@ -159,16 +192,26 @@ const App: React.FC = () => {
   const [moduleGroups, setModuleGroups] = useState<ModuleGroup[]>([]);
 
   const handleAddModule = (type: FlightComputerModuleType, inputs?: Record<string, FlightComputerInput>) => {
+      const assignedColor = getNextModuleColor(flightComputerModules);
       const newModule: FlightComputerModule = {
           id: `fc_mod_${Date.now()}`,
           type,
           isEnabled: true,
           primaryBodyId: selectedBodyId || bodies[0]?.id || '',
           referenceBodyId: bodies.find(b => b.mass > (bodies.find(s => s.id === (selectedBodyId || bodies[0]?.id))?.mass || 0))?.id || bodies[0]?.id || '',
-          color: '#a855f7', // Default purple
+          color: assignedColor,
           inputs: inputs || {}, // Initialize empty inputs or use provided
           groupId: null // Start ungrouped
       };
+
+      if (type === 'marker') {
+          newModule.markerShape = 'ring';
+          newModule.markerTitle = 'Marker';
+          newModule.markerDescription = '';
+          newModule.markerColor = assignedColor;
+          newModule.markerVisible = true;
+          newModule.markerPulse = false;
+      }
 
       if (type === 'thrust_burst') {
           newModule.thrustBurstMode = 'impulse';
@@ -255,9 +298,33 @@ const App: React.FC = () => {
       }
   };
 
+  useEffect(() => {
+      const used = new Set<string>();
+      let changed = false;
+      const updated = flightComputerModules.map((module, index) => {
+          let color = sanitizeHexColor(module.color);
+          if (!color || used.has(color.toLowerCase())) {
+              const paletteChoice = MODULE_COLOR_PALETTE.find(c => !used.has(c.toLowerCase()));
+              color = paletteChoice || hslToHex((index * 47) % 360, 70, 55);
+              if (color !== module.color) {
+                  changed = true;
+              }
+          }
+          used.add(color.toLowerCase());
+          if (color !== module.color) {
+              return { ...module, color };
+          }
+          return module;
+      });
+      if (changed) {
+          setFlightComputerModules(updated);
+      }
+  }, [flightComputerModules, setFlightComputerModules]);
+ 
   const handleExportGroup = (groupId: string) => {
       const group = moduleGroups.find(g => g.id === groupId);
       if (!group) return;
+
 
       // Recursively collect all child groups
       const collectChildGroups = (parentId: string): ModuleGroup[] => {
@@ -2073,12 +2140,13 @@ const App: React.FC = () => {
           const refBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(referenceBodyName.toLowerCase()));
           if (!refBody) return `Reference body '${referenceBodyName}' not found.`;
           
-          let targetBody = null;
-          if (targetBodyName) {
-              targetBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(targetBodyName.toLowerCase()));
-              if (!targetBody) return `Target body '${targetBodyName}' not found.`;
-          }
-          
+           let targetBody = null;
+           if (targetBodyName) {
+               targetBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(targetBodyName.toLowerCase()));
+               if (!targetBody) return `Target body '${targetBodyName}' not found.`;
+           }
+           
+           const assignedColor = getNextModuleColor(flightComputerModules, color);
            const newModule: FlightComputerModule = {
                id: `fc_${Date.now()}`,
                type: moduleType as FlightComputerModuleType,
@@ -2086,10 +2154,19 @@ const App: React.FC = () => {
                primaryBodyId: rocket.id,
                referenceBodyId: refBody.id,
                targetBodyId: targetBody?.id,
-               color: color || '#a855f7',
+               color: assignedColor,
                name: customName || `${moduleType.replace('_', ' ')}`,
                maxDistance: maxDistance
            };
+
+           if (newModule.type === 'marker') {
+               newModule.markerShape = 'ring';
+               newModule.markerTitle = customName || 'Marker';
+               newModule.markerDescription = '';
+               newModule.markerColor = assignedColor;
+               newModule.markerVisible = true;
+               newModule.markerPulse = false;
+           }
 
            if (newModule.type === 'thrust_burst') {
                newModule.thrustBurstMode = 'impulse';
@@ -2114,6 +2191,7 @@ const App: React.FC = () => {
 
           return `Flight Computer module '${newModule.name}' added (${moduleType}) for ${rocket.name}`;
       },
+
       removeFlightComputerModule: (moduleName) => {
           const module = flightComputerModules.find(m => m.name?.toLowerCase().includes(moduleName.toLowerCase()));
           if (!module) return `Flight Computer module '${moduleName}' not found.`;

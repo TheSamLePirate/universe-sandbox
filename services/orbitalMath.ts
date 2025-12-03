@@ -168,6 +168,11 @@ export const resolveInput = (
                 if (outputKey === 'intercept_point') return transferData.interceptPoint;
                 if (outputKey === 'intercept_point_transfer') return transferData.interceptPointTransfer;
             }
+        } else if (module.type === 'marker') {
+            const positionInput = module.inputs?.position || module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            if (outputKey === 'position' && positionInput) {
+                return resolveInput(positionInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
         } else if (module.type === 'rendezvous_tracker') {
             const rendezvous = rendezvousSolutions?.[module.id];
             if (outputKey === 'primary_body') {
@@ -587,6 +592,22 @@ export const resolveBooleanInput = (
                 return transferData.ready;
             }
             return null;
+        } else if (module.type === 'marker') {
+            if (outputKey === 'visible') {
+                const baseVisible = module.markerVisible ?? true;
+                const controlInput = module.inputs?.marker_visible;
+                if (!controlInput) return baseVisible;
+                const resolved = resolveBooleanInput(controlInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                if (resolved === null) return baseVisible;
+                return baseVisible && resolved;
+            }
+            if (outputKey === 'pulse') {
+                const basePulse = module.markerPulse ?? false;
+                const controlInput = module.inputs?.marker_pulse;
+                if (!controlInput) return basePulse;
+                const resolved = resolveBooleanInput(controlInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                return resolved ?? basePulse;
+            }
         } else if (module.type === 'logic_gate' && outputKey === 'result') {
             // Recursive resolution for Logic Gate
             const inputA = resolveBooleanInput(module.inputs?.inputA, bodies, modules, gravitationalConstant, rendezvousSolutions);
@@ -664,6 +685,17 @@ export const resolveStringInput = (
                 case 'landed_on': return bodyData.landedOnBodyId || '';
                 case 'sas_mode': return bodyData.sasMode || '';
                 default: return null;
+            }
+        } else if (module.type === 'marker') {
+            switch (outputKey) {
+                case 'title':
+                    return module.markerTitle || module.name || 'Marker';
+                case 'description':
+                    return module.markerDescription || '';
+                case 'color':
+                    return module.markerColor || module.color || '#a855f7';
+                default:
+                    return null;
             }
         } else if (module.type === 'custom_script' && outputKey === 'result') {
             const res = module.customScriptLastResult;

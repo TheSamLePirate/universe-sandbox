@@ -209,7 +209,9 @@ export interface RocketSpawnConfig {
     color: string;
 }
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script';
+export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';
+
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -303,6 +305,14 @@ export interface FlightComputerModule {
     customScriptLogs?: string[]; // Store last few logs
     customScriptMode?: 'sync' | 'async';
     customScriptAsyncState?: boolean; // true = finished/ready, false = pending/running
+
+    // Marker Module Config
+    markerShape?: MarkerShape;
+    markerTitle?: string;
+    markerDescription?: string;
+    markerColor?: string;
+    markerVisible?: boolean;
+    markerPulse?: boolean;
 }
 
 export interface ModuleGroup {
