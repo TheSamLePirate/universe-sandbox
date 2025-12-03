@@ -487,6 +487,19 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
 
                         (async () => {
                             try {
+
+                                //check if customScriptCode is valid async function by checking if it contains 'async' keyword
+                                if (!module.customScriptCode.includes('async')) {
+                                    mockConsole.error('Custom script must be an async function');
+                                    onUpdateModule(module.id, { 
+                                        customScriptLastResult: 0,
+                                        customScriptLogs: logs.slice(-5),
+                                        customScriptAsyncState: false
+                                    });
+                                    throw new Error('Custom script must be an async function');
+                                }
+
+
                                 const func = new AsyncFunction('input', 'console', 'game', `
                                     try {
                                         ${module.customScriptCode}

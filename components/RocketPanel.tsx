@@ -168,6 +168,15 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
 
     // --- MANEUVER LOGIC ---
     const handleParentChange = (newParentId: string) => {
+        //if neParentId is == to selectedRocket.orbitReferenceId, return
+        if (newParentId === selectedRocket?.orbitReferenceId) return;
+
+        //if neParentId is == to targetBodyId
+        if (newParentId === targetBodyId) return;
+        
+        
+        
+
         if (onParentChange) onParentChange(newParentId);
         if (selectedRocket) {
             onUpdateRocket(selectedRocket.id, { orbitReferenceId: newParentId });
@@ -1792,7 +1801,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     // Desktop UI (unchanged)
     return (
         <div 
-            className={`fixed ${isMobile ? `bottom-20 left-0 right-0 ${isCollapsed ? 'h-auto' : 'h-[50vh]'}` : 'top-0 bottom-16 right-0 w-96'} bg-slate-900/95 backdrop-blur-md border-l border-slate-700 shadow-2xl z-30 flex flex-col transition-all duration-300 ${!isMobile && isCollapsed ? 'w-12 h-2 top-8' : ''}`}
+            className={`fixed ${isMobile ? `bottom-20 left-0 right-0 ${isCollapsed ? 'h-auto' : 'h-[50vh] '}` : 'top-0 bottom-16 right-0 w-96'} bg-slate-900/10 z-30 flex flex-col transition-all duration-300 ${!isMobile && isCollapsed ? 'pt-1 w-[38px] h-[32px] top-8' : 'border-slate-700 border rounded-lg'}`}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -1800,57 +1809,40 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
             onWheel={(e) => e.stopPropagation()}
         >
             {/* Header / Toggle */}
-            <div className={`p-2 border-b border-slate-700 flex ${isCollapsed ? 'flex-col justify-start gap-4' : 'justify-between'} items-center bg-indigo-900/30 transition-all`}>
+            <div className={`p-1 flex bg-indigo-900/30  ${isCollapsed ? 'flex-col justify-start gap-0 p-0 bg-indigo-900/10' : 'justify-between gap-0 p-0 bg-indigo-900/10'} items-center transition-all`}>
                 <button 
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors  bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-lg shadow-xl "
                     title={isCollapsed ? "Expand" : "Collapse"}
                 >
-                    {isCollapsed ? <ArrowRightLeft size={18} className="rotate-180" /> : <ArrowRightLeft size={18} />}
+                    {isCollapsed ? <ArrowRightLeft size={26} className="rotate-180 text-purple-400 group-hover:text-purple-300" /> : <ArrowRightLeft size={26} className="text-purple-400 group-hover:text-purple-300"/>}
                 </button>
 
                 {!isCollapsed && (
                     <>
                         <div className="flex items-center gap-2 text-white font-bold truncate">
-                            <Rocket size={20} className="text-orange-400" />
+                            <Rocket size={26} className="text-orange-400" />
                             <span className="text-sm">Control</span>
                         </div>
-                        <div className="flex gap-1">
-                             <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
-                                <Crosshair size={16} />
+                        <div className="flex gap-0">
+                             <button onClick={onSpawnToggle} className={`p-1 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'} bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-lg shadow-xl `} title="Spawn Mode">
+                                <Crosshair size={26} className="rotate-180 text-purple-400 group-hover:text-purple-300" />
                              </button>
                             <button onClick={onClose} className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded">
-                                <X size={16} />
+                                <X size={26} />
                             </button>
                         </div>
                     </>
                 )}
                 {isCollapsed && (
-                     <div className="flex flex-col gap-4 items-center mt-2">
-                        <button onClick={onSpawnToggle} className={`p-1.5 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`} title="Spawn Mode">
-                            <Crosshair size={16} />
+                     <div className="">
+                        <button onClick={onSpawnToggle} className={`p-1 rounded transition-colors ${isSpawning ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'} bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-lg shadow-xl `} title="Spawn Mode">
+                            <Crosshair size={26} className="text-purple-400 group-hover:text-purple-300"/>
                         </button>
-                                        </div>
-                                    )}
+                    </div>
+                )}
 
-                                    {maneuverType === 'change_simulation_speed' && (
-                                        <div>
-                                            <label className="text-[10px] text-slate-500 block mb-1">New Speed Multiplier</label>
-                                            <select 
-                                                value={maneuverParam}
-                                                onChange={(e) => setManeuverParam(e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                                            >
-                                                <option value="">Select Speed...</option>
-                                                <option value="0.1">0.1x</option>
-                                                <option value="1">1x</option>
-                                                <option value="10">10x</option>
-                                                <option value="100">100x</option>
-                                                <option value="1000">1000x</option>
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
+            </div>
 
             {/* Notification (Overlay when collapsed) */}
             {notification && (
