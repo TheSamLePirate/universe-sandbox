@@ -6,7 +6,7 @@ import { calculateTransferInfo } from './orbitalMath';
 // Reduced softening for better accuracy at close range (allows tighter slingshots)
 const SOFTENING = 0.15; 
 // Velocity threshold for a safe landing (relative velocity magnitude)
-const LANDING_MAX_VELOCITY = 2;
+const LANDING_MAX_VELOCITY = 3;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
 const FUEL_CONSUMPTION_RATE = 10000; 

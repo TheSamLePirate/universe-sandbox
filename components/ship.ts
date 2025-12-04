@@ -78,7 +78,7 @@ export function drawShip(
     ctx.rotate(angle);
 
     // "Size" is roughly the radius or half-length of the ship
-    const size = Math.max(8, 5 * scale); 
+    const size =  5 * scale;
 
     // --- 3. RENDERING PIPELINE ---
 

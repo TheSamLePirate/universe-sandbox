@@ -1006,7 +1006,8 @@ export const PRESETS: Preset[] = [
         name: 'Empty Void',
         bodies: SYSTEM_BLANK,
         defaultScale: 1.0,
-        description: 'A completely empty universe. Start from scratch.'
+        description: 'A completely empty universe. Start from scratch.',
+
     }
 ];
 
