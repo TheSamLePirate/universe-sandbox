@@ -274,8 +274,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         return (
             <div
                 key={group.id}
-                className="bg-slate-900/40 rounded border border-slate-700/30 mb-2"
-                style={{ marginLeft: depth * 12 }}
+                className={`bg-slate-900/40 rounded border border-slate-700/30 mb-2 ${group.isCollapsed ? '' : 'col-span-full'}`}
+                style={{ marginLeft: group.isCollapsed ? 0 : depth * 12 }}
                 onDragOver={(e) => {
                     e.preventDefault();
                     setDragOverGroupId(group.id);
@@ -304,7 +304,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         </div>
                         {group.isCollapsed && (
                             <div className="text-xs text-slate-400 font-mono">
-                                {group.name}
+                                {group.name} 
                             </div>
                         )}
                         {!group.isCollapsed && (
@@ -331,7 +331,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         )}
 
                         {/* align right */}
-                        <div className="flex justify-end">
+                        
                             <button
                                 onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })}
                                 className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
@@ -350,7 +350,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             >
                                 <Trash2 size={14} />
                             </button>
-                        </div>
+                        
                     </div>
 
                     {/* Group Content */}
