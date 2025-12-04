@@ -1235,7 +1235,7 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             <GravitationalWaves bodies={bodies} physicsConfig={physicsConfig} showWaves={visualConfig.showWaves} />
 
             {/* Invisible plane for clicking/raycasting at z=0 */}
-            <mesh position={[0, 0, -5]} onPointerMissed={() => !isCreationMode && onSelectBody(null)} onClick={handleBackgroundClick} visible={false}>
+            <mesh position={[0, 0, -5]} onPointerMissed={() => !isCreationMode && onSelectBody(null)}  visible={false}>
                  <planeGeometry args={[1000000, 1000000]} />
                  <meshBasicMaterial transparent opacity={0} />
             </mesh>

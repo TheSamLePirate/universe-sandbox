@@ -227,83 +227,7 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (isMobile) {
-        return (
-            <div className="fixed top-4 left-4 right-4 z-40 font-mono pointer-events-auto">
-                 <div 
-                    className="bg-slate-900/50 border border-slate-700 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden transition-all duration-300"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                 >
-                    {/* Mobile Header (Always Visible) */}
-                    <div className="p-3 flex justify-between items-center bg-slate-800/50">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${rocket.landedOnBodyId ? 'bg-green-900/50 text-green-400' : 'bg-blue-900/50 text-blue-400'}`}>
-                                <Rocket size={16} />
-                            </div>
-                            <div>
-                                <div className="text-sm font-bold text-white leading-none">{rocket.name}</div>
-                                <div className="text-[10px] text-slate-400 mt-0.5">
-                                    {speed.toFixed(1)} u/s • {rocket.landedOnBodyId ? 'LANDED' : 'IN FLIGHT'}
-                                </div>
-                            </div>
-                        </div>
-                        <button className="text-slate-400">
-                            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                        </button>
-                    </div>
-
-                    {/* Expanded Content */}
-                    {isExpanded && (
-                        <div className="p-4 border-t border-slate-700/50 space-y-4 animate-in slide-in-from-top-2">
-                             {/* Fuel */}
-                            <div>
-                                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                                    <span className="flex items-center gap-1"><Fuel size={10} /> FUEL</span>
-                                    <span className={rocket.fuel && rocket.fuel < 10 ? "text-red-400 font-bold" : ""}>
-                                        {((rocket.fuel || 0) / (rocket.maxFuel || 1) * 100).toFixed(0)}%
-                                    </span>
-                                </div>
-                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full ${rocket.fuel && rocket.fuel < 10 ? 'bg-red-500' : 'bg-orange-500'}`}
-                                        style={{ width: `${rocket.fuel && rocket.maxFuel ? (rocket.fuel / rocket.maxFuel) * 100 : 0}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-slate-800/50 p-2 rounded">
-                                    <div className="text-[9px] text-slate-500 uppercase">Heading</div>
-                                    <div className="text-sm text-white font-bold">{heading.toFixed(1)}°</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-2 rounded">
-                                    <div className="text-[9px] text-slate-500 uppercase">Altitude</div>
-                                    <div className="text-sm text-cyan-300 font-bold">{orbitalParams.altitude.toFixed(1)} u</div>
-                                </div>
-                            </div>
-
-                            {/* Target Info */}
-                            {targetBodyId && (
-                                <div className="bg-slate-800/30 p-2 rounded border border-slate-700/50">
-                                    <div className="text-[10px] text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1">
-                                        <Navigation size={10} /> Target: {targetData.name}
-                                    </div>
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <div className="text-[9px] text-slate-500">Distance</div>
-                                            <div className="text-xs text-white">{targetData.dist.toFixed(1)} u</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[9px] text-slate-500">Rel Speed</div>
-                                            <div className="text-xs text-emerald-300">{targetData.deltaV.toFixed(1)} u/s</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                 </div>
-            </div>
-        );
+        return RocketDataPanelUImobile();
     }
 
     // Calculate vertical offset based on index (each panel is roughly 400px tall)
@@ -622,6 +546,83 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
 
         </div>
     );
+
+    function RocketDataPanelUImobile(): React.ReactNode | Promise<React.ReactNode> {
+        return <div className="fixed top-4 left-4 right-4 z-40 font-mono pointer-events-auto">
+            <div
+                className="bg-slate-900/50 border border-slate-700 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden transition-all duration-300"
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                {/* Mobile Header (Always Visible) */}
+                <div className="p-3 flex justify-between items-center bg-slate-800/50">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${rocket.landedOnBodyId ? 'bg-green-900/50 text-green-400' : 'bg-blue-900/50 text-blue-400'}`}>
+                            <Rocket size={16} />
+                        </div>
+                        <div>
+                            <div className="text-sm font-bold text-white leading-none">{rocket.name }</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                                {speed.toFixed(1)} km/s • {rocket.landedOnBodyId ? 'LANDED' : 'IN FLIGHT'}
+                            </div>
+                        </div>
+                    </div>
+                    <button className="text-slate-400">
+                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </button>
+                </div>
+
+                {/* Expanded Content */}
+                {isExpanded && (
+                    <div className="p-4 border-t border-slate-700/50 space-y-4 animate-in slide-in-from-top-2">
+                        {/* Fuel */}
+                        <div>
+                            <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                                <span className="flex items-center gap-1"><Fuel size={10} /> FUEL</span>
+                                <span className={rocket.fuel && rocket.fuel < 10 ? "text-red-400 font-bold" : ""}>
+                                    {((rocket.fuel || 0) / (rocket.maxFuel || 1) * 100).toFixed(0)}%
+                                </span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full ${rocket.fuel && rocket.fuel < 10 ? 'bg-red-500' : 'bg-orange-500'}`}
+                                    style={{ width: `${rocket.fuel && rocket.maxFuel ? (rocket.fuel / rocket.maxFuel) * 100 : 0}%` }} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-slate-800/50 p-2 rounded">
+                                <div className="text-[9px] text-slate-500 uppercase">Heading</div>
+                                <div className="text-sm text-white font-bold">{heading.toFixed(1)}°</div>
+                            </div>
+                            <div className="bg-slate-800/50 p-2 rounded">
+                                <div className="text-[9px] text-slate-500 uppercase">Altitude</div>
+                                <div className="text-sm text-cyan-300 font-bold">{orbitalParams.altitude.toFixed(1)} u</div>
+                            </div>
+                        </div>
+
+                        {/* Target Info */}
+                        {targetBodyId && (
+                            <div className="bg-slate-800/30 p-2 rounded border border-slate-700/50">
+                                <div className="text-[10px] text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1">
+                                    <Navigation size={10} /> Target: {targetData.name}
+                                </div>
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <div className="text-[9px] text-slate-500">Distance</div>
+                                        <div className="text-xs text-white">{targetData.dist.toFixed(1)} u</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[9px] text-slate-500">Rel Speed</div>
+                                        <div className="text-xs text-emerald-300">{targetData.deltaV.toFixed(1)} u/s</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>;
+    }
 };
 
 export default RocketDataPanel;

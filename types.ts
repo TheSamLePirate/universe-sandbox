@@ -248,6 +248,7 @@ export interface FlightComputerModule {
     comparisonOperator?: ComparisonOperator;
     comparisonValue?: number;
     notifyTriggered?: boolean; // State to track if notification is active
+    notifyMessage?: string;
     
     // Logic Gate Config
     logicOperator?: LogicOperator;
@@ -265,6 +266,7 @@ export interface FlightComputerModule {
     thrustBurstDeltaVPrograde?: number;
     thrustBurstDeltaVRadial?: number;
     thrustBurstCompleted?: boolean;
+    thrustBurstActive?: boolean;
 
     // Maneuver Executor Config
     maneuverExecutorType?: Maneuver['type'];

@@ -181,7 +181,6 @@ const Canvas: React.FC<CanvasProps> = ({
  
   // Touch State Refs
   const touchRef = useRef<{
-
       lastX: number;
       lastY: number;
       lastDist: number;
