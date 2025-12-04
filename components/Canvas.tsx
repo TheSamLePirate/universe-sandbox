@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
 import { resolveInput, resolveStringInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
+import { isModuleActive } from './flight_computer/utils';
 
 interface CanvasProps {
   bodies: Body[];
@@ -920,7 +921,9 @@ const Canvas: React.FC<CanvasProps> = ({
 
     // --- FLIGHT COMPUTER MODULES VISUALIZATION ---
     flightComputerModules.forEach(module => {
+        // Check if module is enabled and active (respects activate input)
         if (!module.isEnabled) return;
+        if (!isModuleActive(module, bodies, flightComputerModules, physicsConfig, {})) return;
 
         const primary = module.primaryBodyId ? bodies.find(b => b.id === module.primaryBodyId) : null;
         const reference = module.referenceBodyId ? bodies.find(b => b.id === module.referenceBodyId) : null;

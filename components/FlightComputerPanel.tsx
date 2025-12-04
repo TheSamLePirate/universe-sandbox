@@ -293,7 +293,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             >
                 <div className="p-2">
                     {/* Group Header */}
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex gap-2 mb-2">
                         <div
                             draggable
                             onDragStart={() => setDraggedGroupId(group.id)}
@@ -302,41 +302,55 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         >
                             <GripVertical size={12} className="text-slate-600" />
                         </div>
-                        <input
-                            type="text"
-                            value={group.name}
-                            onChange={(e) => onUpdateGroup(group.id, { name: e.target.value })}
-                            className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
-                        />
-                        <input
-                            type="color"
-                            value={group.color}
-                            onChange={(e) => onUpdateGroup(group.id, { color: e.target.value })}
-                            className="w-6 h-6 rounded cursor-pointer"
-                        />
+                        {group.isCollapsed && (
+                            <div className="text-xs text-slate-400 font-mono">
+                                {group.name}
+                            </div>
+                        )}
+                        {!group.isCollapsed && (
+                            <>
+                                <input
+                                    type="text"
+                                    value={group.name}
+                                    onChange={(e) => onUpdateGroup(group.id, { name: e.target.value })}
+                                    className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                />
+                                <input
+                                    type="color"
+                                    value={group.color}
+                                    onChange={(e) => onUpdateGroup(group.id, { color: e.target.value })}
+                                    className="w-6 h-6 rounded cursor-pointer"
+                                />
+                            </>
+                        )}
+                        
                         {group.isCollapsed && (
                             <div className="text-xs text-slate-400 font-mono">
                                 {getGroupDisplayValue(group)}
                             </div>
                         )}
-                        <button
-                            onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })}
-                            className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
-                        >
-                            {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                        </button>
-                        <button
-                            onClick={() => onExportGroup(group.id)}
-                            className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
-                        >
-                            <Download size={14} />
-                        </button>
-                        <button
-                            onClick={() => onRemoveGroup(group.id)}
-                            className="p-1 hover:bg-red-900/30 rounded text-red-400"
-                        >
-                            <Trash2 size={14} />
-                        </button>
+
+                        {/* align right */}
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })}
+                                className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
+                            >
+                                {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                            </button>
+                            <button
+                                onClick={() => onExportGroup(group.id)}
+                                className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
+                            >
+                                <Download size={14} />
+                            </button>
+                            <button
+                                onClick={() => onRemoveGroup(group.id)}
+                                className="p-1 hover:bg-red-900/30 rounded text-red-400"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Group Content */}
@@ -427,79 +441,109 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const ungroupedModules = modules.filter(m => !m.groupId);
 
     return (
-        <div className={`${isMobile ? 'w-full' : 'w-50'} bg-slate-900/10 backdrop-blur-xs border-r border-slate-800 flex flex-col fixed top-0 right-0 z-50`}>
-            {/* Header */}
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-slate-200">Flight Computer</h2>
-                <div className="flex gap-1">
-                    <button
-                        onClick={() => setIsAdding(!isAdding)}
-                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400"
-                    >
-                        <Plus size={16} />
-                    </button>
-                    <button
-                        onClick={onAddGroup}
-                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400"
-                    >
-                        <FolderPlus size={16} />
-                    </button>
-                    <button
-                        onClick={onImportGroup}
-                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400"
-                    >
-                        <Upload size={16} />
-                    </button>
-                    <button
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className="p-1.5 hover:bg-slate-800 rounded text-slate-400"
-                    >
-                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
-                </div>
-            </div>
-
-            {/* Module Type Selector */}
-            {isExpanded && isAdding && (
-                <div className="p-3 border-b border-slate-800 bg-slate-800/50">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Add Module</h3>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {['Info', 'Visual', 'Logic', 'Actions', 'Advanced'].map(category => (
-                            <div key={category}>
-                                <div className="text-[10px] text-slate-500 uppercase mb-1">{category}</div>
-                                <div className="space-y-1">
-                                    {MODULE_TYPES.filter(t => t.category === category).map(moduleType => {
-                                        const Icon = MODULE_ICONS[moduleType.value] || Settings;
-                                        return (
-                                            <button
-                                                key={moduleType.value}
-                                                onClick={() => {
-                                                    onAddModule(moduleType.value);
-                                                    setIsAdding(false);
-                                                }}
-                                                className="w-full text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2"
-                                            >
-                                                {React.createElement(Icon as React.ElementType, { size: 12 })}
-                                                {moduleType.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
+        <div className={`fixed z-[60] transition-all duration-300 ${
+            isExpanded 
+                ? 'inset-0 bg-slate-900/30 backdrop-blur-sm' 
+                : 'top-4 right-4 w-auto bg-slate-900/90 backdrop-blur-sm rounded-lg shadow-2xl'
+        } flex flex-col overflow-hidden`}>
+            {/* Header - Always visible */}
+            <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-slate-900/50">
+                <div className="flex items-center justify-between gap-3">
+                    <h2 className={`font-bold text-slate-200 ${isExpanded ? 'text-lg' : 'text-sm'}`}>
+                        Flight Computer
+                        {!isExpanded && modules.length > 0 && (
+                            <span className="ml-2 text-xs text-slate-500">({modules.length} modules)</span>
+                        )}
+                    </h2>
+                    <div className="flex gap-2">
+                        {isExpanded && (
+                            <>
+                                <button
+                                    onClick={() => setIsAdding(!isAdding)}
+                                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                        isAdding 
+                                            ? 'bg-purple-600 text-white' 
+                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <Plus size={16} className="inline mr-1" />
+                                    Add Module
+                                </button>
+                                <button
+                                    onClick={onAddGroup}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm text-slate-300"
+                                >
+                                    <FolderPlus size={16} className="inline mr-1" />
+                                    New Group
+                                </button>
+                                <button
+                                    onClick={onImportGroup}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm text-slate-300"
+                                >
+                                    <Upload size={16} />
+                                </button>
+                            </>
+                        )}
+                        <button
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm text-slate-300"
+                            title={isExpanded ? 'Minimize' : 'Maximize'}
+                        >
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
                     </div>
                 </div>
-            )}
 
-            {/* Modules and Groups */}
+                {/* Module Type Selector - Only when expanded */}
+                {isExpanded && isAdding && (
+                    <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/30">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                            {['Info', 'Visual', 'Logic', 'Actions', 'Advanced'].map(category => (
+                                <div key={category} className="space-y-1">
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold">{category}</div>
+                                    <div className="space-y-1">
+                                        {MODULE_TYPES.filter(t => t.category === category).map(moduleType => {
+                                            const Icon = MODULE_ICONS[moduleType.value] || Settings;
+                                            return (
+                                                <button
+                                                    key={moduleType.value}
+                                                    onClick={() => {
+                                                        onAddModule(moduleType.value);
+                                                        setIsAdding(false);
+                                                    }}
+                                                    className="w-full text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700/50 flex items-center gap-2 transition-colors"
+                                                >
+                                                    {React.createElement(Icon as React.ElementType, { size: 12 })}
+                                                    <span className="truncate">{moduleType.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Main Content - Only when expanded */}
             {isExpanded && (
-                <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                    {topLevelGroups.map(group => renderGroup(group, 0))}
-                    {ungroupedModules.map(renderModule)}
-                    
-                    {modules.length === 0 && (
-                        <div className="text-center text-slate-500 text-xs py-8">
-                            No modules yet. Click + to add one.
+                <div className="flex-1 overflow-y-auto p-4">
+                    {modules.length === 0 ? (
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-center text-slate-500">
+                                <Settings className="mx-auto mb-2 opacity-50" size={48} />
+                                <p className="text-sm">No modules yet</p>
+                                <p className="text-xs mt-1">Click "Add Module" to get started</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-min">
+                            {/* Render Groups */}
+                            {topLevelGroups.map(group => renderGroup(group, 0))}
+                            
+                            {/* Render Ungrouped Modules */}
+                            {ungroupedModules.map(renderModule)}
                         </div>
                     )}
                 </div>

@@ -858,6 +858,10 @@ const FlightComputerOverlay: React.FC<{
         <group>
             {modules.map(module => {
                 if (!module.isEnabled) return null;
+                
+                // Check if module is active (respects activate input)
+                const { isModuleActive } = require('./flight_computer/utils');
+                if (!isModuleActive(module, bodies, modules, physicsConfig, rendezvousSolutions || {})) return null;
 
                 const primary = module.primaryBodyId ? bodies.find(b => b.id === module.primaryBodyId) : null;
                 const reference = module.referenceBodyId ? bodies.find(b => b.id === module.referenceBodyId) : null;
