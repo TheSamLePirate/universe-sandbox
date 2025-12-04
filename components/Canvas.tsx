@@ -3,6 +3,7 @@ import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightC
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
 import { resolveInput, resolveStringInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
 import { isModuleActive } from './flight_computer/utils';
+import { drawShip } from './ship';
 
 interface CanvasProps {
   bodies: Body[];
@@ -651,47 +652,815 @@ const Canvas: React.FC<CanvasProps> = ({
 
         if (isGhost) ctx.globalAlpha = 0.5;
 
-        // --- ROCKET RENDERING ---
-        if (body.isRocket) {
-             const size = Math.max(8, 5 * scale); // Fixed minimal size so we can see it
-             const angle = body.angle || 0;
-             const tipX = screenX + Math.cos(angle) * size;
-             const tipY = screenY + Math.sin(angle) * size;
-             const backLeftX = screenX + Math.cos(angle + 2.5) * size;
-             const backLeftY = screenY + Math.sin(angle + 2.5) * size;
-             const backRightX = screenX + Math.cos(angle - 2.5) * size;
-             const backRightY = screenY + Math.sin(angle - 2.5) * size;
+        // --- BEAUTIFUL ROCKET RENDERING (NOT A TRIANGLE) ---
+        if (body.isRocket && false) {
+            const size = Math.max(8, 5 * scale);
+            const angle = body.angle || 0;
 
-             // Draw Thrust Flame
-             if (body.thrust && (Math.abs(body.thrust.x) > 0.01 || Math.abs(body.thrust.y) > 0.01)) {
-                 const flameSize = Math.random() * size * 1.5 + size;
-                 const flameTipX = screenX + Math.cos(angle + Math.PI) * flameSize;
-                 const flameTipY = screenY + Math.sin(angle + Math.PI) * flameSize;
+            // Keep these (useful for nav lights / orientation anchors)
+            const tipX = screenX + Math.cos(angle) * size;
+            const tipY = screenY + Math.sin(angle) * size;
+            const backLeftX = screenX + Math.cos(angle + 2.5) * size;
+            const backLeftY = screenY + Math.sin(angle + 2.5) * size;
+            const backRightX = screenX + Math.cos(angle - 2.5) * size;
+            const backRightY = screenY + Math.sin(angle - 2.5) * size;
 
-                 ctx.beginPath();
-                 ctx.moveTo(backLeftX, backLeftY);
-                 ctx.lineTo(flameTipX, flameTipY);
-                 ctx.lineTo(backRightX, backRightY);
-                 ctx.fillStyle = '#f97316'; // Orange
-                 ctx.globalAlpha = 0.8;
-                 ctx.fill();
-                 ctx.globalAlpha = 1.0;
-             }
+            // dummy SaS / ship variables : user will plug ship system to that
+            const sasMode = "off"; // "prograde" | "retrograde" | "radial-out" | "none"
+            const landed = true;
+            const landing = false;
+            const fuel = 50; // 0..100
 
-             // Draw Ship
-             ctx.beginPath();
-             ctx.moveTo(tipX, tipY);
-             ctx.lineTo(backLeftX, backLeftY);
-             ctx.lineTo(screenX, screenY); // Center indent
-             ctx.lineTo(backRightX, backRightY);
-             ctx.closePath();
-             ctx.fillStyle = body.color;
-             ctx.fill();
-             ctx.strokeStyle = '#fff';
-             ctx.lineWidth = 1;
-             ctx.stroke();
+            // modules toggles (user will plug real ones)
+            const hasAutopilot = false;
+            const hasRadar = false;
+            const hasScientificLab = false;
+            const hasMess = false;
+            const hasObservatory = false;
+            const hasSolarPanel = false;
+            const hasLazerGun = false;
+            const hasRoboticArm = true;
+            const hasRotatingRing = false;
 
-        } 
+            // module animation placeholders
+            const lazerAngle = Math.sin(Date.now() / 1000)*3.14;            // world angle
+            const lazerFiring = true;           // draw beam/glow if true
+            const roboticArmAngles = [0.2, -0.6, 0.35]; // base/mid/hand (radians) in LOCAL space
+            const roboticArmExtend = 1.0;        // 0..1 scale (optional)
+            const ringSpin = 1.0;                // multiplier
+            const radarSweep = (Date.now() / 800) % (Math.PI * 2);
+
+            // thrust presence
+            const thrustOn = !!(body.thrust && (Math.abs(body.thrust.x) > 0.001 || Math.abs(body.thrust.y) > 0.001));
+
+            // blinkers
+            const t = Date.now();
+            const blinkA = Math.sin(t / 240) > 0.2;
+            const blinkB = Math.sin(t / 510) > 0.6;
+
+            // small helpers (local-space drawing after rotate)
+            const clamp01 = (v) => Math.max(0, Math.min(1, v));
+            const lerp = (a, b, u) => a + (b - a) * u;
+
+            // Rocket MUST fit inside original triangle's bounding rectangle in local frame:
+            // x in [-0.801s .. +1.0s], y in [-0.598s .. +0.598s]
+            const xNose = size * 0.98;
+            const xTail = -size * 0.78;
+            const gearX = -size * 0.2;
+            const halfW = size * 0.50;
+
+            const noseBase = xNose - size * 0.22;
+            const tailShoulder = xTail + size * 0.14;
+            const topY = -halfW * 0.55;
+            const midY = -halfW * 0.28;
+
+            // landing gear deploy factor
+            const gear = landed ? 1 : (landing ? 0.2 : 0);
+
+            // Save state
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.rotate(angle);
+
+            // nice defaults
+            const prevGA = ctx.globalAlpha;
+            const prevGCO = ctx.globalCompositeOperation;
+            ctx.lineWidth = 1;
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+
+            // =========================
+            // BODY SHADING (metal + color accents)
+            // =========================
+            const bodyMetal = ctx.createLinearGradient(xTail, 0, xNose, 0);
+            bodyMetal.addColorStop(0.00, "#121418");
+            bodyMetal.addColorStop(0.20, "#3a404a");
+            bodyMetal.addColorStop(0.45, "#9aa3ad");
+            bodyMetal.addColorStop(0.70, "#49515e");
+            bodyMetal.addColorStop(1.00, "#d5dbe2");
+
+            const bodyWarm = ctx.createLinearGradient(xTail, topY, xNose, -topY);
+            bodyWarm.addColorStop(0.00, "rgba(255,255,255,0.00)");
+            bodyWarm.addColorStop(0.45, "rgba(255,255,255,0.16)");
+            bodyWarm.addColorStop(1.00, "rgba(255,255,255,0.00)");
+
+            const accent = (body.color && typeof body.color === "string") ? body.color : "#7dd3fc";
+
+            // =========================
+            // DRAW FUSELAGE (rocket silhouette, not a triangle)
+            // =========================
+            const drawFuselagePath = () => {
+                ctx.beginPath();
+                ctx.moveTo(xNose, 0);
+                ctx.quadraticCurveTo(xNose - size * 0.07, topY * 0.35, noseBase, topY);
+                ctx.lineTo(tailShoulder, topY);
+                ctx.quadraticCurveTo(xTail, topY * 0.88, xTail, midY);
+                ctx.lineTo(xTail, -midY);
+                ctx.quadraticCurveTo(xTail, -topY * 0.88, tailShoulder, -topY);
+                ctx.lineTo(noseBase, -topY);
+                ctx.quadraticCurveTo(xNose - size * 0.07, -topY * 0.35, xNose, 0);
+                ctx.closePath();
+            };
+
+            // main fill
+            drawFuselagePath();
+            ctx.fillStyle = bodyMetal;
+            ctx.fill();
+
+            // subtle sheen
+            ctx.globalAlpha = 0.9;
+            drawFuselagePath();
+            ctx.fillStyle = bodyWarm;
+            ctx.fill();
+            ctx.globalAlpha = prevGA;
+
+            // outline
+            drawFuselagePath();
+            ctx.strokeStyle = "rgba(255,255,255,0.65)";
+            ctx.stroke();
+
+            // =========================
+            // PANEL LINES / RIVETS / STRIPES (1px details)
+            // =========================
+            // rings
+            ctx.globalAlpha = 0.45;
+            ctx.strokeStyle = "rgba(0,0,0,0.6)";
+            const ringXs = [
+                xTail + size * 0.20,
+                xTail + size * 0.42,
+                xTail + size * 0.64,
+                xTail + size * 0.86
+            ];
+            for (const rx of ringXs) {
+                ctx.beginPath();
+                ctx.moveTo(rx, topY * 0.92);
+                ctx.lineTo(rx, -topY * 0.92);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = prevGA;
+
+            // accent stripe (integrated, no HUD)
+            ctx.globalAlpha = 0.85;
+            ctx.strokeStyle = accent;
+            ctx.beginPath();
+            ctx.moveTo(noseBase + size * 0.02, topY * 0.35);
+            ctx.lineTo(tailShoulder - size * 0.06, topY * 0.35);
+            ctx.stroke();
+            ctx.globalAlpha = prevGA;
+
+            // small hatch + bolts
+            ctx.globalAlpha = 0.55;
+            ctx.strokeStyle = "rgba(255,255,255,0.35)";
+            const hatchX = lerp(xTail, xNose, 0.46);
+            const hatchY = topY * 0.10;
+            ctx.beginPath();
+            ctx.roundRect(hatchX - size * 0.12, hatchY - size * 0.07, size * 0.22, size * 0.14, 2);
+            ctx.stroke();
+
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            for (let i = 0; i < 7; i++) {
+                const bx = hatchX - size * 0.10 + i * (size * 0.03);
+                const by = hatchY + ((i % 2) ? size * 0.05 : -size * 0.05);
+                ctx.beginPath();
+                ctx.arc(bx, by, 0.6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = prevGA;
+
+            // =========================
+            // COCKPIT / WINDOW (glass + reflections)
+            // =========================
+            const cockpitX = xNose - size * 0.40;
+            const cockpitY = 0;
+            const cockpitRx = size * 0.16;
+            const cockpitRy = size * 0.12;
+
+            const glass = ctx.createRadialGradient(cockpitX - cockpitRx * 0.3, cockpitY - cockpitRy * 0.3, 0, cockpitX, cockpitY, cockpitRx * 1.6);
+            glass.addColorStop(0, "rgba(180,245,255,0.95)");
+            glass.addColorStop(0.28, "rgba(60,170,210,0.65)");
+            glass.addColorStop(0.55, "rgba(10,40,70,0.72)");
+            glass.addColorStop(1, "rgba(0,0,0,0.75)");
+
+            ctx.beginPath();
+            ctx.ellipse(cockpitX, cockpitY, cockpitRx, cockpitRy, 0, 0, Math.PI * 2);
+            ctx.fillStyle = glass;
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.55)";
+            ctx.stroke();
+
+            // specular streak
+            ctx.globalAlpha = 0.55;
+            ctx.beginPath();
+            ctx.ellipse(cockpitX - cockpitRx * 0.25, cockpitY - cockpitRy * 0.25, cockpitRx * 0.35, cockpitRy * 0.25, -0.6, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255,255,255,0.55)";
+            ctx.fill();
+            ctx.globalAlpha = prevGA;
+
+            // =========================
+            // ENGINE SECTION (nozzle + glow + thrust flame)
+            // =========================
+            // nozzle geometry (still inside rocket bbox)
+            const nozX0 = xTail + size * 0.02;
+            const nozX1 = xTail - size * 0.12;
+            const nozR0 = halfW * 0.22;
+            const nozR1 = halfW * 0.32;
+
+            const nozzleGrad = ctx.createLinearGradient(nozX1, 0, nozX0, 0);
+            nozzleGrad.addColorStop(0, "#0a0b0e");
+            nozzleGrad.addColorStop(0.5, "#2c313a");
+            nozzleGrad.addColorStop(1, "#6b7480");
+
+            ctx.beginPath();
+            ctx.moveTo(nozX0, -nozR0);
+            ctx.lineTo(nozX1, -nozR1);
+            ctx.lineTo(nozX1, nozR1);
+            ctx.lineTo(nozX0, nozR0);
+            ctx.closePath();
+            ctx.fillStyle = nozzleGrad;
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.35)";
+            ctx.stroke();
+
+            // engine glow on thrust
+            if (thrustOn) {
+                ctx.globalCompositeOperation = "lighter";
+                const glow = ctx.createRadialGradient(nozX1, 0, 0, nozX1, 0, size * 1.1);
+                glow.addColorStop(0, "rgba(255,180,60,0.40)");
+                glow.addColorStop(0.2, "rgba(255,90,30,0.22)");
+                glow.addColorStop(1, "rgba(255,0,0,0.00)");
+
+                ctx.globalAlpha = 0.9;
+                ctx.beginPath();
+                ctx.arc(nozX0, 0, size * 0.65, 0, Math.PI * 2);
+                ctx.fillStyle = glow;
+                ctx.fill();
+                ctx.globalAlpha = prevGA;
+                ctx.globalCompositeOperation = prevGCO;
+
+                // flame (outside physics ok)
+                const flameLen = (size * 0.9) + (Math.random() * size * 0.8);
+                const flameW = halfW * 0.55;
+                const flicker = 0.75 + Math.random() * 0.35;
+
+                ctx.save();
+                ctx.globalCompositeOperation = "lighter";
+
+                const flameGrad = ctx.createLinearGradient(nozX1, 0, nozX1 - flameLen, 0);
+                flameGrad.addColorStop(0.00, "rgba(255,255,255,0.55)");
+                flameGrad.addColorStop(0.12, "rgba(255,210,120,0.75)");
+                flameGrad.addColorStop(0.35, "rgba(255,110,40,0.55)");
+                flameGrad.addColorStop(0.65, "rgba(120,120,255,0.20)");
+                flameGrad.addColorStop(1.00, "rgba(0,0,0,0.00)");
+
+                ctx.globalAlpha = 0.95;
+                ctx.beginPath();
+                ctx.moveTo(nozX1, -nozR1 * 0.55);
+                ctx.quadraticCurveTo(nozX1 - flameLen * 0.35, -flameW * 0.55 * flicker, nozX1 - flameLen, 0);
+                ctx.quadraticCurveTo(nozX1 - flameLen * 0.35, flameW * 0.55 * flicker, nozX1, nozR1 * 0.55);
+                ctx.closePath();
+                ctx.fillStyle = flameGrad;
+                ctx.fill();
+
+                // inner core
+                ctx.globalAlpha = 0.75;
+                ctx.beginPath();
+                ctx.moveTo(nozX1, -nozR1 * 0.25);
+                ctx.quadraticCurveTo(nozX1 - flameLen * 0.22, -flameW * 0.22 * flicker, nozX1 - flameLen * 0.70, 0);
+                ctx.quadraticCurveTo(nozX1 - flameLen * 0.22, flameW * 0.22 * flicker, nozX1, nozR1 * 0.25);
+                ctx.closePath();
+                ctx.fillStyle = "rgba(255,255,255,0.35)";
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // =========================
+            // FINS / RCS PORTS (subtle, realistic)
+            // =========================
+            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = "rgba(255,255,255,0.30)";
+
+            // fins
+            const finX = xTail + size * 0.18;
+            const finLen = size * 0.20;
+            const finH = halfW * 0.22;
+            ctx.beginPath();
+            ctx.moveTo(finX, topY * 0.55);
+            ctx.lineTo(finX - finLen, topY * 0.55 - finH);
+            ctx.lineTo(finX - finLen * 0.15, topY * 0.55);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(finX, -topY * 0.55);
+            ctx.lineTo(finX - finLen, -topY * 0.55 + finH);
+            ctx.lineTo(finX - finLen * 0.15, -topY * 0.55);
+            ctx.stroke();
+
+            // RCS dots
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            const rcsXs = [xTail + size * 0.33, xTail + size * 0.70];
+            for (const rx of rcsXs) {
+                ctx.beginPath(); ctx.arc(rx, topY * 0.70, 0.9, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(rx, -topY * 0.70, 0.9, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = prevGA;
+
+            // =========================
+            // INTEGRATED FUEL INDICATORS (no text, no HUD)
+            // =========================
+            // small pips along lower side of hull: lit amount = fuel%
+            const f = clamp01(fuel / 100);
+            const pipCount = 10;
+            const pipX0 = xTail + size * 0.28;
+            const pipX1 = xNose - size * 0.30;
+            const pipY = topY * 0.62;
+            for (let i = 0; i < pipCount; i++) {
+                const u = i / (pipCount - 1);
+                const px = lerp(pipX0, pipX1, u);
+                const lit = (u <= f);
+                ctx.globalAlpha = lit ? 0.65 : 0.18;
+                ctx.fillStyle = lit ? "rgba(140,255,200,0.85)" : "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.roundRect(px - 1.2, pipY - 0.9, 2.4, 1.8, 1);
+                ctx.fill();
+            }
+            ctx.globalAlpha = prevGA;
+
+            // =========================
+            // LANDING GEAR (deployable visuals; can go outside physics)
+            // =========================
+            if (gear > 0) {
+                const g = clamp01(gear)*1;
+                const legBaseX = gearX + size * 0.26;
+                const legSpread = halfW * 0.70;
+                const legLen = size * (0.55 + 0.35 * g);
+                const foot = size * 0.10;
+
+                ctx.globalAlpha = 0.9;
+                ctx.strokeStyle = "rgba(230,235,242,0.75)";
+
+                for (const s of [-1, 1]) {
+                const by = s * legSpread * 0.55;
+                const kneeX = legBaseX - legLen * 0.35;
+                const kneeY = by + (s * legLen * 0.05);
+                const footX = legBaseX - legLen;
+                const footY = by + (s * legLen * 0.22);
+
+                ctx.beginPath();
+                ctx.moveTo(legBaseX, by);
+                ctx.lineTo(kneeX, kneeY);
+                ctx.lineTo(footX, footY);
+                ctx.stroke();
+
+                // foot pad
+                ctx.beginPath();
+                ctx.moveTo(footX - foot, footY - foot * 0.35);
+                ctx.lineTo(footX + foot, footY + foot * 0.35);
+                ctx.stroke();
+                }
+
+                // dust glow when landing
+                if (landing) {
+                ctx.globalCompositeOperation = "lighter";
+                const dust = ctx.createRadialGradient(xTail + size * 0.6, 0, 0, xTail + size * 0.6, 0, size * 1.6);
+                dust.addColorStop(0, "rgba(255,255,255,0.12)");
+                dust.addColorStop(1, "rgba(255,255,255,0)");
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath();
+                ctx.arc(xTail + size * 0.55, 0, size * 1.2, 0, Math.PI * 2);
+                ctx.fillStyle = dust;
+                ctx.fill();
+                ctx.globalAlpha = prevGA;
+                ctx.globalCompositeOperation = prevGCO;
+                }
+            }
+
+            // =========================
+            // SAS INDICATORS (3 arrows; graphical only)
+            // =========================
+            const drawChevrons = (dir, col) => {
+                // dir in local radians, draw outside hull
+                const r = size * 1.05;
+                const x = Math.cos(dir) * r;
+                const y = Math.sin(dir) * r;
+
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(dir);
+
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.85;
+                ctx.strokeStyle = col;
+
+                for (let i = 0; i < 3; i++) {
+                const o = i * 3.0;
+                ctx.beginPath();
+                ctx.moveTo(-6 - o, -3);
+                ctx.lineTo(-1 - o, 0);
+                ctx.lineTo(-6 - o, 3);
+                ctx.stroke();
+                }
+
+                ctx.restore();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+            };
+
+            if (sasMode === "prograde") drawChevrons(0, "rgba(160,255,190,0.95)");
+            if (sasMode === "retrograde") drawChevrons(Math.PI, "rgba(255,140,140,0.95)");
+            if (sasMode === "radial-out") drawChevrons(Math.PI / 2, "rgba(140,220,255,0.95)");
+
+            // =========================
+            // NAV LIGHTS (blink)
+            // =========================
+            // front beacon (uses tipX/tipY in world, but we're in local: draw at nose)
+            ctx.globalCompositeOperation = "lighter";
+            if (blinkA) {
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = "rgba(255,255,255,0.75)";
+                ctx.beginPath(); ctx.arc(xNose - 0.8, 0, 1.6, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 0.35;
+                ctx.beginPath(); ctx.arc(xNose - 0.8, 0, 5.5, 0, Math.PI * 2); ctx.fill();
+            }
+            if (blinkB) {
+                ctx.globalAlpha = 0.8;
+                ctx.fillStyle = "rgba(255,80,80,0.75)";
+                ctx.beginPath(); ctx.arc(xTail + 1.2, topY * 0.72, 1.3, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "rgba(80,255,120,0.75)";
+                ctx.beginPath(); ctx.arc(xTail + 1.2, -topY * 0.72, 1.3, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalCompositeOperation = prevGCO;
+            ctx.globalAlpha = prevGA;
+
+            // =========================
+            // EXTERNAL MODULES (can extend outside physics bbox)
+            // =========================
+            // Autopilot: antenna + blinking node
+            if (hasAutopilot) {
+                const ax = lerp(xTail, xNose, 0.62);
+                const ay = topY * 0.92;
+                ctx.strokeStyle = "rgba(235,240,255,0.70)";
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(ax + size * 0.10, ay - size * 0.22);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = blinkA ? 0.9 : 0.25;
+                ctx.fillStyle = "rgba(120,200,255,0.85)";
+                ctx.beginPath();
+                ctx.arc(ax + size * 0.10, ay - size * 0.22, 1.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+            }
+
+            // Radar: dish + sweep glow
+            if (hasRadar) {
+                const rx = lerp(xTail, xNose, 0.40);
+                const ry = -topY * 1.10;
+                const rr = size * 0.28;
+
+                ctx.strokeStyle = "rgba(220,230,245,0.70)";
+                ctx.beginPath();
+                ctx.moveTo(rx, ry);
+                ctx.lineTo(rx, ry + size * 0.18);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.55;
+                ctx.strokeStyle = "rgba(140,220,255,0.80)";
+                ctx.beginPath();
+                ctx.arc(rx, ry, rr, radarSweep - 0.15, radarSweep + 0.15);
+                ctx.stroke();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+            }
+
+            // Scientific lab: pod with faint blue core
+            if (hasScientificLab) {
+                const lx = lerp(xTail, xNose, 0.28);
+                const ly = topY * 1.18;
+                const lr = size * 0.22;
+
+                ctx.strokeStyle = "rgba(255,255,255,0.45)";
+                ctx.fillStyle = "rgba(25,30,40,0.85)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.45;
+                ctx.fillStyle = "rgba(130,200,255,0.75)";
+                ctx.beginPath();
+                ctx.arc(lx - lr * 0.18, ly - lr * 0.10, lr * 0.35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+            }
+
+            // Mess: small module with warm windows
+            if (hasMess) {
+                const mx = lerp(xTail, xNose, 0.52);
+                const my = topY * 1.22;
+                const mw = size * 0.52;
+                const mh = size * 0.22;
+
+                ctx.fillStyle = "rgba(22,24,30,0.9)";
+                ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.roundRect(mx - mw / 2, my - mh / 2, mw, mh, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = "lighter";
+                for (let i = 0; i < 4; i++) {
+                const wx = mx - mw * 0.30 + i * (mw * 0.20);
+                const wy = my;
+                ctx.globalAlpha = (blinkB && i === 1) ? 0.7 : 0.35;
+                ctx.fillStyle = "rgba(255,200,120,0.85)";
+                ctx.beginPath();
+                ctx.roundRect(wx - 3, wy - 2, 6, 4, 2);
+                ctx.fill();
+                }
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+            }
+
+            // Observatory: telescope tube / lens
+            if (hasObservatory) {
+                const ox = lerp(xTail, xNose, 0.74);
+                const oy = -topY * 1.18;
+                const ol = size * 0.55;
+
+                ctx.save();
+                ctx.translate(ox, oy);
+                ctx.rotate(-0.25);
+
+                ctx.fillStyle = "rgba(20,22,28,0.92)";
+                ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.roundRect(-ol * 0.55, -size * 0.10, ol, size * 0.20, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = "rgba(140,220,255,0.85)";
+                ctx.beginPath();
+                ctx.arc(ol * 0.45, 0, size * 0.11, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+
+                ctx.restore();
+            }
+
+            // Solar panels: articulated pair with cell grid
+            if (hasSolarPanel) {
+                const px = lerp(xTail, xNose, 0.50);
+                const py = 0;
+                const panelLen = size * 1.10;
+                const panelW = size * 0.26;
+                const hinge = size * 0.10;
+
+                for (const s of [-1, 1]) {
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(s * (Math.PI / 2));
+
+                ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(hinge, 0);
+                ctx.stroke();
+
+                ctx.fillStyle = "rgba(10,30,70,0.75)";
+                ctx.strokeStyle = "rgba(120,180,255,0.55)";
+                ctx.beginPath();
+                ctx.roundRect(hinge, -panelW / 2, panelLen, panelW, 4);
+                ctx.fill();
+                ctx.stroke();
+
+                // cell grid
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = "rgba(160,210,255,0.55)";
+                for (let i = 1; i <= 5; i++) {
+                    const gx = hinge + (panelLen * i) / 6;
+                    ctx.beginPath();
+                    ctx.moveTo(gx, -panelW / 2);
+                    ctx.lineTo(gx, panelW / 2);
+                    ctx.stroke();
+                }
+                for (let j = -1; j <= 1; j++) {
+                    const gy = (panelW * j) / 3;
+                    ctx.beginPath();
+                    ctx.moveTo(hinge, gy);
+                    ctx.lineTo(hinge + panelLen, gy);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = prevGA;
+
+                ctx.restore();
+                }
+            }
+
+            // Rotating gravity ring
+            if (hasRotatingRing) {
+                const ringR = size * 2.05;
+                const spin = ((t / 1000) * 1.35 * ringSpin) % (Math.PI * 2);
+
+                ctx.save();
+                ctx.globalAlpha = 0.85;
+                ctx.strokeStyle = "rgba(180,200,255,0.22)";
+                ctx.lineWidth = 1;
+
+                // ring
+                ctx.beginPath();
+                ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // spokes
+                ctx.globalAlpha = 0.75;
+                for (let i = 0; i < 10; i++) {
+                const a = spin + i * (Math.PI * 2) / 10;
+                const x0 = Math.cos(a) * (ringR * 0.75);
+                const y0 = Math.sin(a) * (ringR * 0.75);
+                const x1 = Math.cos(a) * ringR;
+                const y1 = Math.sin(a) * ringR;
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+                }
+
+                // subtle glow
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.18;
+                ctx.beginPath();
+                ctx.arc(0, 0, ringR + 2, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(140,220,255,0.45)";
+                ctx.stroke();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+
+                ctx.restore();
+            }
+
+            // Lazer gun: turret + barrel (place outside hull), can rotate
+            if (hasLazerGun) {
+                const gunBaseX = lerp(xTail, xNose, 0.58);
+                const gunBaseY = topY * 1.05;
+                const localLazer = (lazerAngle || angle) - angle;
+
+                ctx.save();
+                ctx.translate(gunBaseX, gunBaseY);
+                ctx.rotate(localLazer);
+
+                // mount
+                ctx.fillStyle = "rgba(16,18,22,0.95)";
+                ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.roundRect(-4, -3, 8, 6, 3);
+                ctx.fill();
+                ctx.stroke();
+
+                // barrel
+                ctx.fillStyle = "rgba(25,28,35,0.95)";
+                ctx.beginPath();
+                ctx.roundRect(2, -1.5, size * 0.70, 3, 2);
+                ctx.fill();
+
+                // muzzle glow / beam
+                if (lazerFiring) {
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = "rgba(120,240,255,0.65)";
+                ctx.beginPath();
+                ctx.arc(2 + size * 0.70, 0, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = 0.55;
+                ctx.strokeStyle = "rgba(120,240,255,0.55)";
+                ctx.beginPath();
+                ctx.moveTo(2 + size * 0.70, 0);
+                ctx.lineTo(2 + size * 3.2, 0);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+                }
+
+                ctx.restore();
+            }
+
+            // Robotic arm: 3 bones + hand, movable
+            if (hasRoboticArm) {
+                const armBaseX = lerp(xTail, xNose, 0.34);
+                const armBaseY = -topY * 1.02;
+
+                const seg0 = size * 0.38 * (0.6 + 0.4 * roboticArmExtend);
+                const seg1 = size * 0.34 * (0.6 + 0.4 * roboticArmExtend);
+                const seg2 = size * 0.28 * (0.6 + 0.4 * roboticArmExtend);
+
+                ctx.save();
+                ctx.translate(armBaseX, armBaseY);
+
+                // base mount
+                ctx.fillStyle = "rgba(18,20,25,0.95)";
+                ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                ctx.beginPath();
+                ctx.roundRect(-4, -4, 8, 8, 3);
+                ctx.fill();
+                ctx.stroke();
+
+                // bones
+                let x = 0, y = 0;
+                let a = roboticArmAngles[0] || 0;
+                ctx.strokeStyle = "rgba(230,235,242,0.75)";
+                ctx.fillStyle = "rgba(255,255,255,0.35)";
+
+                const drawBone = (len, ang) => {
+                const nx = x + Math.cos(ang) * len;
+                const ny = y + Math.sin(ang) * len;
+
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(nx, ny);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(nx, ny, 1.6, 0, Math.PI * 2);
+                ctx.fill();
+
+                x = nx; y = ny;
+                };
+
+                // segment 0
+                drawBone(seg0, a);
+
+                // segment 1
+                a += (roboticArmAngles[1] || 0);
+                drawBone(seg1, a);
+
+                // segment 2
+                a += (roboticArmAngles[2] || 0);
+                drawBone(seg2, a);
+
+                // hand (simple clamp)
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(a);
+                ctx.strokeStyle = "rgba(230,235,242,0.75)";
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(6, -3);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(6, 3);
+                ctx.stroke();
+
+                // hand light
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = blinkA ? 0.55 : 0.2;
+                ctx.fillStyle = "rgba(140,220,255,0.8)";
+                ctx.beginPath();
+                ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalCompositeOperation = prevGCO;
+                ctx.globalAlpha = prevGA;
+
+                ctx.restore();
+                ctx.restore();
+            }
+
+            // =========================
+            // FINAL WORLD-SPACE TINY GLOW (ties ship into scene)
+            // =========================
+            ctx.globalCompositeOperation = "lighter";
+            ctx.globalAlpha = 0.12;
+            const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 1.9);
+            halo.addColorStop(0, "rgba(170,220,255,0.18)");
+            halo.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 1.6, 0, Math.PI * 2);
+            ctx.fillStyle = halo;
+            ctx.fill();
+            ctx.globalCompositeOperation = prevGCO;
+            ctx.globalAlpha = prevGA;
+
+            // Restore state
+            ctx.restore();
+        }
+
+        if(body.isRocket && true){
+            drawShip(ctx, screenX, screenY, body.angle, body.thrust, scale, body,flightComputerModules);
+        }
+
         // --- STAR RENDERING ---
         else if (body.isStar) {
             ctx.globalCompositeOperation = 'lighter';

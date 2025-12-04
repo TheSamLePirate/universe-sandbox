@@ -6,10 +6,10 @@ import { calculateTransferInfo } from './orbitalMath';
 // Reduced softening for better accuracy at close range (allows tighter slingshots)
 const SOFTENING = 0.15; 
 // Velocity threshold for a safe landing (relative velocity magnitude)
-const LANDING_MAX_VELOCITY = 3.5;
+const LANDING_MAX_VELOCITY = 2;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
-const FUEL_CONSUMPTION_RATE = 100; 
+const FUEL_CONSUMPTION_RATE = 10000; 
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
@@ -363,6 +363,11 @@ export const updatePhysics = (
                                 } 
                                 // ONE-SHOT BURN CALCULATION FOR OTHERS (Transfer, Land)
                                 else {
+                                    if (m.type === 'auto_land') {
+                                        body.landedOnBodyId = "landing";
+                                        updatedBody.landedOnBodyId = "landing";
+                                    }
+
                                     const res = calculateOrbitalManeuver(updatedBody, target, m.type as any, gConst, currentBodies, refParentId);
                                     if (res) {
                                         // PRECISE BURN CALCULATION
@@ -779,6 +784,7 @@ export const updatePhysics = (
             const isThrusting = body.thrust && (Math.abs(body.thrust.x) > 0.001 || Math.abs(body.thrust.y) > 0.001);
             
             if (isThrusting) {
+                body.landedOnBodyId = undefined;
                 return {
                     ...body,
                     landedOnBodyId: undefined,

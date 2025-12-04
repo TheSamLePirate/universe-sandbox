@@ -970,28 +970,28 @@ export const PRESETS: Preset[] = [
         id: 'mintaka',
         name: 'Mintaka',
         bodies: SYSTEM_THREE_BODY_MINTAKA_STABLE,
-        defaultScale: 1.5,
+        defaultScale: 0.2,
         description: 'Inspired by Mintaka. Three stars in a stable hierarchical triple system.'
     },
     {
         id: 'hd188753',
         name: 'HD 188753',
         bodies: SYSTEM_THREE_BODY_HD188753_STABLE,
-        defaultScale: 1.5,
+        defaultScale: 0.3,
         description: 'Inspired by HD 188753. Three stars in a stable hierarchical triple system.'
     },
     {
         id: 'hd188753_with_planet',
         name: 'HD 188753 with Planet',
         bodies: SYSTEM_THREE_BODY_HD188753_WITH_PLANET_STABLE,
-        defaultScale: 1.5,
+        defaultScale: 0.3,
         description: 'Inspired by HD 188753. Three stars in a stable hierarchical triple system.'
     },
     {
         id: 'solar_with_moons',
         name: 'Solar System with Moons',
         bodies: SYSTEM_SOLAR_WITH_MOONS_ULTRASTABLE,
-        defaultScale: 1.5,
+        defaultScale: 0.02,
         description: 'Inspired by the Solar System. Eight planets with their moons.'
     },
     {

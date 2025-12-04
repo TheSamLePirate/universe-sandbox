@@ -443,8 +443,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     return (
         <div className={`fixed z-[60] transition-all duration-300 ${
             isExpanded 
-                ? 'inset-0 bg-slate-900/30 backdrop-blur-sm' 
-                : 'top-4 right-4 w-auto bg-slate-900/90 backdrop-blur-sm rounded-lg shadow-2xl'
+                ? 'inset-0 bg-slate-900/10 backdrop-blur-xs' 
+                : 'top-0 right-0 w-auto bg-slate-900/10 backdrop-blur-xs rounded-lg shadow-2xl'
         } flex flex-col overflow-hidden`}>
             {/* Header - Always visible */}
             <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-slate-900/50">
