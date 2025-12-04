@@ -6,6 +6,7 @@ import { useFlightComputerLogic } from '../hooks/useFlightComputerLogic';
 import ModuleContent from './flight_computer/ModuleContent';
 import InputSelector from './flight_computer/InputSelector';
 import { getInput, getUpdateForInput, MODULE_ICONS, isModuleActive } from './flight_computer/utils';
+import { resolveScalarInput, resolveBooleanInput } from '../services/orbitalMath';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
@@ -96,10 +97,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         const module = modules.find(m => m.id === moduleId);
         if (!module) return '—';
 
-        // Import resolveInput and other resolve functions from orbitalMath
-        const { resolveInput, resolveScalarInput, resolveBooleanInput, resolveStringInput } = require('../services/orbitalMath');
-
-        // Simplified display logic - you can expand this based on outputKey
+        // Simplified display logic - resolve the output value
         const value = resolveScalarInput(
             { type: 'module_output', value: `${moduleId}:${outputKey}` },
             bodies,
@@ -344,6 +342,77 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                     {/* Group Content */}
                     {!group.isCollapsed && (
                         <div className="space-y-2">
+                            {/* Display Output Selector */}
+                            <div className="bg-slate-800/30 p-2 rounded border border-slate-700/30">
+                                <label className="text-[9px] text-slate-500 uppercase block mb-1">Display Output (When Collapsed)</label>
+                                <select
+                                    value={group.displayOutput ? `${group.displayOutput.moduleId}:${group.displayOutput.outputKey}` : ''}
+                                    onChange={(e) => {
+                                        if (!e.target.value) {
+                                            onUpdateGroup(group.id, { displayOutput: undefined });
+                                        } else {
+                                            const [moduleId, outputKey] = e.target.value.split(':');
+                                            onUpdateGroup(group.id, { 
+                                                displayOutput: { moduleId, outputKey }
+                                            });
+                                        }
+                                    }}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+                                >
+                                    <option value="">None</option>
+                                    {groupModules.flatMap(m => {
+                                        const outputs: { key: string; label: string }[] = [];
+                                        
+                                        // Add common outputs based on module type
+                                        if (m.type === 'orbit_info') {
+                                            outputs.push(
+                                                { key: 'altitude', label: `${m.name || 'Orbit'} - Altitude` },
+                                                { key: 'period', label: `${m.name || 'Orbit'} - Period` },
+                                                { key: 'apoapsis', label: `${m.name || 'Orbit'} - Apoapsis` },
+                                                { key: 'periapsis', label: `${m.name || 'Orbit'} - Periapsis` }
+                                            );
+                                        } else if (m.type === 'transfer_window') {
+                                            outputs.push(
+                                                { key: 'phase_angle', label: `${m.name || 'Transfer'} - Phase Angle` },
+                                                { key: 'wait_time', label: `${m.name || 'Transfer'} - Wait Time` },
+                                                { key: 'ready', label: `${m.name || 'Transfer'} - Ready` }
+                                            );
+                                        } else if (m.type === 'rendezvous_tracker') {
+                                            outputs.push(
+                                                { key: 'time', label: `${m.name || 'Rendezvous'} - Time` },
+                                                { key: 'distance', label: `${m.name || 'Rendezvous'} - Distance` },
+                                                { key: 'delta_v_total', label: `${m.name || 'Rendezvous'} - ΔV Total` }
+                                            );
+                                        } else if (m.type === 'track_distance') {
+                                            outputs.push({ key: 'distance', label: `${m.name || 'Distance'} - Distance` });
+                                        } else if (m.type === 'track_velocity') {
+                                            outputs.push({ key: 'velocity', label: `${m.name || 'Velocity'} - Velocity` });
+                                        } else if (m.type === 'logic_gate') {
+                                            outputs.push({ key: 'result', label: `${m.name || 'Logic'} - Result` });
+                                        } else if (m.type === 'button') {
+                                            outputs.push({ key: 'state', label: `${m.name || 'Button'} - State` });
+                                        } else if (m.type === 'maths') {
+                                            outputs.push({ key: 'result', label: `${m.name || 'Math'} - Result` });
+                                        } else if (m.type === 'custom_script') {
+                                            outputs.push({ key: 'result', label: `${m.name || 'Script'} - Result` });
+                                        } else if (m.type === 'maneuver_executor') {
+                                            outputs.push(
+                                                { key: 'status', label: `${m.name || 'Executor'} - Status` },
+                                                { key: 'progress', label: `${m.name || 'Executor'} - Progress` }
+                                            );
+                                        } else if (m.type === 'selector') {
+                                            outputs.push({ key: 'body', label: `${m.name || 'Selector'} - Body` });
+                                        }
+                                        
+                                        return outputs.map(o => ({ ...o, moduleId: m.id }));
+                                    }).map(({ moduleId, key, label }) => (
+                                        <option key={`${moduleId}:${key}`} value={`${moduleId}:${key}`}>
+                                            {label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            
                             {groupModules.map(renderModule)}
                             {childGroups.map(childGroup => renderGroup(childGroup, depth + 1))}
                         </div>
@@ -358,7 +427,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const ungroupedModules = modules.filter(m => !m.groupId);
 
     return (
-        <div className={`${isMobile ? 'w-full' : 'w-full'} bg-slate-900/10 backdrop-blur-xs border-r border-slate-800 flex flex-col fixed top-0 right-0 z-50`}>
+        <div className={`${isMobile ? 'w-full' : 'w-50'} bg-slate-900/10 backdrop-blur-xs border-r border-slate-800 flex flex-col fixed top-0 right-0 z-50`}>
             {/* Header */}
             <div className="p-3 border-b border-slate-800 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-200">Flight Computer</h2>

@@ -63,9 +63,8 @@ export const useFlightComputerLogic = (
 
         modules.forEach(module => {
             // Follow Module
-            if (module.type === 'follow' && isModuleActive(module) && onSetFollowingBody) {
-                const triggerValue = resolveBooleanInput(module.inputs?.trigger, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-                const shouldFollow = triggerValue ?? false;
+            if (module.type === 'follow' && onSetFollowingBody) {
+                const shouldFollow = isModuleActive(module);
                 const wasFollowing = followModuleTriggerStateRef.current.get(module.id) || false;
 
                 if (shouldFollow && !wasFollowing) {
