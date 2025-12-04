@@ -44,6 +44,7 @@ export const useFlightComputerLogic = (
     const buttonResetTriggerStateRef = useRef<Map<string, boolean>>(new Map());
     const scriptLogsRef = useRef<Map<string, string[]>>(new Map());
     const asyncScriptRunningRef = useRef<Map<string, boolean>>(new Map());
+    const manualTriggerStateRef = useRef<Map<string, number>>(new Map());
 
     // --- Follow Module & Button Reset Logic & Custom Script ---
     useEffect(() => {
@@ -58,6 +59,9 @@ export const useFlightComputerLogic = (
         });
         Array.from(asyncScriptRunningRef.current.keys()).forEach(id => {
             if (!activeIds.has(id)) asyncScriptRunningRef.current.delete(id);
+        });
+        Array.from(manualTriggerStateRef.current.keys()).forEach(id => {
+            if (!activeIds.has(id)) manualTriggerStateRef.current.delete(id);
         });
         // Note: Script logs are kept in ref to avoid re-renders, but we might want to clean up if module removed
 
@@ -101,7 +105,22 @@ export const useFlightComputerLogic = (
                 // Resolve Activate Input (Trigger)
                 const triggerInput = module.inputs?.trigger;
                 // Default to false if not connected
-                const shouldRun = resolveBooleanInput(triggerInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+                let shouldRun = resolveBooleanInput(triggerInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+                
+                // Check Manual Trigger
+                const lastManualTrigger = module.customScriptManualTrigger || 0;
+                const prevManualTrigger = manualTriggerStateRef.current.get(module.id) || 0;
+                
+                if (lastManualTrigger > prevManualTrigger) {
+                    shouldRun = true;
+                    manualTriggerStateRef.current.set(module.id, lastManualTrigger);
+                }
+
+                // Check Continuous Run
+                if (module.customScriptContinuousRun) {
+                    shouldRun = true;
+                }
+
                 const mode = module.customScriptMode || 'sync';
 
                 if (shouldRun) {
@@ -328,7 +347,7 @@ export const useFlightComputerLogic = (
     useEffect(() => {
         modules.forEach(module => {
             if (module.type === 'beep' && isModuleActive(module)) {
-                const input = resolveBooleanInput(module.inputs?.primary, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const input = resolveBooleanInput(module.inputs?.trigger, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                 const mode = module.beepTriggerMode || 'rising';
                 const pitch = module.beepPitch || 800;
                 const rate = module.beepRate || 2;
@@ -352,14 +371,19 @@ export const useFlightComputerLogic = (
                     }
 
                     if (shouldBeep) {
-                        if (module.beepSoundType === 'speak' && module.beepSpeakText && mode !== 'continuous') {
-                            EasySpeech.speak({
-                                text: module.beepSpeakText,
-                                pitch: 1,
-                                rate: 1,
-                                volume: 1,
-                                boundary: e => console.debug('boundary reached')
-                            }).catch(e => console.error(e));
+                        if (module.beepSoundType === 'speak' && mode !== 'continuous') {
+                            const dynamicText = resolveStringInput(module.inputs?.text, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            const textToSpeak = dynamicText || module.beepSpeakText;
+                            
+                            if (textToSpeak) {
+                                EasySpeech.speak({
+                                    text: textToSpeak,
+                                    pitch: 1,
+                                    rate: 1,
+                                    volume: 1,
+                                    boundary: e => console.debug('boundary reached')
+                                }).catch(e => console.error(e));
+                            }
                         } else {
                             playBeep(pitch);
                         }

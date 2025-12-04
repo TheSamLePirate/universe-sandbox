@@ -1,7 +1,8 @@
 import React from 'react';
 import { Body, FlightComputerModule, FlightComputerInput, PhysicsConfig, RendezvousSolution, FlightComputerModuleType, Maneuver } from '../../../types';
 import { resolveInput } from '../../../services/orbitalMath';
-import { getInput, isModuleActive, MANEUVER_TYPE_OPTIONS } from '../utils';
+import { getInput, isModuleActive, MANEUVER_TYPE_OPTIONS, getUpdateForInput } from '../utils';
+import InputSelector from '../InputSelector';
 import { Play, Square } from 'lucide-react';
 
 interface ModuleProps {
@@ -18,7 +19,7 @@ const ManeuverExecutorModule: React.FC<ModuleProps> = ({ module, bodies, modules
     const execType = module.maneuverExecutorType || 'burn';
     const execStatus = module.maneuverExecutorStatus || 'idle';
     const execProgress = module.maneuverExecutorProgress ?? 0;
-    
+
     const resolveVectorInputValue = (input?: FlightComputerInput) =>
         resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
 
@@ -28,7 +29,7 @@ const ManeuverExecutorModule: React.FC<ModuleProps> = ({ module, bodies, modules
     const targetSelected = module.maneuverExecutorTargetBodyId || module.targetBodyId;
     const parentSelected = module.maneuverExecutorParentBodyId || module.referenceBodyId;
     const canExecute = !!executorRocket && (!requiresTarget || targetSelected) && (!requiresParent || parentSelected);
-    const progressPercent = Math.max(0, Math.min(100, Math.round(execProgress * 100))); 
+    const progressPercent = Math.max(0, Math.min(100, Math.round(execProgress * 100)));
 
     const queueExecutor = () => {
         onUpdateModule(module.id, {
@@ -343,6 +344,27 @@ const ManeuverExecutorModule: React.FC<ModuleProps> = ({ module, bodies, modules
                     </select>
                 </div>
             )}
+
+            <div className="space-y-2 pt-2 border-t border-slate-700/30">
+                <InputSelector
+                    label="Plan Trigger (Bool)"
+                    value={getInput(module, 'queueTrigger')}
+                    onChange={(input) => onUpdateModule(module.id, getUpdateForInput(module, 'queueTrigger', input))}
+                    bodies={bodies}
+                    modules={modules}
+                    currentModuleId={module.id}
+                    allowedTypes={['boolean', 'module_output']}
+                />
+                <InputSelector
+                    label="Execute Trigger (Bool)"
+                    value={getInput(module, 'executeTrigger')}
+                    onChange={(input) => onUpdateModule(module.id, getUpdateForInput(module, 'executeTrigger', input))}
+                    bodies={bodies}
+                    modules={modules}
+                    currentModuleId={module.id}
+                    allowedTypes={['boolean', 'module_output']}
+                />
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
                 <button

@@ -127,9 +127,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 draggable
                 onDragStart={() => setDraggedModuleId(module.id)}
                 onDragEnd={() => setDraggedModuleId(null)}
-                className={`bg-slate-800/40 backdrop-blur-sm rounded border transition-all ${
-                    module.isEnabled ? 'border-slate-700/50' : 'border-slate-800/30 opacity-50'
-                } ${draggedModuleId === module.id ? 'opacity-40' : ''}`}
+                className={`bg-slate-800/40 backdrop-blur-sm rounded border transition-all ${module.isEnabled ? 'border-slate-700/50' : 'border-slate-800/30 opacity-50'
+                    } ${draggedModuleId === module.id ? 'opacity-40' : ''}`}
             >
                 <div className="p-2">
                     {/* Header */}
@@ -158,7 +157,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             <CheckSquare size={14} />
                         </button>
                         <button
-                            onClick={() => setExpandedModules(expanded => 
+                            onClick={() => setExpandedModules(expanded =>
                                 isExpanded ? expanded.filter(id => id !== module.id) : [...expanded, module.id]
                             )}
                             className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
@@ -304,7 +303,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         </div>
                         {group.isCollapsed && (
                             <div className="text-xs text-slate-400 font-mono">
-                                {group.name} 
+                                {group.name}
                             </div>
                         )}
                         {!group.isCollapsed && (
@@ -323,7 +322,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                 />
                             </>
                         )}
-                        
+
                         {group.isCollapsed && (
                             <div className="text-xs text-slate-400 font-mono">
                                 {getGroupDisplayValue(group)}
@@ -331,26 +330,26 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         )}
 
                         {/* align right */}
-                        
-                            <button
-                                onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })}
-                                className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
-                            >
-                                {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                            </button>
-                            <button
-                                onClick={() => onExportGroup(group.id)}
-                                className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
-                            >
-                                <Download size={14} />
-                            </button>
-                            <button
-                                onClick={() => onRemoveGroup(group.id)}
-                                className="p-1 hover:bg-red-900/30 rounded text-red-400"
-                            >
-                                <Trash2 size={14} />
-                            </button>
-                        
+
+                        <button
+                            onClick={() => onUpdateGroup(group.id, { isCollapsed: !group.isCollapsed })}
+                            className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
+                        >
+                            {group.isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                        </button>
+                        <button
+                            onClick={() => onExportGroup(group.id)}
+                            className="p-1 hover:bg-slate-700/50 rounded text-slate-400"
+                        >
+                            <Download size={14} />
+                        </button>
+                        <button
+                            onClick={() => onRemoveGroup(group.id)}
+                            className="p-1 hover:bg-red-900/30 rounded text-red-400"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+
                     </div>
 
                     {/* Group Content */}
@@ -366,7 +365,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             onUpdateGroup(group.id, { displayOutput: undefined });
                                         } else {
                                             const [moduleId, outputKey] = e.target.value.split(':');
-                                            onUpdateGroup(group.id, { 
+                                            onUpdateGroup(group.id, {
                                                 displayOutput: { moduleId, outputKey }
                                             });
                                         }
@@ -376,7 +375,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                     <option value="">None</option>
                                     {groupModules.flatMap(m => {
                                         const outputs: { key: string; label: string }[] = [];
-                                        
+
                                         // Add common outputs based on module type
                                         if (m.type === 'orbit_info') {
                                             outputs.push(
@@ -403,7 +402,11 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             outputs.push({ key: 'velocity', label: `${m.name || 'Velocity'} - Velocity` });
                                         } else if (m.type === 'logic_gate') {
                                             outputs.push({ key: 'result', label: `${m.name || 'Logic'} - Result` });
-                                        } else if (m.type === 'button') {
+                                        }
+                                        else if (m.type === 'notify') {
+                                            outputs.push({ key: 'triggered', label: `${m.name || 'Notify'} - Triggered` });
+                                        }
+                                        else if (m.type === 'button') {
                                             outputs.push({ key: 'state', label: `${m.name || 'Button'} - State` });
                                         } else if (m.type === 'maths') {
                                             outputs.push({ key: 'result', label: `${m.name || 'Math'} - Result` });
@@ -417,7 +420,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                         } else if (m.type === 'selector') {
                                             outputs.push({ key: 'body', label: `${m.name || 'Selector'} - Body` });
                                         }
-                                        
+
                                         return outputs.map(o => ({ ...o, moduleId: m.id }));
                                     }).map(({ moduleId, key, label }) => (
                                         <option key={`${moduleId}:${key}`} value={`${moduleId}:${key}`}>
@@ -426,7 +429,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                     ))}
                                 </select>
                             </div>
-                            
+
                             {groupModules.map(renderModule)}
                             {childGroups.map(childGroup => renderGroup(childGroup, depth + 1))}
                         </div>
@@ -441,11 +444,10 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     const ungroupedModules = modules.filter(m => !m.groupId);
 
     return (
-        <div className={`fixed z-[60] transition-all duration-300 ${
-            isExpanded 
-                ? 'inset-0 bg-slate-900/10 backdrop-blur-xs' 
-                : 'top-0 right-0 w-auto bg-slate-900/10 backdrop-blur-xs rounded-lg shadow-2xl'
-        } flex flex-col overflow-hidden`}>
+        <div className={`fixed z-[60] transition-all duration-300 ${isExpanded
+            ? 'inset-0 bg-slate-900/10 backdrop-blur-xs bottom-16'
+            : 'top-0 right-0 w-auto bg-slate-900/10 backdrop-blur-xs rounded-lg shadow-2xl'
+            } flex flex-col overflow-hidden`}>
             {/* Header - Always visible */}
             <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-slate-900/50">
                 <div className="flex items-center justify-between gap-3">
@@ -460,11 +462,10 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                             <>
                                 <button
                                     onClick={() => setIsAdding(!isAdding)}
-                                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                                        isAdding 
-                                            ? 'bg-purple-600 text-white' 
-                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                    }`}
+                                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${isAdding
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                        }`}
                                 >
                                     <Plus size={16} className="inline mr-1" />
                                     Add Module
@@ -541,7 +542,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-min">
                             {/* Render Groups */}
                             {topLevelGroups.map(group => renderGroup(group, 0))}
-                            
+
                             {/* Render Ungrouped Modules */}
                             {ungroupedModules.map(renderModule)}
                         </div>

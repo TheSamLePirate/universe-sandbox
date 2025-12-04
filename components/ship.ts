@@ -36,9 +36,13 @@ export function drawShip(
             if (!module.isEnabled) return;
             if (module.type === 'custom_script') {
                 if (module.customScriptLastResult) {
-                    console.log(module);
-                    if(module.customScriptLastResult==="landing"){
-                        landing=true;
+                    try {
+                        const datas=module.customScriptLastResult.split(':');
+                        if(datas[0]==="landing" && datas[1]===body.id){
+                            landing=true;
+                        }
+                    } catch (error) {
+                        console.error(error);
                     }
                 }
             }

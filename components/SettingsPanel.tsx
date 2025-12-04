@@ -21,11 +21,11 @@ interface SettingsPanelProps {
     setShowMusicPanel: (show: boolean) => void;
 }
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
-    visualConfig, 
-    setVisualConfig, 
-    physicsConfig, 
-    setPhysicsConfig, 
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+    visualConfig,
+    setVisualConfig,
+    physicsConfig,
+    setPhysicsConfig,
     onClose,
     onReset,
     onExport,
@@ -67,8 +67,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     };
 
     return (
-        <div 
-            className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        <div
+            className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -92,21 +92,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
                 {/* Tabs */}
                 <div className="flex border-b border-slate-700">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('visuals')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2
                             ${activeTab === 'visuals' ? 'bg-slate-800 text-blue-300 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         <Eye size={16} /> Visual FX
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('physics')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2
                             ${activeTab === 'physics' ? 'bg-slate-800 text-blue-300 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'}`}
                     >
                         <Activity size={16} /> Physics Engine
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('api')}
                         className={`flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2
                             ${activeTab === 'api' ? 'bg-slate-800 text-blue-300 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'}`}
@@ -134,9 +134,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <label key={item.key} className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer hover:bg-slate-750 transition-colors">
                                         <span className="text-sm text-slate-300">{item.label}</span>
                                         <div className={`w-10 h-5 rounded-full relative transition-colors ${visualConfig[item.key as keyof VisualConfig] ? 'bg-blue-600' : 'bg-slate-600'}`}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={visualConfig[item.key as keyof VisualConfig] as boolean} 
+                                            <input
+                                                type="checkbox"
+                                                checked={visualConfig[item.key as keyof VisualConfig] as boolean}
                                                 onChange={(e) => updateVisual(item.key as keyof VisualConfig, e.target.checked)}
                                                 className="hidden"
                                             />
@@ -145,13 +145,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     </label>
                                 ))}
 
-                                
+
                                 <label className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer hover:bg-slate-750 transition-colors col-span-2 border border-indigo-500/30">
                                     <span className="text-sm text-indigo-300 font-bold">Use 3D Canvas (Beta)</span>
                                     <div className={`w-10 h-5 rounded-full relative transition-colors ${use3D ? 'bg-indigo-600' : 'bg-slate-600'}`}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={use3D} 
+                                        <input
+                                            type="checkbox"
+                                            checked={use3D}
                                             onChange={(e) => setUse3D(e.target.checked)}
                                             className="hidden"
                                         />
@@ -167,9 +167,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className="text-sm text-purple-300 font-bold">AI Music Generator</span>
                                 </div>
                                 <div className={`w-10 h-5 rounded-full relative transition-colors ${showMusicPanel ? 'bg-purple-600' : 'bg-slate-600'}`}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={showMusicPanel} 
+                                    <input
+                                        type="checkbox"
+                                        checked={showMusicPanel}
                                         onChange={(e) => setShowMusicPanel(e.target.checked)}
                                         className="hidden"
                                     />
@@ -184,15 +184,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className="text-sm text-slate-300">Audio Status</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className={`text-xs font-mono px-2 py-1 rounded ${
-                                        audioState === 'running' ? 'bg-green-500/20 text-green-300' : 
-                                        audioState === 'suspended' ? 'bg-orange-500/20 text-orange-300' : 
-                                        'bg-slate-700 text-slate-400'
-                                    }`}>
+                                    <span className={`text-xs font-mono px-2 py-1 rounded ${audioState === 'running' ? 'bg-green-500/20 text-green-300' :
+                                            audioState === 'suspended' ? 'bg-orange-500/20 text-orange-300' :
+                                                'bg-slate-700 text-slate-400'
+                                        }`}>
                                         {audioState.toUpperCase()}
                                     </span>
                                     {audioState === 'suspended' && (
-                                        <button 
+                                        <button
                                             onClick={onEnableAudio}
                                             className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
                                         >
@@ -206,26 +205,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                                     <Layers size={12} /> Environment Config
                                 </h3>
-                                
+
                                 <div>
                                     <div className="flex justify-between text-xs mb-1">
                                         <span className="text-slate-400">Star Density</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.starDensity}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="0" max="2000" step="50"
                                         value={visualConfig.starDensity}
                                         onChange={(e) => updateVisual('starDensity', Number(e.target.value))}
                                         className="w-full accent-blue-500 bg-slate-700 h-1 rounded-lg appearance-none"
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <div className="flex justify-between text-xs mb-1">
                                         <span className="text-slate-400">Star Twinkle Speed</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.starTwinkleSpeed.toFixed(1)}x</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="0.1" max="5.0" step="0.1"
                                         value={visualConfig.starTwinkleSpeed}
                                         onChange={(e) => updateVisual('starTwinkleSpeed', Number(e.target.value))}
@@ -238,7 +237,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <span className="text-slate-400">Nebula Clouds</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.nebulaCloudCount}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="0" max="50" step="1"
                                         value={visualConfig.nebulaCloudCount}
                                         onChange={(e) => updateVisual('nebulaCloudCount', Number(e.target.value))}
@@ -251,7 +250,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <span className="text-slate-400">Nebula Opacity</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.nebulaOpacity.toFixed(2)}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="0" max="1.0" step="0.05"
                                         value={visualConfig.nebulaOpacity}
                                         onChange={(e) => updateVisual('nebulaOpacity', Number(e.target.value))}
@@ -264,7 +263,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <span className="text-slate-400">Trail Length</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.trailLength}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="10" max="2000" step="10"
                                         value={visualConfig.trailLength}
                                         onChange={(e) => updateVisual('trailLength', Number(e.target.value))}
@@ -277,7 +276,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <span className="text-slate-400">Glow Intensity</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.glowIntensity.toFixed(1)}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="0.1" max="3.0" step="0.1"
                                         value={visualConfig.glowIntensity}
                                         onChange={(e) => updateVisual('glowIntensity', Number(e.target.value))}
@@ -290,7 +289,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         <span className="text-slate-400">CoM Distance Threshold</span>
                                         <span className="text-blue-300 font-mono">{visualConfig.centerOfMassThreshold}</span>
                                     </div>
-                                    <input 
+                                    <input
                                         type="range" min="500" max="10000" step="100"
                                         value={visualConfig.centerOfMassThreshold}
                                         onChange={(e) => updateVisual('centerOfMassThreshold', Number(e.target.value))}
@@ -303,17 +302,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     )}
 
                     {activeTab === 'physics' && (
-                         <div className="space-y-6">
-                             <div className="bg-orange-900/20 border border-orange-700/50 p-4 rounded-lg text-sm text-orange-200">
-                                 Warning: Changing physics constants can destabilize existing orbits or cause chaotic ejections.
-                             </div>
+                        <div className="space-y-6">
+                            <div className="bg-orange-900/20 border border-orange-700/50 p-4 rounded-lg text-sm text-orange-200">
+                                Warning: Changing physics constants can destabilize existing orbits or cause chaotic ejections.
+                            </div>
 
-                             <label className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer">
+                            <label className="flex items-center justify-between bg-slate-800 p-3 rounded-lg cursor-pointer">
                                 <span className="text-sm text-slate-300">Enable Collisions</span>
                                 <div className={`w-10 h-5 rounded-full relative transition-colors ${physicsConfig.collisions ? 'bg-green-600' : 'bg-slate-600'}`}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={physicsConfig.collisions} 
+                                    <input
+                                        type="checkbox"
+                                        checked={physicsConfig.collisions}
                                         onChange={(e) => updatePhysics('collisions', e.target.checked)}
                                         className="hidden"
                                     />
@@ -326,7 +325,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className="text-slate-400">Gravitational Constant (G)</span>
                                     <span className="text-blue-300 font-mono">{physicsConfig.gravitationalConstant.toFixed(2)}</span>
                                 </div>
-                                <input 
+                                <input
                                     type="range" min="0.1" max="5.0" step="0.05"
                                     value={physicsConfig.gravitationalConstant}
                                     onChange={(e) => updatePhysics('gravitationalConstant', Number(e.target.value))}
@@ -339,7 +338,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className="text-slate-400">Time Step (Delta T)</span>
                                     <span className="text-blue-300 font-mono">{physicsConfig.timeStep.toFixed(3)}</span>
                                 </div>
-                                <input 
+                                <input
                                     type="range" min="0.001" max="2.0" step="0.001"
                                     value={physicsConfig.timeStep}
                                     onChange={(e) => updatePhysics('timeStep', Number(e.target.value))}
@@ -355,14 +354,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <span className="text-slate-400">Time Reverse Duration</span>
                                     <span className="text-blue-300 font-mono">{physicsConfig.timeReverseDuration?.toFixed(1) || 4.0}s</span>
                                 </div>
-                                <input 
+                                <input
                                     type="range" min="1.0" max="10.0" step="0.5"
                                     value={physicsConfig.timeReverseDuration || 4.0}
                                     onChange={(e) => updatePhysics('timeReverseDuration', Number(e.target.value))}
                                     className="w-full accent-blue-500 bg-slate-700 h-1 rounded-lg appearance-none"
                                 />
                             </div>
-                         </div>
+                        </div>
                     )}
 
                     {activeTab === 'api' && (
@@ -380,8 +379,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     Gemini API Key
                                 </label>
                                 <div className="flex gap-2">
-                                    <input 
-                                        type="password" 
+                                    <input
+                                        type="password"
                                         value={apiKey}
                                         onChange={(e) => setApiKey(e.target.value)}
                                         placeholder="Enter your Gemini API key..."
@@ -403,14 +402,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </div>
 
                             <div className="flex gap-3">
-                                <button 
+                                <button
                                     onClick={handleSaveApiKey}
                                     disabled={!apiKey.trim()}
                                     className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
                                 >
                                     Save API Key
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleClearApiKey}
                                     className="px-4 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
                                 >
@@ -430,11 +429,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 {/* Footer with Actions */}
                 <div className="p-4 border-t border-slate-700 flex justify-between items-center bg-slate-800/30 gap-2">
                     <div className="flex gap-2">
-                         <label className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors px-3 py-2 hover:bg-slate-700 rounded-lg border border-slate-700 cursor-pointer">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors px-3 py-2 hover:bg-slate-700 rounded-lg border border-slate-700 cursor-pointer">
                             <Upload size={14} /> Import
                             <input type="file" accept=".json" onChange={onImport} className="hidden" />
                         </label>
-                        <button 
+                        <button
                             onClick={onExport}
                             className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors px-3 py-2 hover:bg-slate-700 rounded-lg border border-slate-700"
                         >
@@ -442,7 +441,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         </button>
                     </div>
 
-                    <button 
+                    <button
                         onClick={onReset}
                         className="flex items-center gap-2 text-xs font-bold text-red-400 hover:text-red-300 transition-colors px-3 py-2 hover:bg-red-500/10 rounded-lg border border-transparent hover:border-red-500/30"
                     >

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Play, Repeat } from 'lucide-react';
 import { Body, FlightComputerModule, FlightComputerInput, PhysicsConfig, RendezvousSolution, FlightComputerModuleType } from '../../../types';
 import { getInput, getUpdateForInput } from '../utils';
 import InputSelector from '../InputSelector';
@@ -68,29 +69,45 @@ const CustomScriptModule: React.FC<ModuleProps> = ({ module, bodies, modules, on
             {/* Inputs List */}
             <div className="space-y-1 bg-slate-900/30 p-2 rounded border border-slate-800">
                 <label className="text-[9px] text-slate-500 uppercase block mb-1">Inputs</label>
-                
+
                 {/* Trigger Input */}
-                <div className="mb-2 pb-2 border-b border-slate-800">
-                    <InputSelector 
-                        label="Run Trigger (True to Run)" 
-                        value={module.inputs?.trigger} 
-                        onChange={(input) => updateInput(module.id, 'trigger', input)} 
-                        bodies={bodies} 
-                        modules={modules} 
-                        currentModuleId={module.id} 
-                        allowedTypes={['boolean', 'module_output']}
-                    />
+                <div className="mb-2 pb-2 border-b border-slate-800 flex items-end gap-2">
+                    <div className="flex-1">
+                        <InputSelector
+                            label="Run Trigger (True to Run)"
+                            value={module.inputs?.trigger}
+                            onChange={(input) => updateInput(module.id, 'trigger', input)}
+                            bodies={bodies}
+                            modules={modules}
+                            currentModuleId={module.id}
+                            allowedTypes={['boolean', 'module_output']}
+                        />
+                    </div>
+                    <button
+                        onClick={() => onUpdateModule(module.id, { customScriptManualTrigger: Date.now() })}
+                        className="bg-green-600 hover:bg-green-500 text-white p-1 rounded transition-colors h-[26px] w-[26px] flex items-center justify-center"
+                        title="Run Script Now"
+                    >
+                        <Play size={14} />
+                    </button>
+                    <button
+                        onClick={() => onUpdateModule(module.id, { customScriptContinuousRun: !module.customScriptContinuousRun })}
+                        className={`p-1 rounded transition-colors h-[26px] w-[26px] flex items-center justify-center ${module.customScriptContinuousRun ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'}`}
+                        title="Continuous Run (Loop)"
+                    >
+                        <Repeat size={14} />
+                    </button>
                 </div>
 
                 {/* Dynamic Data Inputs */}
                 {Array.from({ length: inputsCount }).map((_, i) => (
                     <div key={i}>
-                        <InputSelector 
-                            label={`input[${i}]`} 
-                            value={module.inputs?.[`input_${i}`]} 
-                            onChange={(input) => updateInput(module.id, `input_${i}`, input)} 
-                            bodies={bodies} 
-                            modules={modules} 
+                        <InputSelector
+                            label={`input[${i}]`}
+                            value={module.inputs?.[`input_${i}`]}
+                            onChange={(input) => updateInput(module.id, `input_${i}`, input)}
+                            bodies={bodies}
+                            modules={modules}
                             currentModuleId={module.id}
                             allowedTypes={['body', 'module_output', 'scalar', 'boolean', 'string', 'vector']}
                         />
@@ -120,7 +137,7 @@ const CustomScriptModule: React.FC<ModuleProps> = ({ module, bodies, modules, on
                         {isReady ? "READY" : "RUNNING..."}
                     </span>
                 </div>
-                
+
                 {/* Logs */}
                 <div className="max-h-20 overflow-y-auto space-y-0.5 text-slate-400">
                     {module.customScriptLogs?.map((log, i) => (
@@ -133,9 +150,9 @@ const CustomScriptModule: React.FC<ModuleProps> = ({ module, bodies, modules, on
                 <div className="pt-1 border-t border-slate-800">
                     <span className="text-purple-400 font-bold">=&gt; </span>
                     <span className="text-slate-200">
-                        {scriptResult === undefined ? 'undefined' : 
-                         typeof scriptResult === 'object' ? JSON.stringify(scriptResult) : 
-                         String(scriptResult)}
+                        {scriptResult === undefined ? 'undefined' :
+                            typeof scriptResult === 'object' ? JSON.stringify(scriptResult) :
+                                String(scriptResult)}
                     </span>
                 </div>
             </div>

@@ -556,7 +556,7 @@ export const resolveBooleanInput = (
 
         if (module.type === 'notify' && outputKey === 'triggered') {
             // Re-evaluate notify logic
-            const nInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+            const nInput = module.inputs?.inputA || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
             const currentValue = resolveScalarInput(nInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
             const operator = module.comparisonOperator || '>';
             const threshold = module.comparisonValue || 0;

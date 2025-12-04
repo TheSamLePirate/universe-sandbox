@@ -307,6 +307,8 @@ export interface FlightComputerModule {
     customScriptLogs?: string[]; // Store last few logs
     customScriptMode?: 'sync' | 'async';
     customScriptAsyncState?: boolean; // true = finished/ready, false = pending/running
+    customScriptManualTrigger?: number; // Timestamp of last manual trigger
+    customScriptContinuousRun?: boolean; // Run every frame
 
     // Marker Module Config
     markerShape?: MarkerShape;

@@ -19,11 +19,22 @@ const BeepModule: React.FC<ModuleProps> = ({ module, bodies, modules, physicsCon
         onUpdateModule(moduleId, getUpdateForInput(module, key, input));
     };
 
-    const beepInput = getInput(module, 'primary');
+    const beepInput = getInput(module, 'trigger');
     const beepTriggered = resolveBooleanInput(beepInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-    
+
     return (
         <div className="mt-2 space-y-2">
+            <div className="space-y-1">
+                <InputSelector
+                    label="Trigger (Bool)"
+                    value={getInput(module, 'trigger')}
+                    onChange={(input) => updateInput(module.id, 'trigger', input)}
+                    bodies={bodies}
+                    modules={modules}
+                    currentModuleId={module.id}
+                    allowedTypes={['boolean', 'module_output']}
+                />
+            </div>
             <div className="space-y-1">
                 <label className="text-[9px] text-slate-500 uppercase">Trigger Mode</label>
                 <select
@@ -51,7 +62,16 @@ const BeepModule: React.FC<ModuleProps> = ({ module, bodies, modules, physicsCon
 
             {module.beepSoundType === 'speak' && (
                 <div className="space-y-1">
-                    <label className="text-[9px] text-slate-500 uppercase">Text to Speak</label>
+                    <InputSelector
+                        label="Text Input (String)"
+                        value={getInput(module, 'text')}
+                        onChange={(input) => updateInput(module.id, 'text', input)}
+                        bodies={bodies}
+                        modules={modules}
+                        currentModuleId={module.id}
+                        allowedTypes={['string', 'module_output']}
+                    />
+                    <label className="text-[9px] text-slate-500 uppercase">Fallback Text</label>
                     <input
                         type="text"
                         value={module.beepSpeakText || ''}
@@ -86,7 +106,7 @@ const BeepModule: React.FC<ModuleProps> = ({ module, bodies, modules, physicsCon
                     )}
                 </div>
             )}
-            
+
             <div className={`p-2 rounded border flex items-center justify-between ${beepTriggered ? 'bg-purple-900/20 border-purple-500/40' : 'bg-slate-800/30 border-slate-700/30'}`}>
                 <span className="text-[10px] text-slate-400 uppercase">Input Signal</span>
                 <span className={`text-xs font-bold ${beepTriggered ? 'text-purple-400' : 'text-slate-500'}`}>
