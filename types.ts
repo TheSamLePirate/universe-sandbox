@@ -129,7 +129,9 @@ export interface SimulationSaveData {
     camera: {
         scale: number;
         offset: Vector2D;
-    }
+    };
+    flightComputerModules?: FlightComputerModule[];
+    moduleGroups?: ModuleGroup[];
 }
 
 export interface SimulationState {

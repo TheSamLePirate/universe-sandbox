@@ -1505,7 +1505,9 @@ const App: React.FC = () => {
             camera: {
                 scale: scale,
                 offset: offset
-            }
+            },
+            flightComputerModules: flightComputerModules,
+            moduleGroups: moduleGroups
         };
 
         try {
@@ -1571,6 +1573,9 @@ const App: React.FC = () => {
                 setObserverBodyIds({ a: null, b: null });
                 setPredictionPaths([]);
                 simulationTimeRef.current = 0; // Reset clock for imported state
+
+                setFlightComputerModules(data.flightComputerModules || []);
+                setModuleGroups(data.moduleGroups || []);
 
                 setTimeout(() => setIsRunning(true), 100);
                 //alert("Simulation loaded successfully!");
