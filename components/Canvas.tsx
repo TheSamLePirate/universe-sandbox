@@ -392,6 +392,9 @@ const Canvas: React.FC<CanvasProps> = ({
                         ctx.strokeStyle = body.color;
                         ctx.globalAlpha = opacity * 0.6;
                         ctx.lineWidth = Math.max(1, 2 * scale * opacity);
+                        if (body.name.includes("Pomme")) {
+                            ctx.lineWidth = 0.1;
+                        }
                         ctx.stroke();
                     }
                 }
@@ -644,7 +647,7 @@ const Canvas: React.FC<CanvasProps> = ({
         const drawBody = (body: Body, isGhost = false) => {
             const screenX = cx + body.position.x * scale;
             const screenY = cy + body.position.y * scale;
-            const visualRadius = Math.max(3, body.radius * scale);
+            const visualRadius = body.radius * scale;
 
             if (screenX + visualRadius * 3 < 0 || screenX - visualRadius * 3 > width ||
                 screenY + visualRadius * 3 < 0 || screenY - visualRadius * 3 > height) return;
@@ -1492,7 +1495,7 @@ const Canvas: React.FC<CanvasProps> = ({
             // --- PLANET RENDERING (Procedural) ---
             else {
                 // 1. Draw Rings (if Saturn-like)
-                if (false) {
+                if (body.name.includes('Pomme')) {
 
 
                     if (body.name.includes('Saturn') || (body.mass > 300 && body.mass < 500)) {
@@ -1609,11 +1612,12 @@ const Canvas: React.FC<CanvasProps> = ({
 
                         ctx.restore();
                     }
+                } else {
+                    const ttime = time;
+                    //drawBeautifulPlanetOpenAi(ctx, body, screenX, screenY, visualRadius, body.color, { primaryStar, visualConfig, isGhost, time: ttime });
+                    drawBeautifullPlanetGemini(ctx, body, screenX, screenY, visualRadius, { primaryStar, visualConfig, isGhost, time: ttime });
                 }
 
-                const ttime = time;
-                //drawBeautifulPlanetOpenAi(ctx, body, screenX, screenY, visualRadius, body.color, { primaryStar, visualConfig, isGhost, time: ttime });
-                drawBeautifullPlanetGemini(ctx, body, screenX, screenY, visualRadius, { primaryStar, visualConfig, isGhost, time: ttime });
 
                 // --- SURFACE OBJECTS RENDERING ---
                 if (body.surfaceObjects && body.surfaceObjects.length > 0) {
@@ -1669,7 +1673,7 @@ const Canvas: React.FC<CanvasProps> = ({
             if (body) {
                 const screenX = cx + body.position.x * scale;
                 const screenY = cy + body.position.y * scale;
-                const visualRadius = Math.max(3, body.radius * scale);
+                const visualRadius = body.radius * scale;
                 const rot = time * 2;
                 if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
                     ctx.beginPath(); ctx.setLineDash([5, 5]);

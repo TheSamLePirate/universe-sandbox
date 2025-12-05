@@ -13,11 +13,18 @@ const FUEL_CONSUMPTION_RATE = 500;
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
+const nameExcludedFromGravity = ['FakeSun', 'FakeStar', 'FakePlanet'];
+const attractButDontMove = ['FakeTerre'];
+
 export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
   const forces: Vector2D[] = bodies.map(() => ({ x: 0, y: 0 }));
 
   for (let i = 0; i < bodies.length; i++) {
     for (let j = i + 1; j < bodies.length; j++) {
+
+      if (nameExcludedFromGravity.includes(bodies[i].name) || nameExcludedFromGravity.includes(bodies[j].name)) continue;
+
+      
       const bodyA = bodies[i];
       const bodyB = bodies[j];
 
@@ -31,11 +38,18 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
 
       const fx = f * dx;
       const fy = f * dy;
+      
+      // If not part of attractButDontMove, apply force
+      if (!attractButDontMove.includes(bodyA.name)) {
+        forces[i].x += fx;
+        forces[i].y += fy;
+      }
 
-      forces[i].x += fx;
-      forces[i].y += fy;
-      forces[j].x -= fx;
-      forces[j].y -= fy;
+      // If not part of attractButDontMove, apply force
+      if (!attractButDontMove.includes(bodyB.name)) {
+        forces[j].x -= fx;
+        forces[j].y -= fy;
+      }
     }
   }
 
@@ -868,14 +882,16 @@ export const updatePhysics = (
                   const dx = currentBody.position.x - otherBody.position.x;
                   const dy = currentBody.position.y - otherBody.position.y;
                   const dist = Math.sqrt(dx * dx + dy * dy);
-                  const minDist = (currentBody.radius + otherBody.radius) * 0.9; 
+                  const minDist = (currentBody.radius + otherBody.radius); 
 
                   if (dist < minDist) {
                       // COLLISION
                       const isRocketA = !!currentBody.isRocket;
                       const isRocketB = !!otherBody.isRocket;
+                      const isApple = currentBody.name.includes("Pomme") || otherBody.name.includes("Pomme");
+
                       
-                      if (isRocketA !== isRocketB) {
+                      if (isRocketA !== isRocketB || isApple) {
                           const rocket = isRocketA ? currentBody : otherBody;
                           const planet = isRocketA ? otherBody : currentBody;
                           
@@ -883,7 +899,9 @@ export const updatePhysics = (
                           const dvy = rocket.velocity.y - planet.velocity.y;
                           const relVel = Math.sqrt(dvx*dvx + dvy*dvy);
 
-                          if (relVel < LANDING_MAX_VELOCITY) {
+                          const maxVel = isApple ? 100 : LANDING_MAX_VELOCITY;
+
+                          if (relVel < maxVel) {
                               if (isRocketA) {
                                   currentBody.landedOnBodyId = planet.id;
                                   currentBody.velocity = { ...planet.velocity };

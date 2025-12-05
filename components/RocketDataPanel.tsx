@@ -269,7 +269,9 @@ const RocketDataPanel: React.FC<RocketDataPanelProps> = ({
                     </div>
                     <div>
                         <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1"><Compass size={10} /> Heading</div>
-                        <div className="text-lg text-white font-bold">{heading.toFixed(1)}°</div>
+                        {/* Color the icon base on rocket.color it is a #ffaacc format*/}
+                        <div className="text-[10px] text-slate-500 uppercase flex items-center gap-1 " style={{ color: rocket.color }}><Rocket size={26} className={`rotate-[${(heading - 45 + 90).toFixed(0)}deg]`} /></div>
+
                     </div>
                 </div>
 
