@@ -18,7 +18,7 @@ import FlightComputerDashboard from './components/FlightComputerDashboard';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine';
 import { resolveInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from './services/orbitalMath';
-import { Body, Vector2D, VisualConfig, PhysicsConfig, Preset, RocketSpawnConfig, Maneuver, CoMData, AssistantActions, Particle, SimulationSaveData, FlightComputerModule, FlightComputerModuleType, FlightComputerInput, ModuleGroup, RendezvousSolution } from './types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, SimulationState, Preset, FlightComputerModule, FlightComputerInput, ModuleGroup, FlightComputerModuleType, Maneuver, SurfaceObject, RocketSpawnConfig, RendezvousSolution, CoMData, AssistantActions } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -1442,7 +1442,10 @@ const App: React.FC = () => {
     };
 
     const handleDeleteBody = (id: string) => {
-        setBodies(prev => prev.filter(b => b.id !== id));
+        const nextBodies = bodiesRef.current.filter(b => b.id !== id);
+        bodiesRef.current = nextBodies;
+        setBodies(nextBodies);
+
         if (selectedBodyId === id) setSelectedBodyId(null);
         if (followingBodyId === id) setFollowingBodyId(null);
         if (observerBodyIds.a === id) setObserverBodyIds(prev => ({ ...prev, a: null }));
@@ -1450,7 +1453,7 @@ const App: React.FC = () => {
     };
 
     const handleMakeStar = (id: string) => {
-        setBodies(prev => prev.map(b => {
+        const nextBodies = bodiesRef.current.map(b => {
             if (b.id === id) {
                 return {
                     ...b,
@@ -1462,7 +1465,23 @@ const App: React.FC = () => {
                 };
             }
             return b;
-        }));
+        });
+        bodiesRef.current = nextBodies;
+        setBodies(nextBodies);
+    };
+
+    const handlePlaceObject = (bodyId: string, object: SurfaceObject) => {
+        const nextBodies = bodiesRef.current.map(b => {
+            if (b.id === bodyId) {
+                return {
+                    ...b,
+                    surfaceObjects: [...(b.surfaceObjects || []), object]
+                };
+            }
+            return b;
+        });
+        bodiesRef.current = nextBodies;
+        setBodies(nextBodies);
     };
 
     const handleReset = () => {
@@ -2613,6 +2632,7 @@ const App: React.FC = () => {
                     onToggleFollow={() => selectedBodyId && handleToggleFollow(selectedBodyId)}
                     onDelete={handleDeleteBody}
                     onMakeStar={handleMakeStar}
+                    onPlaceObject={handlePlaceObject}
                 />
             )}
 

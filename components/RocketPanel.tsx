@@ -338,6 +338,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
             angle: (selectedRocket.angle || 0) + (deltaDeg * Math.PI / 180),
             sasMode: 'off'
         });
+        recordGapAndAction('sas', 'off');
         recordGapAndAction('rotate', deltaDeg);
     };
 
@@ -589,6 +590,9 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                     break;
                 case '=': // Radial Out
                     handlers.setSAS('radial_out');
+                    break;
+                case ',': // Radial Out
+                    handlers.setSAS('off');
                     break;
                 case 'j': // 0.1x
                     handlers.onSpeedChange(0.1);

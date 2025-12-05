@@ -1614,6 +1614,49 @@ const Canvas: React.FC<CanvasProps> = ({
                 const ttime = time;
                 //drawBeautifulPlanetOpenAi(ctx, body, screenX, screenY, visualRadius, body.color, { primaryStar, visualConfig, isGhost, time: ttime });
                 drawBeautifullPlanetGemini(ctx, body, screenX, screenY, visualRadius, { primaryStar, visualConfig, isGhost, time: ttime });
+
+                // --- SURFACE OBJECTS RENDERING ---
+                if (body.surfaceObjects && body.surfaceObjects.length > 0) {
+                    body.surfaceObjects.forEach(obj => {
+                        const angle = obj.angle; // Radians
+                        // Position on surface
+                        const objX = screenX + Math.cos(angle) * visualRadius;
+                        const objY = screenY + Math.sin(angle) * visualRadius;
+
+                        ctx.save();
+                        ctx.translate(objX, objY);
+                        ctx.rotate(angle + Math.PI / 2); // Align with surface normal
+
+                        const size = Math.max(2, obj.radius * scale);
+                        ctx.fillStyle = obj.color;
+
+                        // Draw based on design
+                        ctx.beginPath();
+                        if (obj.design === 'square') {
+                            ctx.fillRect(-size / 2, -size / 2, size, size);
+                        } else if (obj.design === 'triangle') {
+                            ctx.moveTo(0, -size / 2);
+                            ctx.lineTo(size / 2, size / 2);
+                            ctx.lineTo(-size / 2, size / 2);
+                            ctx.fill();
+                        } else if (obj.design === 'hexagon') {
+                            ctx.moveTo(size / 2, 0);
+                            for (let i = 1; i <= 6; i++) {
+                                ctx.lineTo(size / 2 * Math.cos(i * 2 * Math.PI / 6), size / 2 * Math.sin(i * 2 * Math.PI / 6));
+                            }
+                            ctx.fill();
+                        } else {
+                            // Circle (default)
+                            ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+
+                        // Optional: Draw name on hover or always? 
+                        // Maybe too cluttered. Let's keep it simple for now.
+
+                        ctx.restore();
+                    });
+                }
             }
             if (isGhost) ctx.globalAlpha = 1.0;
         };

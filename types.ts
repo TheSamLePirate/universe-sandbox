@@ -61,6 +61,20 @@ export interface Body {
   fuel?: number; // Current fuel amount
   maxFuel?: number; // Tank capacity
   dryMass?: number; // Mass without fuel
+
+  // Surface Objects
+  surfaceObjects?: SurfaceObject[];
+}
+
+export interface SurfaceObject {
+    id: string;
+    type: 'mineral' | 'artifact' | 'technology' | 'fuel' | 'custom';
+    name: string;
+    color: string;
+    mass: number;
+    radius: number;
+    angle: number; // Radians
+    design?: string; // Icon or shape identifier
 }
 
 export interface Particle {
