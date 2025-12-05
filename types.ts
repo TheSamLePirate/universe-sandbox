@@ -329,6 +329,18 @@ export interface FlightComputerModule {
     sliderMax?: number; // Maximum value (default 100)
     sliderStep?: number; // Step size (default 1)
     sliderValue?: number; // Current value
+
+    // Dashboard Configuration
+    dashboardConfig?: {
+        x: number;
+        y: number;
+        showTitle?: boolean;
+        customLabel?: string;
+        displayOutput?: {
+            key: string;
+            label: string;
+        };
+    };
 }
 
 export interface ModuleGroup {

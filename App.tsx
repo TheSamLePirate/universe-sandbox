@@ -14,6 +14,7 @@ import PredictionPanel from './components/PredictionPanel';
 import Assistant from './components/Assistant';
 import MusicPanel from './components/MusicPanel';
 import FlightComputerPanel from './components/FlightComputerPanel';
+import FlightComputerDashboard from './components/FlightComputerDashboard';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
 import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine';
 import { resolveInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from './services/orbitalMath';
@@ -2457,6 +2458,14 @@ const App: React.FC = () => {
             </div>
 
             {/* Flight Computer Panel */}
+            <FlightComputerDashboard
+                modules={flightComputerModules}
+                bodies={bodies}
+                physicsConfig={physicsConfig}
+                rendezvousPoints={rendezvousPoints}
+                onUpdateModule={handleUpdateModule}
+                onToggleModule={handleToggleModule}
+            />
             <FlightComputerPanel
                 modules={flightComputerModules}
                 groups={moduleGroups}
