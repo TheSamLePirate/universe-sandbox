@@ -322,6 +322,7 @@ export interface FlightComputerModule {
     keyboardKey?: string;
     keyboardState?: boolean;
     keyboardAutodetect?: boolean;
+    keyboardListenMode?: 'specific' | 'any';
 }
 
 export interface ModuleGroup {
