@@ -29,6 +29,28 @@ export function drawShip(
     const time = performance.now() / 20; // Global animation timer
 
     let landing=false;
+    // Physics / Status
+    const fuel = body.fuel/body.maxFuel*100; // 0 to 100
+    const landed = body.landedOnBodyId !== undefined;
+    const sasMode = body.sasMode; // 'none', 'prograde', 'retrograde', 'radial-out'
+
+    // Modules (Flags)
+    let hasSolarPanel = false;
+    let hasGravityRing = false;
+    let hasObservatory = false;
+    let hasRadar = false;
+    let hasLaser = false;
+    let hasRoboticArm = false;
+
+    // Dynamic Module State
+    let laserAngle = 0;
+    let gravityRingSpeed = 2;
+    let roboticArm = { 
+        shoulder: Math.PI/4, 
+        elbow: -Math.PI/2, 
+        wrist: 0, 
+        grab: false 
+    };
 
     //data from flight computer modules
     flightComputerModules.forEach(module => {
@@ -41,6 +63,55 @@ export function drawShip(
                         if(datas[0]==="landing" && datas[1]===body.id){
                             landing=true;
                         }
+                        if(datas[0]==="solarOn" && datas[1]===body.id){
+                            hasSolarPanel=true;
+                        }
+                        if(datas[0]==="solarOff" && datas[1]===body.id){
+                            hasSolarPanel=false;
+                        }
+                        if(datas[0]==="hasObservatory" && datas[1]===body.id){
+                            hasObservatory=true;
+                        }
+                        if(datas[0]==="hasObservatoryOff" && datas[1]===body.id){
+                            hasObservatory=false;
+                        }
+                        if(datas[0]==="hasRadar" && datas[1]===body.id){
+                            hasRadar=true;
+                        }
+                        if(datas[0]==="hasRadarOff" && datas[1]===body.id){
+                            hasRadar=false;
+                        }
+                        if(datas[0]==="hasLaser" && datas[1]===body.id){
+                            hasLaser=true;
+                        }
+                        if(datas[0]==="hasLaserOff" && datas[1]===body.id){
+                            hasLaser=false;
+                        }
+                        if(datas[0]==="hasGravityRing" && datas[1]===body.id){
+                            hasGravityRing=true;
+                        }
+                        if(datas[0]==="hasGravityRingOff" && datas[1]===body.id){
+                            hasGravityRing=false;
+                        }
+                        if(datas[0]==="gravityRingSpeed" && datas[1]===body.id){
+                            gravityRingSpeed=Number(datas[2]);
+                        }
+                        if(datas[0]==="laserAngle" && datas[1]===body.id){
+                            laserAngle=Number(datas[2]);
+                        }
+                        if(datas[0]==="roboticArm" && datas[1]===body.id){
+                            hasRoboticArm=true;
+                            const ggrab=datas[5]==="true";
+                            roboticArm={
+                                shoulder: Number(datas[2]),
+                                elbow: Number(datas[3]),
+                                wrist: Number(datas[4]),
+                                grab: ggrab
+                            };
+                        }
+                        
+
+
                     } catch (error) {
                         console.error(error);
                     }
@@ -48,28 +119,7 @@ export function drawShip(
             }
     });
     
-    // Physics / Status
-    const fuel = body.fuel/body.maxFuel*100; // 0 to 100
-    const landed = body.landedOnBodyId !== undefined;
-    const sasMode = body.sasMode; // 'none', 'prograde', 'retrograde', 'radial-out'
-
-    // Modules (Flags)
-    const hasSolarPanel = false;
-    const hasGravityRing = false;
-    const hasObservatory = false;
-    const hasRadar = false;
-    const hasLaser = false;
-    const hasRoboticArm = false;
-
-    // Dynamic Module State
-    const laserAngle = 0;
-    const gravityRingSpeed = 2;
-    const roboticArm = { 
-        shoulder: Math.PI/4, 
-        elbow: -Math.PI/2, 
-        wrist: 0, 
-        grab: false 
-    };
+    
 
 
     // --- 2. SETUP & TRANSFORMS ---
