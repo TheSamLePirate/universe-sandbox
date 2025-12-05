@@ -211,7 +211,7 @@ export interface RocketSpawnConfig {
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -317,6 +317,11 @@ export interface FlightComputerModule {
     markerColor?: string;
     markerVisible?: boolean;
     markerPulse?: boolean;
+
+    // Keyboard Module Config
+    keyboardKey?: string;
+    keyboardState?: boolean;
+    keyboardAutodetect?: boolean;
 }
 
 export interface ModuleGroup {

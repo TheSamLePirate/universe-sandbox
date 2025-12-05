@@ -6,7 +6,7 @@ import { useFlightComputerLogic } from '../hooks/useFlightComputerLogic';
 import ModuleContent from './flight_computer/ModuleContent';
 import InputSelector from './flight_computer/InputSelector';
 import { getInput, getUpdateForInput, MODULE_ICONS, isModuleActive } from './flight_computer/utils';
-import { resolveScalarInput, resolveBooleanInput } from '../services/orbitalMath';
+import { resolveScalarInput, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
 
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
@@ -41,6 +41,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'maths', label: 'Math Operation', category: 'Logic' },
     { value: 'button', label: 'Button', category: 'Logic' },
     { value: 'selector', label: 'Selector', category: 'Logic' },
+    { value: 'keyboard', label: 'Keyboard Handler', category: 'Logic' },
     { value: 'notify', label: 'Notify', category: 'Actions' },
     { value: 'beep', label: 'Beep', category: 'Actions' },
     { value: 'thrust_burst', label: 'Thrust Burst', category: 'Actions' },
@@ -98,8 +99,19 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         if (!module) return '—';
 
         // Simplified display logic - resolve the output value
+        const input = { type: 'module_output', value: `${moduleId}:${outputKey}` } as FlightComputerInput;
+
+        // Try string first
+        const strValue = resolveStringInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+        if (strValue !== null) return strValue;
+
+        // Try boolean
+        const boolValue = resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+        if (boolValue !== null) return boolValue ? 'TRUE' : 'FALSE';
+
+        // Try scalar
         const value = resolveScalarInput(
-            { type: 'module_output', value: `${moduleId}:${outputKey}` },
+            input,
             bodies,
             modules,
             physicsConfig.gravitationalConstant,
@@ -419,6 +431,11 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             );
                                         } else if (m.type === 'selector') {
                                             outputs.push({ key: 'body', label: `${m.name || 'Selector'} - Body` });
+                                        } else if (m.type === 'keyboard') {
+                                            outputs.push(
+                                                { key: 'state', label: `${m.name || 'Keyboard'} - State` },
+                                                { key: 'key', label: `${m.name || 'Keyboard'} - Key Name` }
+                                            );
                                         }
 
                                         return outputs.map(o => ({ ...o, moduleId: m.id }));
@@ -527,30 +544,29 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                 )}
             </div>
 
-            {/* Main Content - Only when expanded */}
-            {isExpanded && (
-                <div className="flex-1 overflow-y-auto p-4">
-                    {modules.length === 0 ? (
-                        <div className="flex items-center justify-center h-full">
-                            <div className="text-center text-slate-500">
-                                <Settings className="mx-auto mb-2 opacity-50" size={48} />
-                                <p className="text-sm">No modules yet</p>
-                                <p className="text-xs mt-1">Click "Add Module" to get started</p>
-                            </div>
+            {/* Main Content - Always rendered but hidden if not expanded */}
+            <div className={`flex-1 overflow-y-auto p-4 ${isExpanded ? '' : 'hidden'}`}>
+                {modules.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center text-slate-500">
+                            <Settings className="mx-auto mb-2 opacity-50" size={48} />
+                            <p className="text-sm">No modules yet</p>
+                            <p className="text-xs mt-1">Click "Add Module" to get started</p>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-min">
-                            {/* Render Groups */}
-                            {topLevelGroups.map(group => renderGroup(group, 0))}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-min">
+                        {/* Render Groups */}
+                        {topLevelGroups.map(group => renderGroup(group, 0))}
 
-                            {/* Render Ungrouped Modules */}
-                            {ungroupedModules.map(renderModule)}
-                        </div>
-                    )}
-                </div>
-            )}
+                        {/* Render Ungrouped Modules */}
+                        {ungroupedModules.map(renderModule)}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
 
 export default FlightComputerPanel;
+

@@ -638,6 +638,8 @@ export const resolveBooleanInput = (
         } else if (module.type === 'custom_script' && outputKey === 'state') {
             // Default to true (finished) if undefined
             return module.customScriptAsyncState ?? true;
+        } else if (module.type === 'keyboard' && outputKey === 'state') {
+            return module.keyboardState ?? false;
         }
     }
     return null;
@@ -700,6 +702,8 @@ export const resolveStringInput = (
         } else if (module.type === 'custom_script' && outputKey === 'result') {
             const res = module.customScriptLastResult;
             return typeof res === 'string' ? res : null;
+        } else if (module.type === 'keyboard' && outputKey === 'key') {
+            return module.keyboardKey || '';
         }
     }
     

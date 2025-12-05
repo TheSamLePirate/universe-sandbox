@@ -48,13 +48,13 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                 <label className="text-[9px] text-slate-500 uppercase">{label}</label>
                 {bodyAllowed && moduleSelectorEnabled && (
                     <div className="flex bg-slate-800 rounded p-0.5">
-                        <button 
+                        <button
                             onClick={() => setMode('body')}
                             className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'body' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                         >
                             BODY
                         </button>
-                        <button 
+                        <button
                             onClick={() => setMode('module')}
                             className={`px-1.5 py-0.5 text-[8px] rounded ${mode === 'module' ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                         >
@@ -63,9 +63,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                     </div>
                 )}
             </div>
-            
+
             {mode === 'body' && bodyAllowed ? (
-                <select 
+                <select
                     value={value?.type === 'body' ? value.value : ''}
                     onChange={(e) => onChange({ type: 'body', value: e.target.value, label: bodies.find(b => b.id === e.target.value)?.name })}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
@@ -76,7 +76,7 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                     ))}
                 </select>
             ) : moduleSelectorEnabled ? (
-                <select 
+                <select
                     value={value?.type === 'module_output' ? value.value : ''}
                     onChange={(e) => {
                         const [modId, key] = e.target.value.split(':');
@@ -92,10 +92,10 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             if (key === 'delta_v_prograde') label = `${mod?.name || 'Rendezvous'} ΔV Prograde`;
                             if (key === 'delta_v_radial') label = `${mod?.name || 'Rendezvous'} ΔV Radial`;
                         }
-                        
-                        onChange({ 
-                            type: 'module_output', 
-                            value: e.target.value, 
+
+                        onChange({
+                            type: 'module_output',
+                            value: e.target.value,
                             label: label
                         });
                     }}
@@ -104,7 +104,7 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                     <option value="">Select Output...</option>
                     {availableModules.map(m => {
                         const options = [];
-                        
+
                         // Vector/Point Outputs
                         if (!scalarAllowed || vectorAllowed) {
                             if (m.type === 'orbit_info') {
@@ -147,7 +147,7 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                 }
                             }
                         }
-                        
+
                         // Scalar Outputs
                         if (allowedTypes.includes('scalar')) {
                             if (m.type === 'track_distance') {
@@ -207,7 +207,7 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                 }
                             }
                         }
-                        
+
                         // Boolean Outputs
                         if (allowedTypes.includes('boolean')) {
                             if (m.type === 'transfer_window') {
@@ -235,8 +235,11 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                 }
                                 options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Script'} - State (Ready)</option>);
                             }
+                            if (m.type === 'keyboard') {
+                                options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Keyboard'} - State (Pressed)</option>);
+                            }
                         }
-                        
+
                         // String Outputs
                         if (allowedTypes.includes('string')) {
                             if (m.type === 'body_info') {
@@ -265,8 +268,11 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                     options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (String)</option>);
                                 }
                             }
+                            if (m.type === 'keyboard') {
+                                options.push(<option key={`${m.id}:key`} value={`${m.id}:key`}>{m.name || 'Keyboard'} - Key Name</option>);
+                            }
                         }
-                        
+
                         return options;
                     })}
                 </select>
