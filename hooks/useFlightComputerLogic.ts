@@ -2,6 +2,8 @@ import { useEffect, useRef, useMemo } from 'react';
 import { Body, FlightComputerModule, FlightComputerInput, PhysicsConfig, RendezvousSolution, FlightComputerModuleType } from '../types';
 import { resolveInput, resolveScalarInput, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
 import EasySpeech from 'easy-speech';
+import { useMusic } from '../contexts/MusicContext';
+import { formatTime } from '../components/flight_computer/utils';
 
 export const useFlightComputerLogic = (
     modules: FlightComputerModule[],
@@ -12,7 +14,9 @@ export const useFlightComputerLogic = (
     onAddModule: (type: FlightComputerModuleType, inputs?: Record<string, FlightComputerInput>) => void,
     onRemoveModule: (id: string) => void,
     onToggleModule: (id: string) => void,
-    onSetFollowingBody?: (bodyId: string | null) => void
+    fps: number,
+    simulationTime: number,
+    onSetFollowingBody?: (bodyId: string | null) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -181,8 +185,11 @@ export const useFlightComputerLogic = (
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
                             resolveScalar: (input: FlightComputerInput) => resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
                             resolveBoolean: (input: FlightComputerInput) => resolveBooleanInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
-                            resolveString: (input: FlightComputerInput) => resolveStringInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap)
-                        }
+                            resolveString: (input: FlightComputerInput) => resolveStringInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
+                            formatTime: (totalSeconds: number) => formatTime(totalSeconds)
+                        },
+                        fps,
+                        simulationTime
                     };
 
                     // Prepare Console Mock
@@ -396,6 +403,123 @@ export const useFlightComputerLogic = (
             }
         });
     }, [bodies, modules, physicsConfig, rendezvousSolutionMap]);
+
+    // --- Music Controller Logic ---
+    const { 
+        play: musicPlay, 
+        pause: musicPause, 
+        setVolume: setMusicVolume, 
+        updatePrompt: updateMusicPrompt, 
+        prompts: musicPrompts,
+        playbackState: musicPlaybackState, 
+        volume: musicVolumeValue,
+        reverbMix,
+        lowpassCutoff,
+        setReverbMix,
+        setLowpassCutoff
+    } = useMusic();
+    
+    useEffect(() => {
+        modules.forEach(module => {
+            if (module.type === 'music_controller' && isModuleActive(module)) {
+                // Inputs
+                const playInput = module.inputs?.play;
+                const pauseInput = module.inputs?.pause;
+                const volumeInput = module.inputs?.volume;
+                const reverbInput = module.inputs?.reverb_mix;
+                const lowpassInput = module.inputs?.lowpass_cutoff;
+                
+                // Shuffle Inputs (2x prompt + weight)
+                const playVal = resolveBooleanInput(playInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const pauseVal = resolveBooleanInput(pauseInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const volumeVal = resolveScalarInput(volumeInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const reverbVal = resolveScalarInput(reverbInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const lowpassVal = resolveScalarInput(lowpassInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+
+                // Playback Control
+                if (playVal && musicPlaybackState !== 'playing' && musicPlaybackState !== 'loading') {
+                    musicPlay();
+                } else if (pauseVal && musicPlaybackState === 'playing') {
+                    musicPause();
+                }
+
+                // Volume Control (Debounced check)
+                if (volumeVal !== null) {
+                    if (Math.abs(volumeVal - musicVolumeValue) > 0.01) {
+                        setMusicVolume(volumeVal);
+                    }
+                }
+
+                // Reverb Control
+                const m = module as any;
+                const manualReverb = m.musicReverbMix ?? 0.35;
+                const finalReverb = reverbVal !== null ? reverbVal : manualReverb;
+                if (Math.abs(finalReverb - reverbMix) > 0.01) {
+                    setReverbMix(finalReverb);
+                }
+
+                // Lowpass Control
+                const manualLowpass = m.musicLowpassCutoff ?? 16000;
+                const finalLowpass = lowpassVal !== null ? lowpassVal : manualLowpass;
+                if (Math.abs(finalLowpass - lowpassCutoff) > 10) {
+                    setLowpassCutoff(finalLowpass);
+                }
+
+                // Update Prompts
+                const updateMPrompt = (pid: string, textIn?: FlightComputerInput, weightIn?: FlightComputerInput, fallbackText?: string, fallbackWeight?: number) => {
+                     const textVal = resolveStringInput(textIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                     const weightVal = resolveScalarInput(weightIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                     
+                     // Prioritize dynamic input, fallback to manual
+                     const finalText = textVal || fallbackText;
+                     const finalWeight = weightVal !== null ? weightVal : fallbackWeight;
+
+                     if (musicPrompts.has(pid)) {
+                         const p = musicPrompts.get(pid)!;
+                         const updates: Partial<typeof p> = {};
+                         
+                         if (finalText && finalText !== p.text) updates.text = finalText;
+                         
+                         if (finalWeight !== undefined && finalWeight !== null && typeof finalWeight === 'number') {
+                             if (Math.abs(finalWeight - p.weight) > 0.01) {
+                                 updates.weight = finalWeight;
+                             }
+                         }
+                         
+                         if (Object.keys(updates).length > 0) {
+                             updateMusicPrompt(pid, updates);
+                         }
+                     }
+                };
+
+                // Handle 4 channels
+                [0, 1, 2, 3].forEach(i => {
+                    const tInput = module.inputs?.[`prompt_text_${i}`];
+                    const wInput = module.inputs?.[`prompt_weight_${i}`];
+                    // Use type assertion or access via index if TS complains about dynamic access on type
+                    const m = module as any;
+                    const manualText = m[`musicPromptText${i}`];
+                    const manualWeight = m[`musicPromptWeight${i}`];
+                    
+                    updateMPrompt(`prompt-${i}`, tInput, wInput, manualText, manualWeight);
+                });
+
+                // Update Module Outputs (State Feedback)
+                const isPlaying = musicPlaybackState === 'playing';
+                const currentVol = musicVolumeValue;
+                
+                const stateChanged = module.musicPlaying !== isPlaying;
+                const volChanged = module.musicVolume === undefined || Math.abs(module.musicVolume - currentVol) > 0.001;
+
+                if (stateChanged || volChanged) {
+                    onUpdateModule(module.id, {
+                        musicPlaying: isPlaying,
+                        musicVolume: currentVol
+                    });
+                }
+            }
+        });
+    }, [modules, bodies, physicsConfig, rendezvousSolutionMap, musicPlaybackState, musicVolumeValue, musicPrompts, musicPlay, musicPause, setMusicVolume, updateMusicPrompt, onUpdateModule]);
 
     return {
         rendezvousSolutionMap,

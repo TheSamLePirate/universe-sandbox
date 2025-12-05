@@ -536,6 +536,8 @@ export const resolveScalarInput = (
             return typeof res === 'number' ? res : null;
         } else if (module.type === 'slider' && outputKey === 'value') {
             return module.sliderValue ?? module.sliderMin ?? 0;
+        } else if (module.type === 'music_controller' && outputKey === 'volume') {
+            return module.musicVolume ?? 0;
         }
     }
     
@@ -642,6 +644,8 @@ export const resolveBooleanInput = (
             return module.customScriptAsyncState ?? true;
         } else if (module.type === 'keyboard' && outputKey === 'state') {
             return module.keyboardState ?? false;
+        } else if (module.type === 'music_controller' && outputKey === 'state') {
+            return module.musicPlaying ?? false;
         }
     }
     return null;

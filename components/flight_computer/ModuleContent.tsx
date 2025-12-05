@@ -20,6 +20,7 @@ import BodyByModule from './modules/BodyByModule';
 import CustomScriptModule from './modules/CustomScriptModule';
 import KeyboardModule from './modules/KeyboardModule';
 import SliderModule from './modules/SliderModule';
+import MusicControllerModule from './modules/MusicControllerModule';
 
 interface ModuleContentProps {
     module: FlightComputerModule;
@@ -56,6 +57,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'custom_script': return <CustomScriptModule {...props} />;
         case 'keyboard': return <KeyboardModule {...props} />;
         case 'slider': return <SliderModule {...props} />;
+        case 'music_controller': return <MusicControllerModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

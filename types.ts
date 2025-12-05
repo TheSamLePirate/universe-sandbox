@@ -227,7 +227,7 @@ export interface RocketSpawnConfig {
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard' | 'slider';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard' | 'slider' | 'music_controller';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -345,6 +345,20 @@ export interface FlightComputerModule {
     sliderMax?: number; // Maximum value (default 100)
     sliderStep?: number; // Step size (default 1)
     sliderValue?: number; // Current value
+
+    // Music Controller
+    musicPlaying?: boolean;
+    musicVolume?: number;
+    musicPromptText0?: string;
+    musicPromptWeight0?: number;
+    musicPromptText1?: string;
+    musicPromptWeight1?: number;
+    musicPromptText2?: string;
+    musicPromptWeight2?: number;
+    musicPromptText3?: string;
+    musicPromptWeight3?: number;
+    musicReverbMix?: number;
+    musicLowpassCutoff?: number;
 
     // Dashboard Configuration
     dashboardConfig?: {

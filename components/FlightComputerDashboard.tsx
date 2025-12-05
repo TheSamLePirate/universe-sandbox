@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Body, FlightComputerModule, PhysicsConfig, FlightComputerInput, RendezvousSolution } from '../types';
 import { Edit, X, GripVertical, Check, Plus, Trash2, Settings } from 'lucide-react';
 import { MODULE_ICONS, isModuleActive, getUpdateForInput, getInput } from './flight_computer/utils';
-import { resolveScalarInput, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
+import { resolveScalarInput, resolveBooleanInput, resolveStringInput, resolveInput } from '../services/orbitalMath';
 import InputSelector from './flight_computer/InputSelector';
 
 interface FlightComputerDashboardProps {
@@ -14,9 +14,9 @@ interface FlightComputerDashboardProps {
     onToggleModule: (id: string) => void;
 }
 
-const CELL_WIDTH = 140;
+const CELL_WIDTH = 120;
 const CELL_HEIGHT = 80;
-const GRID_GAP = 8;
+const GRID_GAP = 4;
 
 const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     modules,
@@ -100,6 +100,10 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
         // Try scalar
         const val = resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
         if (typeof val === 'number') return val.toFixed(2);
+
+        // Try body
+        const body = resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
+        if (body !== null) return body.name;
 
         return '—';
     };
@@ -191,6 +195,14 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                 displayValue = getModuleOutputValue(module, 'result');
                 displayLabel = 'Result';
             }
+            else if (module.type === 'custom_script') {
+                displayValue = getModuleOutputValue(module, 'result');
+                displayLabel = '';
+            }
+            else if (module.type === 'body_by') {
+                displayValue = getModuleOutputValue(module, 'body');
+                displayLabel = 'Body';
+            }
             else {
                 // Fallback
                 displayValue = '...';
@@ -219,7 +231,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                         }`}
                 >
                     {isEditMode ? <Check size={16} /> : <Edit size={16} />}
-                    <span className="font-medium text-sm">{isEditMode ? 'Done' : 'Edit Dashboard'}</span>
+                    <span className="font-medium text-sm">{isEditMode ? 'Done' : 'Edit'}</span>
                 </button>
             </div>
 
@@ -281,23 +293,25 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                             }}
                         >
                             {/* Card Header (Title) */}
-                            <div
-                                className="h-6 px-2 flex items-center justify-between text-[10px] font-bold text-white/80"
-                                style={{ backgroundColor: module.color + '40' }}
-                            >
-                                <div className="flex items-center gap-1 truncate">
-                                    <Icon size={10} />
-                                    <span className="truncate">{module.name || module.type}</span>
+                            {module.dashboardConfig?.showTitle && (
+                                <div
+                                    className="h-6 px-2 flex items-center justify-between text-[10px] font-bold text-white/80"
+                                    style={{ backgroundColor: module.color + '40' }}
+                                >
+                                    <div className="flex items-center gap-1 truncate">
+                                        <Icon size={10} />
+                                        <span className="truncate">{module.name || module.type}</span>
+                                    </div>
+                                    {isEditMode && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveFromDashboard(module.id); }}
+                                            className="text-red-400 hover:text-red-300"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    )}
                                 </div>
-                                {isEditMode && (
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleRemoveFromDashboard(module.id); }}
-                                        className="text-red-400 hover:text-red-300"
-                                    >
-                                        <X size={10} />
-                                    </button>
-                                )}
-                            </div>
+                            )}
 
                             {/* Card Content */}
                             <div className="h-[calc(100%-24px)] w-full">
@@ -385,7 +399,20 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                                 outputs.push({ key: 'velocity', label: 'Velocity' });
                             } else if (m.type === 'logic_gate' || m.type === 'maths') {
                                 outputs.push({ key: 'result', label: 'Result' });
+                            } else if (m.type === 'custom_script') {
+                                outputs.push({ key: 'result', label: 'Result' });
+                            } else if (m.type === 'body_info') {
+                                outputs.push({ key: 'name', label: 'Name' });
+                                outputs.push({ key: 'mass', label: 'Mass' });
+                                outputs.push({ key: 'radius', label: 'Radius' });
+                                outputs.push({ key: 'fuel', label: 'Fuel' });
+                                outputs.push({ key: 'landedOnBodyId', label: 'Landed On' });
+                                outputs.push({ key: 'sasMode', label: 'SAS Mode' });
+                            } else if (m.type === 'body_by') {
+                                outputs.push({ key: 'body', label: 'Body' });
+                                outputs.push({ key: 'name', label: 'Body Name' });
                             }
+
                             // Add more as needed
                             return outputs;
                         };

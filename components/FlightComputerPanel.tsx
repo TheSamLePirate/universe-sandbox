@@ -26,6 +26,8 @@ interface FlightComputerPanelProps {
     onImportGroup: () => void;
     rendezvousPoints?: RendezvousSolution[];
     onSetFollowingBody?: (bodyId: string | null) => void;
+    fps: number;
+    simulationTime: number;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -48,6 +50,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'thrust_burst', label: 'Thrust Burst', category: 'Actions' },
     { value: 'maneuver_executor', label: 'Maneuver Executor', category: 'Actions' },
     { value: 'follow', label: 'Follow', category: 'Actions' },
+    { value: 'music_controller', label: 'Music Controller', category: 'Actions' },
     { value: 'custom_script', label: 'Custom Script', category: 'Advanced' },
 ];
 
@@ -68,7 +71,9 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     onExportGroup,
     onImportGroup,
     rendezvousPoints,
-    onSetFollowingBody
+    onSetFollowingBody,
+    fps,
+    simulationTime,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -89,6 +94,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         onAddModule,
         onRemoveModule,
         onToggleModule,
+        fps,
+        simulationTime,
         onSetFollowingBody
     );
 
@@ -439,6 +446,11 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             );
                                         } else if (m.type === 'slider') {
                                             outputs.push({ key: 'value', label: `${m.name || 'Slider'} - Value` });
+                                        } else if (m.type === 'music_controller') {
+                                            outputs.push(
+                                                { key: 'volume', label: `${m.name || 'Music'} - Volume` },
+                                                { key: 'state', label: `${m.name || 'Music'} - Playing` }
+                                            );
                                         }
 
                                         return outputs.map(o => ({ ...o, moduleId: m.id }));
