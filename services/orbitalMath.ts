@@ -534,6 +534,8 @@ export const resolveScalarInput = (
         } else if (module.type === 'custom_script' && outputKey === 'result') {
             const res = module.customScriptLastResult;
             return typeof res === 'number' ? res : null;
+        } else if (module.type === 'slider' && outputKey === 'value') {
+            return module.sliderValue ?? module.sliderMin ?? 0;
         }
     }
     

@@ -42,6 +42,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'button', label: 'Button', category: 'Logic' },
     { value: 'selector', label: 'Selector', category: 'Logic' },
     { value: 'keyboard', label: 'Keyboard Handler', category: 'Logic' },
+    { value: 'slider', label: 'Slider', category: 'Logic' },
     { value: 'notify', label: 'Notify', category: 'Actions' },
     { value: 'beep', label: 'Beep', category: 'Actions' },
     { value: 'thrust_burst', label: 'Thrust Burst', category: 'Actions' },
@@ -436,6 +437,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                                 { key: 'state', label: `${m.name || 'Keyboard'} - State` },
                                                 { key: 'key', label: `${m.name || 'Keyboard'} - Key Name` }
                                             );
+                                        } else if (m.type === 'slider') {
+                                            outputs.push({ key: 'value', label: `${m.name || 'Slider'} - Value` });
                                         }
 
                                         return outputs.map(o => ({ ...o, moduleId: m.id }));

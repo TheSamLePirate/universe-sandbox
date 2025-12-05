@@ -206,6 +206,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                     options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Number)</option>);
                                 }
                             }
+                            if (m.type === 'slider') {
+                                options.push(<option key={`${m.id}:value`} value={`${m.id}:value`}>{m.name || 'Slider'} - Value</option>);
+                            }
                         }
 
                         // Boolean Outputs

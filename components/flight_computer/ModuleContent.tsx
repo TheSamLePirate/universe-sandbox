@@ -19,6 +19,7 @@ import BodyInfoModule from './modules/BodyInfoModule';
 import BodyByModule from './modules/BodyByModule';
 import CustomScriptModule from './modules/CustomScriptModule';
 import KeyboardModule from './modules/KeyboardModule';
+import SliderModule from './modules/SliderModule';
 
 interface ModuleContentProps {
     module: FlightComputerModule;
@@ -54,6 +55,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'body_by': return <BodyByModule {...props} />;
         case 'custom_script': return <CustomScriptModule {...props} />;
         case 'keyboard': return <KeyboardModule {...props} />;
+        case 'slider': return <SliderModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };
