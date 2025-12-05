@@ -493,6 +493,139 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
     const [showTelemetry, setShowTelemetry] = useState(true);
 
+    // Refs for keyboard controls to avoid dependency cycles/re-renders
+    const selectedRocketRef = useRef(selectedRocket);
+    const manualThrustPowerRef = useRef(manualThrustPower);
+    const manualThrustingRef = useRef(manualThrusting);
+    const circularizeBodyIdRef = useRef(circularizeBodyId);
+    const landBodyIdRef = useRef(landBodyId);
+    const transferTargetBodyIdRef = useRef(transferTargetBodyId);
+    const transferParentBodyIdRef = useRef(transferParentBodyId);
+
+    // Handlers ref to ensure we call the latest version of functions (which close over fresh state)
+    const handlersRef = useRef({
+        handleManualThrustStart,
+        handleManualThrustEnd,
+        handleRotate,
+        setSAS,
+        triggerAutoManeuver,
+        onSpeedChange,
+        setManualThrustPower
+    });
+
+    useEffect(() => { selectedRocketRef.current = selectedRocket; }, [selectedRocket]);
+    useEffect(() => { manualThrustPowerRef.current = manualThrustPower; }, [manualThrustPower]);
+    useEffect(() => { manualThrustingRef.current = manualThrusting; }, [manualThrusting]);
+    useEffect(() => { circularizeBodyIdRef.current = circularizeBodyId; }, [circularizeBodyId]);
+    useEffect(() => { landBodyIdRef.current = landBodyId; }, [landBodyId]);
+    useEffect(() => { transferTargetBodyIdRef.current = transferTargetBodyId; }, [transferTargetBodyId]);
+    useEffect(() => { transferParentBodyIdRef.current = transferParentBodyId; }, [transferParentBodyId]);
+
+    useEffect(() => {
+        handlersRef.current = {
+            handleManualThrustStart,
+            handleManualThrustEnd,
+            handleRotate,
+            setSAS,
+            triggerAutoManeuver,
+            onSpeedChange,
+            setManualThrustPower
+        };
+    }); // Update on every render
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+            if (!selectedRocketRef.current) return;
+
+            const handlers = handlersRef.current;
+
+            switch (e.key) {
+                case ' ': // Space - Ignition
+                    e.preventDefault();
+                    if (!manualThrustingRef.current) {
+                        handlers.handleManualThrustStart();
+                    }
+                    break;
+                case 'ArrowLeft': // Rotate Left
+                    e.preventDefault();
+                    handlers.handleRotate(-5);
+                    break;
+                case 'ArrowRight': // Rotate Right
+                    e.preventDefault();
+                    handlers.handleRotate(5);
+                    break;
+                case 'ArrowUp': // Increase Force
+                    e.preventDefault();
+                    handlers.setManualThrustPower(p => Math.min(p + 0.001, 0.05));
+                    break;
+                case 'ArrowDown': // Decrease Force
+                    e.preventDefault();
+                    handlers.setManualThrustPower(p => Math.max(p - 0.001, 0.001));
+                    break;
+                case 'Shift': // Circularize
+                    e.preventDefault();
+                    if (circularizeBodyIdRef.current) {
+                        handlers.triggerAutoManeuver('auto_circularize', circularizeBodyIdRef.current);
+                    }
+                    break;
+                case 'Backspace': // Auto Land
+                    e.preventDefault();
+                    if (landBodyIdRef.current) {
+                        handlers.triggerAutoManeuver('auto_land', landBodyIdRef.current);
+                    }
+                    break;
+                case 'Enter': // Transfer
+                    e.preventDefault();
+                    if (transferTargetBodyIdRef.current && transferParentBodyIdRef.current) {
+                        handlers.triggerAutoManeuver('auto_transfer', transferTargetBodyIdRef.current, transferParentBodyIdRef.current);
+                    }
+                    break;
+                case ';': // Prograde
+                    handlers.setSAS('prograde');
+                    break;
+                case ':': // Retrograde
+                    handlers.setSAS('retrograde');
+                    break;
+                case '=': // Radial Out
+                    handlers.setSAS('radial_out');
+                    break;
+                case 'j': // 0.1x
+                    handlers.onSpeedChange(0.1);
+                    break;
+                case 'k': // 1x
+                    handlers.onSpeedChange(1);
+                    break;
+                case 'l': // 10x
+                    handlers.onSpeedChange(10);
+                    break;
+                case 'm': // 100x
+                    handlers.onSpeedChange(100);
+                    break;
+                case 'ù': // 1000x
+                    handlers.onSpeedChange(1000);
+                    break;
+            }
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+            if (e.key === ' ') {
+                e.preventDefault();
+                handlersRef.current.handleManualThrustEnd();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []); // Empty dependency array to attach once
+
 
 
     // Helper function to format time
