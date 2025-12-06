@@ -28,6 +28,7 @@ interface FlightComputerPanelProps {
     onSetFollowingBody?: (bodyId: string | null) => void;
     fps: number;
     simulationTime: number;
+    scale: number;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -74,6 +75,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     onSetFollowingBody,
     fps,
     simulationTime,
+    scale,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -96,6 +98,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         onToggleModule,
         fps,
         simulationTime,
+        scale,
         onSetFollowingBody
     );
 

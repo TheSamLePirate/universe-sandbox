@@ -2695,6 +2695,7 @@ const App: React.FC = () => {
                 }}
                 fps={fps}
                 simulationTime={simulationTimeRef.current}
+                scale={scaleRef.current}
             />
 
             {/* Assistant */}

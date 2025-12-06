@@ -501,6 +501,7 @@ function drawLandingGear(ctx: CanvasRenderingContext2D, size: number, extension:
 }
 
 function drawRoboticArm(ctx: CanvasRenderingContext2D, size: number, armState: any) {
+    console.log("size",size);
     ctx.save();
     ctx.translate(0, size * 0.25); 
     

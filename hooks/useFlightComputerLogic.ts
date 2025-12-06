@@ -16,6 +16,7 @@ export const useFlightComputerLogic = (
     onToggleModule: (id: string) => void,
     fps: number,
     simulationTime: number,
+    scale: number,
     onSetFollowingBody?: (bodyId: string | null) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
@@ -189,7 +190,8 @@ export const useFlightComputerLogic = (
                             formatTime: (totalSeconds: number) => formatTime(totalSeconds)
                         },
                         fps,
-                        simulationTime
+                        simulationTime,
+                        scale
                     };
 
                     // Prepare Console Mock
