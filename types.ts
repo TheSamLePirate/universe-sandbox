@@ -180,6 +180,7 @@ export interface PhysicsResult {
   bodies: Body[];
   newParticles: Particle[];
   systemEvents: SystemEvent[];
+  jobId?: number;
 }
 
 export interface CoMData {

@@ -1,6 +1,7 @@
 
 
 import { Body, Vector2D, Particle, PhysicsResult, SASMode, SystemEvent } from '../types';
+export type { PhysicsResult };
 import { calculateTransferInfo } from './orbitalMath';
 
 // Reduced softening for better accuracy at close range (allows tighter slingshots)

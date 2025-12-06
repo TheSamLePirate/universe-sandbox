@@ -17,9 +17,10 @@ import FlightComputerPanel from './components/FlightComputerPanel';
 import FlightComputerDashboard from './components/FlightComputerDashboard';
 import { MusicProvider } from './contexts/MusicContext';
 import { PRESETS, createBody, DEFAULT_VISUAL_CONFIG, DEFAULT_PHYSICS_CONFIG } from './constants';
-import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine';
+import { updatePhysics, predictSystemTrajectories, reverseTime } from './services/physicsEngine'; // Keep exports, but don't use updatePhysics here directly
+
 import { resolveInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from './services/orbitalMath';
-import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, SimulationState, Preset, FlightComputerModule, FlightComputerInput, ModuleGroup, FlightComputerModuleType, Maneuver, SurfaceObject, RocketSpawnConfig, RendezvousSolution, CoMData, AssistantActions } from './types';
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, SimulationState, Preset, FlightComputerModule, FlightComputerInput, ModuleGroup, FlightComputerModuleType, Maneuver, SurfaceObject, RocketSpawnConfig, RendezvousSolution, CoMData, AssistantActions, PhysicsResult } from './types';
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
@@ -163,6 +164,13 @@ const App: React.FC = () => {
     // Prediction Worker
     const predictionWorkerRef = useRef<Worker | null>(null);
     const isWorkerBusyRef = useRef(false);
+
+    // Physics Worker
+    const physicsWorkerRef = useRef<Worker | null>(null);
+    const isPhysicsWorkerBusyRef = useRef(false);
+    const accumulatedPhysicsTimeRef = useRef(0);
+    const workerJobIdRef = useRef(0);
+    const lastBodyUpdateTimesRef = useRef<Map<string, number>>(new Map());
 
     // Refs for Prediction Logic (to access fresh state inside animate loop)
     // Refs for Prediction Logic (to access fresh state inside animate loop)
@@ -638,6 +646,10 @@ const App: React.FC = () => {
                         maneuverExecutorProgress: 0,
                         ...(updateLastRequestId ? { maneuverExecutorLastRequestId: updateLastRequestId } : {})
                     });
+                    // TAG TIMESTAMP for Selective Merge (Prevent Worker Overwrite)
+                    if (lastBodyUpdateTimesRef.current) {
+                        lastBodyUpdateTimesRef.current.set(rocket.id, Date.now());
+                    }
                     return true;
                 } else {
                     queueUpdate(module, {
@@ -652,6 +664,10 @@ const App: React.FC = () => {
             const executeMissionPlan = () => {
                 if (rocket.maneuvers && rocket.maneuvers.some(m => m.status === 'pending')) {
                     rocket.maneuvers = rocket.maneuvers.map(m => m.status === 'pending' ? { ...m, status: 'active' as const } : m);
+                    // TAG TIMESTAMP for Selective Merge
+                    if (lastBodyUpdateTimesRef.current) {
+                        lastBodyUpdateTimesRef.current.set(rocket.id, Date.now());
+                    }
                 }
             };
 
@@ -666,7 +682,9 @@ const App: React.FC = () => {
             const requestId = module.maneuverExecutorRequestId;
             const lastRequest = module.maneuverExecutorLastRequestId;
             if (module.isEnabled && requestId && requestId !== lastRequest) {
-                enqueueManeuver(requestId);
+                if (enqueueManeuver(requestId)) {
+                    executeMissionPlan();
+                }
             }
 
             const activeId = module.maneuverExecutorActiveManeuverId;
@@ -923,6 +941,83 @@ const App: React.FC = () => {
         };
     }, []);
 
+
+
+    // Initialize Physics Worker
+    useEffect(() => {
+        physicsWorkerRef.current = new Worker(new URL('./services/physicsWorker.ts', import.meta.url), { type: 'module' });
+
+        physicsWorkerRef.current.onmessage = (e: MessageEvent<PhysicsResult>) => {
+            const { bodies: newBodies, newParticles: newExplosions, systemEvents, jobId } = e.data;
+
+            // Job ID Check: Discard results from old jobs (Reset/Reverse happened)
+            if (jobId !== undefined && jobId !== workerJobIdRef.current) {
+                isPhysicsWorkerBusyRef.current = false;
+                return;
+            }
+
+            // SELECTIVE MERGE: Integrate Worker Physics with Main Thread Inputs
+            // Because the Worker processes a "snapshot" of state, it might overwrite
+            // recent user inputs (Rocket Controls) that happened on the Main Thread 
+            // while the worker was busy. We prioritize FRESH user inputs.
+            const mergedBodies = newBodies.map(workerBody => {
+                const localBody = bodiesRef.current.find(b => b.id === workerBody.id);
+                if (!localBody) return workerBody;
+
+                const lastInputTime = lastBodyUpdateTimesRef.current.get(workerBody.id) || 0;
+                // If user input < 100ms ago, assume it's fresher than worker result
+                const isFreshInput = (Date.now() - lastInputTime) < 100;
+
+                if (localBody.isRocket && isFreshInput) {
+                    return {
+                        ...workerBody,
+                        // Keep LOCAL User Inputs
+                        thrust: localBody.thrust,
+                        angle: localBody.angle,
+                        sasMode: localBody.sasMode || workerBody.sasMode,
+                        // Keep Worker Physics
+                        position: workerBody.position,
+                        velocity: workerBody.velocity,
+                        fuel: workerBody.fuel,
+                        // Merge Maneuvers: Trust LOCAL if fresh (user just clicked Execute), otherwise worker
+                        maneuvers: localBody.maneuvers // Use LOCAL maneuvers to ensure 'active' status sticks
+                    };
+                }
+                return workerBody;
+            });
+
+            // Apply updates
+            bodiesRef.current = mergedBodies;
+            setBodies(mergedBodies);
+
+            if (newExplosions && newExplosions.length > 0) {
+                // DIRECTLY UPDATE REF for immediate rendering in loop
+                particlesRef.current = [...particlesRef.current, ...newExplosions];
+                if (particlesRef.current.length > 10000) {
+                    particlesRef.current = particlesRef.current.slice(-10000);
+                }
+
+                // Also update state for React re-renders (less frequent usually)
+                setParticles(particlesRef.current);
+            }
+
+            // Handle System Events (e.g. Speed Change from Flight Computer)
+            if (systemEvents) {
+                systemEvents.forEach(event => {
+                    if (event.type === 'set_speed') {
+                        setSpeed(event.value);
+                    }
+                });
+            }
+
+            isPhysicsWorkerBusyRef.current = false;
+        };
+
+        return () => {
+            physicsWorkerRef.current?.terminate();
+        };
+    }, []);
+
     // Sync Prediction Refs
     // Sync Prediction Refs
     useEffect(() => { selectedBodyIdRef.current = selectedBodyId; }, [selectedBodyId]);
@@ -1152,6 +1247,7 @@ const App: React.FC = () => {
                     const reversedBodies = reverseTime(bodiesRef.current);
                     bodiesRef.current = reversedBodies;
                     setBodies(reversedBodies);
+                    workerJobIdRef.current++; // Invalidate pending physics jobs so they don't overwrite reverse
                 }
             } else if (phase === 'accelerate') {
                 const progress = Math.min(1, elapsed / halfDuration);
@@ -1169,32 +1265,107 @@ const App: React.FC = () => {
             const dt = physicsConfigRef.current.timeStep * speed;
             simulationTimeRef.current += dt;
 
-            const bodiesForSimulation = bodiesRef.current.map(body => ({
-                ...body,
-                position: { ...body.position },
-                velocity: { ...body.velocity },
-                thrust: body.thrust ? { ...body.thrust } : undefined
-            }));
+            // --- PHYSICS WORKER LOGIC ---
+            // If worker is free, send the accumulated time and current state
+            accumulatedPhysicsTimeRef.current += dt;
 
-            applyManeuverExecutorModules(bodiesForSimulation);
-            applyThrustBurstModules(bodiesForSimulation, dt);
+            // Only send if we have accrued enough time to matter (or just always send if free?)
+            // To be perfectly 1:1 with time, we send whatever 'dt' we have.
+            // But if worker is slow, 'accumulatedPhysicsTimeRef' will grow.
+            // When worker returns, we send the new large chunk.
 
-            const physicsResult = updatePhysics(
-                bodiesForSimulation,
-                dt,
-                physicsConfigRef.current.gravitationalConstant,
-                visualConfigRef.current.trailLength,
-                physicsConfigRef.current.collisions
-            );
-            const nextBodies = physicsResult.bodies;
+            if (!isPhysicsWorkerBusyRef.current && physicsWorkerRef.current) {
+                const timeToSimulate = accumulatedPhysicsTimeRef.current;
+                accumulatedPhysicsTimeRef.current = 0; // Reset accumulator
 
-            // Handle System Events (e.g. Speed Change from Flight Computer)
-            if (physicsResult.systemEvents) {
-                physicsResult.systemEvents.forEach(event => {
-                    if (event.type === 'set_speed') {
-                        setSpeed(event.value);
-                    }
+                isPhysicsWorkerBusyRef.current = true;
+
+                // Prepare bodies state for simulation
+                // We need to inject Thrust/Maneuver logic BEFORE sending to worker?
+                // Wait - The original code applied Flight Computer logic INSIDE updatePhysics loop (sub-stepping).
+                // So we must rely on the worker to do that.
+                // HOWEVER: The Flight Computer logic (applyManeuverExecutorModules) was modifying bodies BEFORE updatePhysics call in legacy code.
+                // Let's look at legacy animate loop:
+                // 1. applyManeuverExecutorModules(bodiesForSimulation)
+                // 2. applyThrustBurstModules(bodiesForSimulation, dt)
+                // 3. updatePhysics(...)
+
+                // If we move updatePhysics to worker, we must decide:
+                // Option A: Move Flight Computer Logic to Worker too. (Cleanest for performance)
+                // Option B: Run Flight Computer on Main Thread, then send to Worker. (Easier refactor now)
+
+                // The original plan said "Move entire updatePhysics".
+                // But applyManeuverExecutorModules is called OUTSIDE updatePhysics in App.tsx.
+                // Let's keep Flight Computer on Main Thread for now to avoid moving all module state refs to worker.
+                // This means the Flight Computer updates (Thrust setting) happen once per FRAME (main thread), 
+                // and are then constant for the duration of the physics sub-steps in the worker.
+                // This is acceptable for most cases, though slightly less precise for rapid-fire auto-circularize corrections.
+                // Given the complexity of moving Flight Computer State (refs, maps) to worker, Option B is safer.
+
+                // 1. Updates from Flight Computer (Main Thread)
+                const bodiesForSimulation = bodiesRef.current.map(body => ({
+                    ...body,
+                    position: { ...body.position },
+                    velocity: { ...body.velocity },
+                    thrust: body.thrust ? { ...body.thrust } : undefined
+                }));
+
+                applyManeuverExecutorModules(bodiesForSimulation);
+                applyThrustBurstModules(bodiesForSimulation, timeToSimulate); // Use the Full time chunk for thrust calculation? 
+                // Wait, applyThrustBurstModules generally handles dt for consumption... 
+                // Ideally this should run PER SUB-STEP in worker, but for now Main Thread is okay.
+
+                // 2. Send to Worker
+                physicsWorkerRef.current.postMessage({
+                    bodies: bodiesForSimulation,
+                    dt: timeToSimulate,
+                    gConst: physicsConfigRef.current.gravitationalConstant,
+                    trailLength: visualConfigRef.current.trailLength,
+                    collisions: physicsConfigRef.current.collisions,
+                    jobId: workerJobIdRef.current
                 });
+            } else {
+                // If worker is busy, we just accumulate time.
+                // The physics will "catch up" in big jumps if main thread is faster than worker (likely not the case),
+                // or more likely, the simulation will run in bursts if worker is slower.
+                // But UI remains smooth.
+            }
+
+            // CLIENT-SIDE EXTRAPOLATION:
+            // While waiting for the worker (which might run at e.g. 20fps or be busy), 
+            // we visually extrapolate the position of bodies to maintain 60fps smoothness.
+            // We use the last known velocity to predict the position at the current time.
+            // When the worker returns, it provides the "authoritative" position, which corrects drift.
+
+            let nextBodies = bodiesRef.current;
+            if (!timeReverseStateRef.current.active) {
+                nextBodies = bodiesRef.current.map(b => {
+                    // Only extrapolate if we have velocity
+                    if (!b.velocity) return b;
+
+                    return {
+                        ...b,
+                        position: {
+                            x: b.position.x + b.velocity.x * dt,
+                            y: b.position.y + b.velocity.y * dt
+                        }
+                    };
+                });
+
+                // Update Ref and State for rendering
+                // Note: We intentionally drift 'bodiesRef' here. 
+                // The worker is calculating based on 'accumulatedPhysicsTime', so it will catch up.
+                // The selective merge in onmessage ensures we don't snap back manual inputs.
+                // CORRECTION: We DO NOT update bodiesRef.current with extrapolated data.
+                // bodiesRef.current must remain the AUTHORITATIVE state returned by worker.
+                // We only update the visual state (setBodies).
+                // bodiesRef.current = nextBodies; // <--- REMOVED
+                setBodies(nextBodies);
+            } else {
+                // In time reverse, we rely on the logic above (lines 1188-1224) 
+                // or just render the current static frame if widely paused.
+                // Ideally reverse logic handles setBodies itself.
+                setBodies(nextBodies);
             }
 
             // Clean up references to destroyed bodies
@@ -1238,9 +1409,7 @@ const App: React.FC = () => {
                 life: p.life - p.decay * speed
             })).filter(p => p.life > 0);
 
-            if (physicsResult.newParticles.length > 0) {
-                nextParticles = [...nextParticles, ...physicsResult.newParticles];
-            }
+
 
             // Hard limit on particles to prevent memory issues
             const MAX_PARTICLES = 10000;
@@ -1490,6 +1659,7 @@ const App: React.FC = () => {
         const freshBodies = JSON.parse(JSON.stringify(preset.bodies));
 
         setIsRunning(false);
+        workerJobIdRef.current++; // Invalidate pending physics jobs
         bodiesRef.current = freshBodies;
         particlesRef.current = [];
         setBodies(freshBodies);
@@ -1614,6 +1784,7 @@ const App: React.FC = () => {
             setCurrentPresetId(id);
             const freshBodies = JSON.parse(JSON.stringify(preset.bodies));
             setIsRunning(false);
+            workerJobIdRef.current++; // Invalidate pending physics jobs
             setBodies(freshBodies);
             setParticles([]);
             bodiesRef.current = freshBodies;
@@ -1666,9 +1837,16 @@ const App: React.FC = () => {
     };
 
     const updateRocket = (id: string, updates: Partial<Body>) => {
-        const updated = bodies.map(b => b.id === id ? { ...b, ...updates } : b);
-        setBodies(updated);
+        // Timestamp tracking for manual inputs allows selective merge in worker callback
+        if (lastBodyUpdateTimesRef.current) {
+            lastBodyUpdateTimesRef.current.set(id, Date.now());
+        }
+
+        // Use REF as source of truth, not state (which might be extrapolated)
+        const updated = bodiesRef.current.map(b => b.id === id ? { ...b, ...updates } : b);
+
         bodiesRef.current = updated;
+        setBodies(updated);
     };
 
     const handleTimeReverse = () => {
@@ -2403,8 +2581,8 @@ const App: React.FC = () => {
                 />
             ) : (
                 <Canvas
-                    bodies={bodies}
-                    particles={particles}
+                    bodiesRef={bodiesRef}
+                    particlesRef={particlesRef}
                     width={dimensions.width}
                     height={dimensions.height}
                     scale={scale}
