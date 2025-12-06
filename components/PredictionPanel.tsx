@@ -35,9 +35,9 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
         <div className={`fixed ${isMobile ? 'top-0 left-0' : 'top-0 left-0 right-0'} z-50 flex flex-col items-center pointer-events-none`}>
             {/* Header / Main Control */}
             <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-md border-b border-x border-slate-700 rounded-b-lg shadow-xl px-4 py-1.5 flex items-center gap-4 transition-all hover:bg-slate-800/90">
-                
+
                 {/* Expand Toggle */}
-                <button 
+                <button
                     onClick={toggleExpanded}
                     className="text-slate-400 hover:text-blue-400 transition-colors p-1"
                 >
@@ -52,10 +52,10 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                         <Activity size={16} className={isEnabled ? "text-blue-400" : "text-slate-500"} />
                         <span>Trajectory Prediction</span>
                     </div>
-                    
+
                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                            type="checkbox" 
+                        <input
+                            type="checkbox"
                             className="sr-only peer"
                             checked={isEnabled}
                             onChange={(e) => onToggleEnabled(e.target.checked)}
@@ -68,17 +68,17 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
             {/* Expanded Config Body */}
             {isExpanded && (
                 <div className="pointer-events-auto mt-0 bg-slate-900/95 backdrop-blur-md border-x border-b border-slate-700 rounded-b-lg shadow-2xl p-4 w-[320px] animate-in fade-in slide-in-from-top-2 duration-200">
-                    
+
                     {/* Steps Slider */}
                     <div className="mb-4">
                         <div className="flex justify-between text-xs mb-1.5">
                             <span className="text-slate-400">Prediction Steps</span>
                             <span className="text-blue-300 font-mono">{predictionSteps}</span>
                         </div>
-                        <input 
-                            type="range" 
-                            min="100" 
-                            max="400000" 
+                        <input
+                            type="range"
+                            min="100"
+                            max="400000"
                             step="100"
                             value={predictionSteps}
                             onChange={(e) => onStepsChange(Number(e.target.value))}
@@ -93,7 +93,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                         <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                             Bodies to Trace
                         </div>
-                        
+
                         {bodies.length === 0 && (
                             <div className="text-xs text-slate-500 italic text-center py-2">No bodies in system</div>
                         )}
@@ -102,17 +102,17 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                             const isSelected = selectedBodyIds.includes(body.id);
                             const isFollowing = followingBodyId === body.id;
                             return (
-                                <div 
+                                <div
                                     key={body.id}
                                     className={`flex items-center justify-between p-2 rounded-lg transition-colors border border-transparent
                                         ${isSelected ? 'bg-blue-500/10 border-blue-500/30' : 'hover:bg-slate-800'}`}
                                 >
-                                    <div 
+                                    <div
                                         className="flex items-center gap-2 overflow-hidden flex-1 cursor-pointer"
                                         onClick={() => onToggleBody(body.id)}
                                     >
                                         {body.isRocket ? (
-                                            <Rocket size={14} className="text-orange-400 shrink-0" />
+                                            <Rocket size={14} className="text-orange-400 shrink-0" style={{ color: body.color }} />
                                         ) : (
                                             <Globe size={14} className="text-slate-400 shrink-0" style={{ color: body.color }} />
                                         )}
@@ -120,7 +120,7 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                                             {body.name}
                                         </span>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={(e) => {
@@ -132,8 +132,8 @@ const PredictionPanel: React.FC<PredictionPanelProps> = ({
                                         >
                                             <Crosshair size={12} />
                                         </button>
-                                        
-                                        <div 
+
+                                        <div
                                             className={`cursor-pointer ${isSelected ? "text-blue-400" : "text-slate-600"}`}
                                             onClick={() => onToggleBody(body.id)}
                                         >

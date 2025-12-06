@@ -1380,7 +1380,7 @@ const App: React.FC = () => {
         const currentScale = scaleRef.current;
         const currentOffset = offsetRef.current;
 
-        const nextScale = Math.max(0.01, Math.min(100.0, currentScale * factor));
+        const nextScale = Math.max(0.0001, Math.min(10000.0, currentScale * factor));
 
         if (Math.abs(nextScale - currentScale) < 0.000001) return;
 
@@ -2433,7 +2433,7 @@ const App: React.FC = () => {
             )}
 
             {/* DEBUG PANEL */}
-            <div className={`fixed ${isMobile ? 'top-0 right-0' : 'bottom-0 right-0'} z-[60] pointer-events-auto font-mono text-xs`}>
+            {true && (<div className={`fixed ${isMobile ? 'top-0 right-0' : 'bottom-0 right-0'} z-[60] pointer-events-auto font-mono text-xs`}>
                 <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
                     {/* Time and FPS Row */}
                     <div className="flex items-center gap-3 ">
@@ -2480,7 +2480,7 @@ const App: React.FC = () => {
                         </>
                     )}
                 </div>
-            </div>
+            </div>)}
 
             {/* Flight Computer Panel */}
             <FlightComputerDashboard

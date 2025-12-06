@@ -8,6 +8,7 @@ export interface OrbitInfo {
     isBound: boolean;
     pePoint?: Vector2D; // Position of Periapsis in world space
     paPoint?: Vector2D; // Position of Apoapsis in world space
+    eccentricity: number;
 }
 
 export const calculateOrbitInfo = (
@@ -41,6 +42,7 @@ export const calculateOrbitInfo = (
     let period = 0;
     let pePoint: Vector2D | undefined;
     let paPoint: Vector2D | undefined;
+    let eccentricity = -1;
 
     if (E < 0) {
         const a = -mu / (2 * E);
@@ -49,7 +51,7 @@ export const calculateOrbitInfo = (
         // In 2D: h = x*vy - y*vx
         const h = (dx * dvy) - (dy * dvx);
         
-        const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
+        eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
         periapsis = (a * (1 - eccentricity)) - reference.radius;
         apoapsis = (a * (1 + eccentricity)) - reference.radius;
         period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
@@ -84,7 +86,7 @@ export const calculateOrbitInfo = (
         }
     }
 
-    return { altitude, periapsis, apoapsis, period, isBound: E < 0, pePoint, paPoint };
+    return { altitude, periapsis, apoapsis, period, isBound: E < 0, pePoint, paPoint, eccentricity };
 };
 
 export const resolveInput = (
@@ -423,6 +425,7 @@ export const resolveScalarInput = (
                      if (outputKey === 'periapsis') return info.periapsis;
                      if (outputKey === 'apoapsis') return info.apoapsis;
                      if (outputKey === 'period') return info.period;
+                     if (outputKey === 'eccentricity') return info.eccentricity;
                  }
             }
         } else if (module.type === 'transfer_window') {

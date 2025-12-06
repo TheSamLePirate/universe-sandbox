@@ -231,7 +231,7 @@ const ManualCreationPanel: React.FC<ManualCreationPanelProps> = ({ candidate, pr
                         <span className="text-blue-300 font-mono">{candidate.mass}</span>
                     </div>
                     <input
-                        type="range" min="0.001" max={candidate.isStar ? "10000" : "1000"} step="0.001"
+                        type="range" min="1.001" max={candidate.isStar ? "10000" : "1000"} step="0.001"
                         value={candidate.mass}
                         onChange={(e) => {
 

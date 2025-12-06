@@ -14,9 +14,13 @@ interface FlightComputerDashboardProps {
     onToggleModule: (id: string) => void;
 }
 
-const CELL_WIDTH = 120;
-const CELL_HEIGHT = 80;
-const GRID_GAP = 4;
+const screenWidth = window.innerWidth;
+const screenHeight = window.innerHeight;
+
+
+const CELL_WIDTH = screenWidth / 12;
+const CELL_HEIGHT = screenHeight / 12;
+const GRID_GAP = 0;
 
 const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     modules,
@@ -111,6 +115,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     const renderCardContent = (module: FlightComputerModule) => {
         // Special handling for interactive modules
         if (module.type === 'button') {
+            const customLabel = module.dashboardConfig?.customLabel;
             return (
                 <button
                     className={`w-full h-full rounded flex items-center justify-center font-bold transition-colors ${module.buttonState
@@ -124,7 +129,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                     }}
                     style={{ pointerEvents: isEditMode ? 'none' : 'auto' }}
                 >
-                    {module.buttonState ? 'ON' : 'OFF'}
+                    {module.buttonState ? customLabel || 'ON' : customLabel || 'OFF'}
                 </button>
             );
         }
@@ -173,9 +178,10 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
         // Default: Show configured output
         const outputKey = module.dashboardConfig?.displayOutput?.key;
         const outputLabel = module.dashboardConfig?.displayOutput?.label;
+        const customLabel = module.dashboardConfig?.customLabel;
 
         let displayValue = '—';
-        let displayLabel = outputLabel || 'Value';
+        let displayLabel = customLabel || outputLabel || 'Value';
 
         if (outputKey) {
             displayValue = getModuleOutputValue(module, outputKey);
@@ -201,13 +207,14 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
             }
             else if (module.type === 'body_by') {
                 displayValue = getModuleOutputValue(module, 'body');
-                displayLabel = 'Body';
+                displayLabel = '';
             }
             else {
                 // Fallback
                 displayValue = '...';
             }
         }
+        displayLabel = customLabel || displayLabel;
 
         return (
             <div className="flex flex-col items-center justify-center h-full">
@@ -314,7 +321,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                             )}
 
                             {/* Card Content */}
-                            <div className="h-[calc(100%-24px)] w-full">
+                            <div className={`${module.dashboardConfig?.showTitle ? 'h-[calc(100%-24px)]' : 'h-full'} w-full`}>
                                 {renderCardContent(module)}
                             </div>
                         </div>
@@ -324,7 +331,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
 
             {/* Unused Modules Drawer (Edit Mode Only) */}
             {isEditMode && (
-                <div className="absolute bottom-0 left-0 right-0 h-48 bg-slate-900 border-t border-slate-700 p-4 transform transition-transform duration-300 pointer-events-auto flex flex-col z-[60]">
+                <div className="absolute bottom-40 left-40 right-40 h-64 bg-slate-900 border-t border-slate-700 p-4 transform transition-transform duration-300 pointer-events-auto flex flex-col z-[60]">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-bold text-slate-300">Available Modules</h3>
                         <div className="text-xs text-slate-500">Drag modules to the grid above</div>
@@ -387,7 +394,8 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                                     { key: 'altitude', label: 'Altitude' },
                                     { key: 'period', label: 'Period' },
                                     { key: 'apoapsis', label: 'Apoapsis' },
-                                    { key: 'periapsis', label: 'Periapsis' }
+                                    { key: 'periapsis', label: 'Periapsis' },
+                                    { key: 'eccentricity', label: 'Eccentricity' }
                                 );
                             } else if (m.type === 'transfer_window') {
                                 outputs.push(
@@ -408,9 +416,6 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                                 outputs.push({ key: 'fuel', label: 'Fuel' });
                                 outputs.push({ key: 'landedOnBodyId', label: 'Landed On' });
                                 outputs.push({ key: 'sasMode', label: 'SAS Mode' });
-                            } else if (m.type === 'body_by') {
-                                outputs.push({ key: 'body', label: 'Body' });
-                                outputs.push({ key: 'name', label: 'Body Name' });
                             }
 
                             // Add more as needed
@@ -456,8 +461,18 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                                                 <option key={o.key} value={o.key}>{o.label}</option>
                                             ))}
                                         </select>
+
                                     </div>
+
                                 )}
+
+                                <label className="text-xs text-slate-500 block mb-1">Show Title</label>
+                                <input
+                                    type="checkbox"
+                                    checked={module.dashboardConfig?.showTitle}
+                                    onChange={(e) => onUpdateModule(module.id, { dashboardConfig: { ...module.dashboardConfig!, showTitle: e.target.checked } })}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                                />
 
                                 <button
                                     onClick={() => handleRemoveFromDashboard(module.id)}

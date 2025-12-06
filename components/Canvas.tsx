@@ -6,6 +6,7 @@ import { isModuleActive } from './flight_computer/utils';
 import { drawShip } from './ship';
 import { drawBeautifullPlanetGemini } from './PlanetsGemini';
 import { drawBeautifulPlanetOpenAi } from './PlanetsOpenAI';
+import { drawApple } from './Apple';
 
 interface CanvasProps {
     bodies: Body[];
@@ -1495,7 +1496,7 @@ const Canvas: React.FC<CanvasProps> = ({
             // --- PLANET RENDERING (Procedural) ---
             else {
                 // 1. Draw Rings (if Saturn-like)
-                if (body.name.includes('Pomme')) {
+                if (body.name.includes('Pomme') && false) {
 
 
                     if (body.name.includes('Saturn') || (body.mass > 300 && body.mass < 500)) {
@@ -1612,6 +1613,8 @@ const Canvas: React.FC<CanvasProps> = ({
 
                         ctx.restore();
                     }
+                } else if (body.name.includes('Pomme')) {
+                    drawApple(ctx, screenX, screenY, visualRadius, 1);
                 } else {
                     const ttime = time;
                     //drawBeautifulPlanetOpenAi(ctx, body, screenX, screenY, visualRadius, body.color, { primaryStar, visualConfig, isGhost, time: ttime });
