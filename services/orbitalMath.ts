@@ -96,14 +96,18 @@ export const resolveInput = (
     gravitationalConstant: number,
     rendezvousSolutions?: Record<string, RendezvousSolution>
 ): Body | Vector2D | null => {
+    
     if (!input) return null;
 
     if (input.type === 'body') {
         return bodies.find(b => b.id === input.value) || null;
     } else if (input.type === 'module_output') {
         const [moduleId, outputKey] = input.value.split(':');
+        
         const module = modules.find(m => m.id === moduleId);
-        if (!module) return null;
+        if (!module) {
+            return null;
+        }
 
         // Recursively resolve module output
         // For now, let's handle specific module types we know about

@@ -102,7 +102,12 @@ const getPulsePhase = (id: string) => {
     return (hash % 360) / 57.2958; // Convert degrees to radians-ish offset
 };
 
-const extractVector = (value: Body | Vector2D): Vector2D => ('position' in value ? value.position : value);
+const extractVector = (value: Body | Vector2D | null | undefined): Vector2D | null => {
+    if (!value) return null;
+    if ('position' in value && value.position) return value.position;
+    if ('x' in value && 'y' in value) return value as Vector2D;
+    return null;
+};
 
 // Helper for deterministic random based on string seed
 const seededRandom = (seed: string) => {
@@ -176,11 +181,15 @@ const Canvas: React.FC<CanvasProps> = ({
         return map;
     }, [rendezvousPoints]);
 
-    const resolveMarkerVector = (input?: FlightComputerInput): Vector2D | null => {
+    const resolveMarkerVector = (input?: FlightComputerInput, flightComputerModules?: FlightComputerModule[]): Vector2D | null => {
         if (!input) return null;
+        if (!flightComputerModules || flightComputerModules.length === 0) {
+            console.log("no flight computer modules..... on Canvas...");
+            return null;
+        };
+
         const resolved = resolveInput(input, bodiesRef.current, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-        if (!resolved) return null;
-        return extractVector(resolved as Body | Vector2D);
+        return extractVector(resolved);
     };
 
     const resolveMarkerStringValue = (input: FlightComputerInput | undefined, fallback: string): string => {
@@ -1900,12 +1909,17 @@ const Canvas: React.FC<CanvasProps> = ({
                     }
                 } else if (module.type === 'marker') {
                     const inputs = module.inputs || {};
+
                     const positionInput = inputs.position || inputs.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
-                    const markerPos = resolveMarkerVector(positionInput);
+                    const markerPos = resolveMarkerVector(positionInput, flightComputerModules);
+
+
+
                     if (!markerPos) return;
 
                     const screenX = cx + markerPos.x * scale;
                     const screenY = cy + markerPos.y * scale;
+
                     if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) return;
 
                     const title = resolveMarkerStringValue(inputs.marker_title, module.markerTitle ?? module.name ?? 'Marker');

@@ -24,6 +24,7 @@ import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, SimulationSaveDa
 import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
+import JargonMetre from './components/JargonMetre';
 
 const MODULE_COLOR_PALETTE = ['#a855f7', '#22d3ee', '#f97316', '#10b981', '#f43f5e', '#facc15', '#6366f1', '#ef4444', '#06b6d4', '#fb923c'];
 
@@ -967,8 +968,9 @@ const App: React.FC = () => {
                 const lastInputTime = lastBodyUpdateTimesRef.current.get(workerBody.id) || 0;
                 // If user input < 100ms ago, assume it's fresher than worker result
                 const isFreshInput = (Date.now() - lastInputTime) < 100;
+                const isDocked = workerBody.landedOnBodyId && workerBody.landedOnBodyId.includes('rocket_');
 
-                if (localBody.isRocket && isFreshInput) {
+                if (localBody.isRocket && isFreshInput && !isDocked) {
                     return {
                         ...workerBody,
                         // Keep LOCAL User Inputs
@@ -983,6 +985,27 @@ const App: React.FC = () => {
                         maneuvers: localBody.maneuvers // Use LOCAL maneuvers to ensure 'active' status sticks
                     };
                 }
+                // If Docked, we trust the worker's Angle/Position completely 
+                // (Physics Engine handles the docking constraint)
+                // But we might still want to keep local maneuvers/thrust if they are just starting?
+                // Actually, if docked, thrust undocks, so we probably want to allow thrust to passthrough?
+                // But position/angle DEFINITELY come from worker.
+
+                if (localBody.isRocket && isFreshInput && isDocked) {
+                    return {
+                        ...workerBody,
+                        // Keep LOCAL Thrust/Maneuvers to allow Undocking
+                        thrust: localBody.thrust,
+                        maneuvers: localBody.maneuvers,
+                        // Trust Worker for Transform
+                        angle: workerBody.angle,
+                        position: workerBody.position,
+                        velocity: workerBody.velocity,
+                        fuel: workerBody.fuel,
+                        sasMode: localBody.sasMode || workerBody.sasMode
+                    };
+                }
+
                 return workerBody;
             });
 
@@ -2696,6 +2719,7 @@ const App: React.FC = () => {
                 fps={fps}
                 simulationTime={simulationTimeRef.current}
                 scale={scaleRef.current}
+                updateRocket={updateRocket}
             />
 
             {/* Assistant */}
@@ -2880,6 +2904,15 @@ const App: React.FC = () => {
                     onThresholdChange={(v) => setVisualConfig(prev => ({ ...prev, centerOfMassThreshold: v }))}
                 />
             )}
+
+            {false && (
+                <div className="fixed top-0 right-0 bottom-0 left-0 z-[80] pointer-events-none">
+                    <JargonMetre />
+                </div>
+            )}
+
+
+
 
             <Controls
                 isRunning={isRunning}

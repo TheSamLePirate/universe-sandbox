@@ -803,8 +803,70 @@ export const updatePhysics = (
                 return {
                     ...body,
                     landedOnBodyId: undefined,
-                    landingAngle: undefined // Clear landing angle so it can be recalculated on next landing
+                    landingAngle: undefined, // Clear landing angle so it can be recalculated on next landing
+                    dockingRelativePosition: undefined, // Clear docking relative position
+                    dockingRelativeAngle: undefined // Clear docking relative angle
                 };
+            }
+
+            //if landedOnRocket, this is docking. I should stay at this position relatively to the rocket landedOnBodyId (even if the rocket landedOnBodyId moves and rotate)
+            if(body.landedOnBodyId.includes("rocket_")) {
+                 const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
+                 if (parent) {
+                     // 1. Initialize relative position/angle if not set
+                     let relPos = body.dockingRelativePosition;
+                     let relAngle = body.dockingRelativeAngle;
+
+                     if (!relPos || relAngle === undefined) {
+                         // Calculate current relative position in parent's local space
+                         const dx = body.position.x - parent.position.x;
+                         const dy = body.position.y - parent.position.y;
+                         
+                         // Rotate by negative parent angle to get local space coordinates
+                         const parentAngle = parent.angle || 0;
+                         const cos = Math.cos(-parentAngle);
+                         const sin = Math.sin(-parentAngle);
+                         
+                         relPos = {
+                             x: dx * cos - dy * sin,
+                             y: dx * sin + dy * cos
+                         };
+                         
+                         relAngle = (body.angle || 0) - parentAngle;
+                         
+                         // We return immediately with stored values to ensure stability from next frame
+                         return {
+                             ...body,
+                             dockingRelativePosition: relPos,
+                             dockingRelativeAngle: relAngle
+                         };
+                     }
+
+                     // 2. Update Position & Angle based on Parent
+                     const parentAngle = parent.angle || 0;
+                     const cos = Math.cos(parentAngle);
+                     const sin = Math.sin(parentAngle);
+
+                     // Rotate local position by parent angle to get world space offset
+                     const worldOffsetX = relPos.x * cos - relPos.y * sin;
+                     const worldOffsetY = relPos.x * sin + relPos.y * cos;
+
+                     const newX = parent.position.x + worldOffsetX;
+                     const newY = parent.position.y + worldOffsetY;
+                     const newAngle = parentAngle + relAngle;
+
+                     return {
+                         ...body,
+                         position: { x: newX, y: newY },
+                         angle: newAngle,
+                         velocity: { ...parent.velocity }, // Match velocity exactly
+                         trail: [] // Optional: clear trail or let it generate
+                     };
+
+                 } else {
+                    // Parent not found, undock
+                    return { ...body, landedOnBodyId: undefined };
+                 }
             }
 
             // Find parent to stick to

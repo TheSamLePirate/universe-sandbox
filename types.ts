@@ -61,6 +61,10 @@ export interface Body {
   fuel?: number; // Current fuel amount
   maxFuel?: number; // Tank capacity
   dryMass?: number; // Mass without fuel
+  
+  // Docking System
+  dockingRelativePosition?: Vector2D; // Position relative to parent when docked
+  dockingRelativeAngle?: number; // Angle relative to parent when docked
 
   // Surface Objects
   surfaceObjects?: SurfaceObject[];
@@ -384,4 +388,17 @@ export interface ModuleGroup {
         moduleId: string;
         outputKey: string;
     };
+}
+
+export interface JargonAnalysis {
+  score: number; // 0.0 to 1.0
+  reasoning: string;
+  jargonWords: string[];
+}
+
+export enum ConnectionStatus {
+  DISCONNECTED = 'DISCONNECTED',
+  CONNECTING = 'CONNECTING',
+  CONNECTED = 'CONNECTED',
+  ERROR = 'ERROR'
 }

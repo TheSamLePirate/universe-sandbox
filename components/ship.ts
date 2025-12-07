@@ -40,6 +40,7 @@ export function drawShip(
     let hasObservatory = false;
     let hasRadar = false;
     let hasLaser = false;
+    let fireLaser=false;
     let hasRoboticArm = false;
 
     // Dynamic Module State
@@ -81,8 +82,11 @@ export function drawShip(
                         if(datas[0]==="hasRadarOff" && datas[1]===body.id){
                             hasRadar=false;
                         }
-                        if(datas[0]==="hasLaser" && datas[1]===body.id){
+                        if(datas[0]==="hasLaser" && datas[1]===body.id && datas[2] && datas[3]){
                             hasLaser=true;
+                            laserAngle=Number(datas[2]);
+                            fireLaser=datas[3]==="true";
+
                         }
                         if(datas[0]==="hasLaserOff" && datas[1]===body.id){
                             hasLaser=false;
@@ -113,7 +117,9 @@ export function drawShip(
 
 
                     } catch (error) {
-                        console.error(error);
+                        //do nothing, no console log
+
+
                     }
                 }
             }
@@ -146,8 +152,9 @@ export function drawShip(
         drawCockpit(ctx, size);
     }
     
+
     if (hasRadar) drawRadar(ctx, size, time);
-    if (hasLaser) drawLaser(ctx, size, laserAngle);
+    if (hasLaser) drawLaser(ctx, size, laserAngle,fireLaser);
     if (hasRoboticArm) drawRoboticArm(ctx, size, roboticArm);
 
     // Layer 4: Landing Gear
@@ -368,16 +375,14 @@ function drawRCS(ctx: CanvasRenderingContext2D, size: number, sas: string, time:
         if (sas === 'prograde' || sas === 'radial_out') {
             // Front puffs
             ctx.beginPath();
-            ctx.arc(size * 0.8, size * 0.1, size * 0.05, 0, Math.PI * 2);
+            ctx.arc(size * 0.8, 0, size * 0.05, 0, Math.PI * 2);
             ctx.fill();
-            
-            
         }
         
         if (sas === 'retrograde') {
              // Rear puffs
              ctx.beginPath();
-             ctx.arc(-size * 0.8, -size * 0.3, size * 0.05, 0, Math.PI * 2);
+             ctx.arc(-size * 0.8, 0, size * 0.05, 0, Math.PI * 2);
              ctx.fill();
         }
     }
@@ -574,7 +579,7 @@ function drawRadar(ctx: CanvasRenderingContext2D, size: number, time: number) {
     ctx.restore();
 }
 
-function drawLaser(ctx: CanvasRenderingContext2D, size: number, angle: number) {
+function drawLaser(ctx: CanvasRenderingContext2D, size: number, angle: number, fire: boolean) {
     ctx.save();
     ctx.translate(size * 0.6, size * 0.3);
     
@@ -589,30 +594,63 @@ function drawLaser(ctx: CanvasRenderingContext2D, size: number, angle: number) {
     ctx.fillRect(size * 0.35, -3, size * 0.08, 2);
     ctx.fillRect(size * 0.35, 1, size * 0.08, 2);
 
+    
+    if(fire){
+        //draw the green laser beam line (infinite)
+        ctx.beginPath();
+        ctx.moveTo(size * 0.35, 0);
+        ctx.lineTo(1000, 0);
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
     ctx.restore();
 }
 
 function drawIndicators(ctx: CanvasRenderingContext2D, size: number, sas: string, landed: boolean, time: number) {
     const blink = Math.floor(time / 40) % 2 === 0;
+    const halfBlink = Math.floor(time / 20) % 2 === 0;
     const width = size * 0.8;
 
     // Navigation Lights
     if (blink) {
-        // Red Top
-        ctx.fillStyle = '#ef4444';
-        ctx.shadowColor = '#ef4444';
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(-size * 0.9, -width*0.4, 2, 0, Math.PI*2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
 
-        // Green Bottom
-        ctx.fillStyle = '#22c55e';
-        ctx.shadowColor = '#22c55e';
+        
+        if(halfBlink){
+            // Red Left Bottom
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(-size * 0.9, -width*0.4, 2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 5;
+        }
+        else{
+            // Green RightBottom
+            ctx.fillStyle = '#22c55e';
+            ctx.shadowColor = '#22c55e';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(-size * 0.9, width*0.4, 2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+       
+
+        
+
+        
+    }
+    else{
+        // Blue top
+        ctx.fillStyle = '#01a2ffff';
+        ctx.shadowColor = '#01a2ffff';
         ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(-size * 0.9, width*0.4, 2, 0, Math.PI*2);
+        ctx.arc(size, 0, 2, 0, Math.PI*2);
         ctx.fill();
         ctx.shadowBlur = 0;
     }

@@ -18,6 +18,7 @@ export const useFlightComputerLogic = (
     simulationTime: number,
     scale: number,
     onSetFollowingBody?: (bodyId: string | null) => void,
+    updateRocket?: (id: string, updates: Partial<Body>) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -180,7 +181,8 @@ export const useFlightComputerLogic = (
                             addModule: onAddModule,
                             removeModule: onRemoveModule,
                             toggleModule: onToggleModule,
-                            setFollowingBody: onSetFollowingBody
+                            setFollowingBody: onSetFollowingBody,
+                            updateRocket: updateRocket,
                         },
                         helpers: {
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),

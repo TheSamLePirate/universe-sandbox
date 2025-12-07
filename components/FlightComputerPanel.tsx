@@ -29,6 +29,7 @@ interface FlightComputerPanelProps {
     fps: number;
     simulationTime: number;
     scale: number;
+    updateRocket?: (id: string, updates: Partial<Body>) => void;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -76,6 +77,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     fps,
     simulationTime,
     scale,
+    updateRocket,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -99,7 +101,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         fps,
         simulationTime,
         scale,
-        onSetFollowingBody
+        onSetFollowingBody,
+        updateRocket,
     );
 
     // Helper to get display value for collapsed group
