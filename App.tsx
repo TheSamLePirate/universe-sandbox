@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Activity } from 'react';
 import Canvas from './components/Canvas';
 import Canvas3D from './components/Canvas3D';
 import Controls from './components/Controls';
@@ -21,7 +21,7 @@ import { updatePhysics, predictSystemTrajectories, reverseTime } from './service
 
 import { resolveInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from './services/orbitalMath';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, SimulationSaveData, SimulationState, Preset, FlightComputerModule, FlightComputerInput, ModuleGroup, FlightComputerModuleType, Maneuver, SurfaceObject, RocketSpawnConfig, RendezvousSolution, CoMData, AssistantActions, PhysicsResult } from './types';
-import { Terminal, Activity, MemoryStick, Trash2 } from 'lucide-react';
+import { Terminal, Activity as ActivityIcon, MemoryStick, Trash2 } from 'lucide-react';
 import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
 import JargonMetre from './components/JargonMetre';
@@ -62,6 +62,7 @@ const App: React.FC = () => {
 
     // --- State ---
     const isMobile = useIsMobile();
+    const [showUI, setShowUI] = useState(false);
     const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
 
     const [currentPresetId, setCurrentPresetId] = useState(defaultPreset.id);
@@ -2633,322 +2634,335 @@ const App: React.FC = () => {
                 />
             )}
 
-            {/* DEBUG PANEL */}
-            {true && (<div className={`fixed ${isMobile ? 'top-0 right-0' : 'bottom-0 right-0'} z-[60] pointer-events-auto font-mono text-xs`}>
-                <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
-                    {/* Time and FPS Row */}
-                    <div className="flex items-center gap-3 ">
-                        <Terminal size={12} />
-                        <div className="font-bold">
-                            {(() => {
-                                const totalSeconds = Math.floor(simulationTimeRef.current);
-                                const years = Math.floor(totalSeconds / (365.25 * 24 * 3600));
-                                const months = Math.floor((totalSeconds % (365.25 * 24 * 3600)) / (30.44 * 24 * 3600));
-                                const days = Math.floor((totalSeconds % (30.44 * 24 * 3600)) / (24 * 3600));
-                                const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
-                                const minutes = Math.floor((totalSeconds % 3600) / 60);
-                                let seconds = totalSeconds % 60;
+            <div className="fixed bottom-0 left-0 z-[60] pointer-events-auto ">
+                <button className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2" onClick={() => setShowUI(!showUI)}>Toggle UI</button>
+            </div>
 
-                                const parts = [];
-                                if (years > 0) parts.push(`${years}y`);
-                                if (months > 0) parts.push(months < 10 ? `0${months}mo` : `${months}mo`);
-                                if (days > 0) parts.push(days < 10 ? `0${days}d` : `${days}d`);
-                                if (hours > 0) parts.push(hours < 10 ? `0${hours}h` : `${hours}h`);
-                                if (minutes > 0) parts.push(minutes < 10 ? `0${minutes}m` : `${minutes}m`);
-                                else if (parts.length > 0) parts.push('00m');
-                                if (seconds > 0) parts.push(seconds < 10 ? `0${seconds}s` : `${seconds}s`);
-                                else if (parts.length > 0) parts.push('00s');
 
-                                return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
-                            })()}
-                        </div>
-                        <div className="w-px h-3 bg-slate-700 mx-1 " />
-                        <div className={fps < 30 ? "text-red-400" : "text-green-400"}>{fps.toFixed(0)} FPS</div>
-                    </div>
+            <Activity mode={showUI ? 'visible' : 'hidden'}>
 
-                    {/* Extended Debug Info (Desktop Only) */}
-                    {!isMobile && (
-                        <>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-400">
 
-                                {memoryUsage && (
-                                    <div className="col-span-2 flex items-center gap-1 mt-0 pt-0 border-t border-slate-700/30">
-                                        <MemoryStick size={10} />
-                                        <span>{memoryUsage.used.toFixed(0)}MB / {memoryUsage.total.toFixed(0)}MB ({memoryUsage.percent.toFixed(0)}%)</span>
-                                    </div>
-                                )}
+                <>
+
+                    {/* DEBUG PANEL */}
+                    {true && (<div className={`fixed ${isMobile ? 'top-0 right-0' : 'bottom-0 right-0'} z-[60] pointer-events-auto font-mono text-xs`}>
+                        <div className="bg-slate-900/90 border border-slate-700 text-green-400 px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm space-y-2">
+                            {/* Time and FPS Row */}
+                            <div className="flex items-center gap-3 ">
+                                <Terminal size={12} />
+                                <div className="font-bold">
+                                    {(() => {
+                                        const totalSeconds = Math.floor(simulationTimeRef.current);
+                                        const years = Math.floor(totalSeconds / (365.25 * 24 * 3600));
+                                        const months = Math.floor((totalSeconds % (365.25 * 24 * 3600)) / (30.44 * 24 * 3600));
+                                        const days = Math.floor((totalSeconds % (30.44 * 24 * 3600)) / (24 * 3600));
+                                        const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+                                        const minutes = Math.floor((totalSeconds % 3600) / 60);
+                                        let seconds = totalSeconds % 60;
+
+                                        const parts = [];
+                                        if (years > 0) parts.push(`${years}y`);
+                                        if (months > 0) parts.push(months < 10 ? `0${months}mo` : `${months}mo`);
+                                        if (days > 0) parts.push(days < 10 ? `0${days}d` : `${days}d`);
+                                        if (hours > 0) parts.push(hours < 10 ? `0${hours}h` : `${hours}h`);
+                                        if (minutes > 0) parts.push(minutes < 10 ? `0${minutes}m` : `${minutes}m`);
+                                        else if (parts.length > 0) parts.push('00m');
+                                        if (seconds > 0) parts.push(seconds < 10 ? `0${seconds}s` : `${seconds}s`);
+                                        else if (parts.length > 0) parts.push('00s');
+
+                                        return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
+                                    })()}
+                                </div>
+                                <div className="w-px h-3 bg-slate-700 mx-1 " />
+                                <div className={fps < 30 ? "text-red-400" : "text-green-400"}>{fps.toFixed(0)} FPS</div>
                             </div>
-                        </>
+
+                            {/* Extended Debug Info (Desktop Only) */}
+                            {!isMobile && (
+                                <>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-slate-400">
+
+                                        {memoryUsage && (
+                                            <div className="col-span-2 flex items-center gap-1 mt-0 pt-0 border-t border-slate-700/30">
+                                                <MemoryStick size={10} />
+                                                <span>{memoryUsage.used.toFixed(0)}MB / {memoryUsage.total.toFixed(0)}MB ({memoryUsage.percent.toFixed(0)}%)</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>)}
+
+                    {/* Flight Computer Panel */}
+                    <FlightComputerDashboard
+                        modules={flightComputerModules}
+                        bodies={bodies}
+                        physicsConfig={physicsConfig}
+                        rendezvousPoints={rendezvousPoints}
+                        onUpdateModule={handleUpdateModule}
+                        onToggleModule={handleToggleModule}
+                    />
+                    <FlightComputerPanel
+                        modules={flightComputerModules}
+                        groups={moduleGroups}
+                        bodies={bodies}
+                        physicsConfig={physicsConfig}
+                        onAddModule={handleAddModule}
+                        onRemoveModule={handleRemoveModule}
+                        onUpdateModule={handleUpdateModule}
+                        onToggleModule={handleToggleModule}
+                        onAddGroup={handleAddGroup}
+                        onRemoveGroup={handleRemoveGroup}
+                        onUpdateGroup={handleUpdateGroup}
+                        onMoveModuleToGroup={handleMoveModuleToGroup}
+                        onMoveGroupToGroup={handleMoveGroupToGroup}
+                        onExportGroup={handleExportGroup}
+                        onImportGroup={handleImportGroup}
+                        rendezvousPoints={rendezvousPoints}
+                        onSetFollowingBody={(id) => {
+                            if (id) {
+                                handleToggleFollow(id);
+                            } else {
+                                setFollowingBodyId(null);
+                            }
+                        }}
+                        fps={fps}
+                        simulationTime={simulationTimeRef.current}
+                        scale={scaleRef.current}
+                        updateRocket={updateRocket}
+                    />
+
+                    {/* Assistant */}
+                    {showAssistant && (
+                        <Assistant
+                            selectedBodyName={selectedBodyId ? bodies.find(b => b.id === selectedBodyId)?.name || null : null}
+                            actions={assistantActions}
+                            bodies={bodies}
+                        />
                     )}
-                </div>
-            </div>)}
-
-            {/* Flight Computer Panel */}
-            <FlightComputerDashboard
-                modules={flightComputerModules}
-                bodies={bodies}
-                physicsConfig={physicsConfig}
-                rendezvousPoints={rendezvousPoints}
-                onUpdateModule={handleUpdateModule}
-                onToggleModule={handleToggleModule}
-            />
-            <FlightComputerPanel
-                modules={flightComputerModules}
-                groups={moduleGroups}
-                bodies={bodies}
-                physicsConfig={physicsConfig}
-                onAddModule={handleAddModule}
-                onRemoveModule={handleRemoveModule}
-                onUpdateModule={handleUpdateModule}
-                onToggleModule={handleToggleModule}
-                onAddGroup={handleAddGroup}
-                onRemoveGroup={handleRemoveGroup}
-                onUpdateGroup={handleUpdateGroup}
-                onMoveModuleToGroup={handleMoveModuleToGroup}
-                onMoveGroupToGroup={handleMoveGroupToGroup}
-                onExportGroup={handleExportGroup}
-                onImportGroup={handleImportGroup}
-                rendezvousPoints={rendezvousPoints}
-                onSetFollowingBody={(id) => {
-                    if (id) {
-                        handleToggleFollow(id);
-                    } else {
-                        setFollowingBodyId(null);
-                    }
-                }}
-                fps={fps}
-                simulationTime={simulationTimeRef.current}
-                scale={scaleRef.current}
-                updateRocket={updateRocket}
-            />
-
-            {/* Assistant */}
-            {showAssistant && (
-                <Assistant
-                    selectedBodyName={selectedBodyId ? bodies.find(b => b.id === selectedBodyId)?.name || null : null}
-                    actions={assistantActions}
-                    bodies={bodies}
-                />
-            )}
 
 
-            {/* NEW ROCKET HUD */}
-            {!isMobile && showRocketPanel && (() => {
-                const allRockets = bodies.filter(b => b.isRocket);
-                const selectedRocket = selectedBodyId ? bodies.find(b => b.id === selectedBodyId && b.isRocket) : null;
+                    {/* NEW ROCKET HUD */}
+                    {!isMobile && showRocketPanel && (() => {
+                        const allRockets = bodies.filter(b => b.isRocket);
+                        const selectedRocket = selectedBodyId ? bodies.find(b => b.id === selectedBodyId && b.isRocket) : null;
 
-                // If a rocket is selected, show only that one
-                if (selectedRocket) {
-                    return (
-                        <RocketDataPanel
-                            rocket={selectedRocket}
+                        // If a rocket is selected, show only that one
+                        if (selectedRocket) {
+                            return (
+                                <RocketDataPanel
+                                    rocket={selectedRocket}
+                                    bodies={bodies}
+                                    physicsConfig={physicsConfig}
+                                    parentBodyId={rocketParentBodyId}
+                                    targetBodyId={rocketTargetBodyId}
+                                    predictionPaths={predictionPaths}
+                                    predictionSteps={predictionSteps}
+                                    predictSystem={isPredictionEnabled}
+                                    onUpdateRocket={updateRocket}
+                                    onSelectRocket={setSelectedBodyId}
+                                    index={0}
+                                />
+                            );
+                        }
+
+                        // Otherwise, show all rockets
+                        return (
+                            <>
+                                {allRockets.map((rocket, index) => (
+                                    <RocketDataPanel
+                                        key={rocket.id}
+                                        rocket={rocket}
+                                        bodies={bodies}
+                                        physicsConfig={physicsConfig}
+                                        parentBodyId={rocket.orbitReferenceId}
+                                        targetBodyId={rocketTargetBodyId}
+                                        predictionPaths={predictionPaths}
+                                        predictionSteps={predictionSteps}
+                                        predictSystem={isPredictionEnabled}
+                                        onUpdateRocket={updateRocket}
+                                        onSelectRocket={setSelectedBodyId}
+                                        index={index}
+                                    />
+                                ))}
+                            </>
+                        );
+                    })()}
+
+                    {/* Global Prediction Panel */}
+                    <PredictionPanel
+                        bodies={bodies}
+                        isEnabled={isPredictionEnabled}
+                        onToggleEnabled={setIsPredictionEnabled}
+                        predictionSteps={predictionSteps}
+                        onStepsChange={setPredictionSteps}
+                        selectedBodyIds={predictionBodyIds}
+                        onToggleBody={(id) => {
+                            setPredictionBodyIds(prev =>
+                                prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
+                            );
+                        }}
+                        followingBodyId={followingBodyId}
+                        onFollowBody={handleToggleFollow}
+                    />
+
+                    {showRocketPanel && (
+                        <RocketPanel
+                            onClose={() => setShowRocketPanel(false)}
+                            onSpawnToggle={() => setIsRocketSpawning(!isRocketSpawning)}
+                            isSpawning={isRocketSpawning}
+                            spawnConfig={rocketSpawnConfig}
+                            onUpdateSpawnConfig={setRocketSpawnConfig}
+                            selectedRocket={bodies.find(b => b.id === selectedBodyId && b.isRocket) || null}
+                            onUpdateRocket={updateRocket}
+                            isFollowing={followingBodyId === selectedBodyId}
+                            onToggleFollow={() => selectedBodyId && handleToggleFollow(selectedBodyId)}
                             bodies={bodies}
                             physicsConfig={physicsConfig}
-                            parentBodyId={rocketParentBodyId}
                             targetBodyId={rocketTargetBodyId}
+                            onTargetChange={setRocketTargetBodyId}
+                            speed={speed}
+                            onSpeedChange={setSpeed}
+                            onUpdatePhysicsConfig={(c) => setPhysicsConfig(prev => ({ ...prev, ...c }))}
+                            getSimulationTime={() => simulationTimeRef.current}
+                            parentBodyId={rocketParentBodyId}
+                            onParentChange={setRocketParentBodyId}
+                            showTransferWindow={showTransferWindow}
+                            onToggleTransferWindow={() => setShowTransferWindow(!showTransferWindow)}
+                            showTheoreticalOrbit={showTheoreticalOrbit}
+                            onToggleTheoreticalOrbit={() => setShowTheoreticalOrbit(!showTheoreticalOrbit)}
                             predictionPaths={predictionPaths}
                             predictionSteps={predictionSteps}
                             predictSystem={isPredictionEnabled}
-                            onUpdateRocket={updateRocket}
+                            onRendezvousPointChange={setRendezvousPoint}
                             onSelectRocket={setSelectedBodyId}
-                            index={0}
                         />
-                    );
-                }
+                    )}
 
-                // Otherwise, show all rockets
-                return (
-                    <>
-                        {allRockets.map((rocket, index) => (
-                            <RocketDataPanel
-                                key={rocket.id}
-                                rocket={rocket}
-                                bodies={bodies}
-                                physicsConfig={physicsConfig}
-                                parentBodyId={rocket.orbitReferenceId}
-                                targetBodyId={rocketTargetBodyId}
-                                predictionPaths={predictionPaths}
-                                predictionSteps={predictionSteps}
-                                predictSystem={isPredictionEnabled}
-                                onUpdateRocket={updateRocket}
-                                onSelectRocket={setSelectedBodyId}
-                                index={index}
-                            />
-                        ))}
-                    </>
-                );
-            })()}
+                    {selectedBodyId && !isCreationMode && !isRocketSpawning && !showRocketPanel && (
+                        <InfoPanel
+                            body={bodies.find(b => b.id === selectedBodyId) || null}
+                            onClose={() => setSelectedBodyId(null)}
+                            allBodies={bodies}
+                            isFollowing={followingBodyId === selectedBodyId}
+                            onToggleFollow={() => selectedBodyId && handleToggleFollow(selectedBodyId)}
+                            onDelete={handleDeleteBody}
+                            onMakeStar={handleMakeStar}
+                            onPlaceObject={handlePlaceObject}
+                        />
+                    )}
 
-            {/* Global Prediction Panel */}
-            <PredictionPanel
-                bodies={bodies}
-                isEnabled={isPredictionEnabled}
-                onToggleEnabled={setIsPredictionEnabled}
-                predictionSteps={predictionSteps}
-                onStepsChange={setPredictionSteps}
-                selectedBodyIds={predictionBodyIds}
-                onToggleBody={(id) => {
-                    setPredictionBodyIds(prev =>
-                        prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
-                    );
-                }}
-                followingBodyId={followingBodyId}
-                onFollowBody={handleToggleFollow}
-            />
+                    {showBuilder && (
+                        <BuilderPanel
+                            onClose={() => setShowBuilder(false)}
+                            onAddBody={handleAddBody}
+                        />
+                    )}
 
-            {showRocketPanel && (
-                <RocketPanel
-                    onClose={() => setShowRocketPanel(false)}
-                    onSpawnToggle={() => setIsRocketSpawning(!isRocketSpawning)}
-                    isSpawning={isRocketSpawning}
-                    spawnConfig={rocketSpawnConfig}
-                    onUpdateSpawnConfig={setRocketSpawnConfig}
-                    selectedRocket={bodies.find(b => b.id === selectedBodyId && b.isRocket) || null}
-                    onUpdateRocket={updateRocket}
-                    isFollowing={followingBodyId === selectedBodyId}
-                    onToggleFollow={() => selectedBodyId && handleToggleFollow(selectedBodyId)}
-                    bodies={bodies}
-                    physicsConfig={physicsConfig}
-                    targetBodyId={rocketTargetBodyId}
-                    onTargetChange={setRocketTargetBodyId}
-                    speed={speed}
-                    onSpeedChange={setSpeed}
-                    onUpdatePhysicsConfig={(c) => setPhysicsConfig(prev => ({ ...prev, ...c }))}
-                    getSimulationTime={() => simulationTimeRef.current}
-                    parentBodyId={rocketParentBodyId}
-                    onParentChange={setRocketParentBodyId}
-                    showTransferWindow={showTransferWindow}
-                    onToggleTransferWindow={() => setShowTransferWindow(!showTransferWindow)}
-                    showTheoreticalOrbit={showTheoreticalOrbit}
-                    onToggleTheoreticalOrbit={() => setShowTheoreticalOrbit(!showTheoreticalOrbit)}
-                    predictionPaths={predictionPaths}
-                    predictionSteps={predictionSteps}
-                    predictSystem={isPredictionEnabled}
-                    onRendezvousPointChange={setRendezvousPoint}
-                    onSelectRocket={setSelectedBodyId}
-                />
-            )}
+                    {isCreationMode && creationCandidate && (
+                        <ManualCreationPanel
+                            candidate={creationCandidate}
+                            predictionSteps={predictionSteps}
+                            onUpdate={handleUpdateCandidate}
+                            onStepsChange={setPredictionSteps}
+                            onSpawn={handleSpawnManual}
+                            onCancel={() => {
+                                setIsCreationMode(false);
+                                setCreationCandidate(null);
+                            }}
+                        />
+                    )}
 
-            {selectedBodyId && !isCreationMode && !isRocketSpawning && !showRocketPanel && (
-                <InfoPanel
-                    body={bodies.find(b => b.id === selectedBodyId) || null}
-                    onClose={() => setSelectedBodyId(null)}
-                    allBodies={bodies}
-                    isFollowing={followingBodyId === selectedBodyId}
-                    onToggleFollow={() => selectedBodyId && handleToggleFollow(selectedBodyId)}
-                    onDelete={handleDeleteBody}
-                    onMakeStar={handleMakeStar}
-                    onPlaceObject={handlePlaceObject}
-                />
-            )}
+                    {showSettings && (
+                        <SettingsPanel
+                            visualConfig={visualConfig}
+                            setVisualConfig={setVisualConfig}
+                            physicsConfig={physicsConfig}
+                            setPhysicsConfig={setPhysicsConfig}
+                            onClose={() => setShowSettings(false)}
+                            onReset={() => {
+                                setVisualConfig(DEFAULT_VISUAL_CONFIG);
+                                setPhysicsConfig(DEFAULT_PHYSICS_CONFIG);
+                            }}
+                            onExport={handleExportState}
+                            onImport={handleImportState}
+                            use3D={use3D}
+                            setUse3D={setUse3D}
+                            audioState={audioState}
+                            onEnableAudio={resumeAudio}
+                            showMusicPanel={showMusicPanel}
+                            setShowMusicPanel={setShowMusicPanel}
+                        />
+                    )}
 
-            {showBuilder && (
-                <BuilderPanel
-                    onClose={() => setShowBuilder(false)}
-                    onAddBody={handleAddBody}
-                />
-            )}
+                    {showObserver && (
+                        <GravityObserverPanel
+                            bodies={bodies}
+                            bodyIdA={observerBodyIds.a}
+                            bodyIdB={observerBodyIds.b}
+                            onSelectA={(id) => setObserverBodyIds(prev => ({ ...prev, a: id }))}
+                            onSelectB={(id) => setObserverBodyIds(prev => ({ ...prev, b: id }))}
+                            onClose={() => setShowObserver(false)}
+                            gConstant={physicsConfig.gravitationalConstant}
+                        />
+                    )}
 
-            {isCreationMode && creationCandidate && (
-                <ManualCreationPanel
-                    candidate={creationCandidate}
-                    predictionSteps={predictionSteps}
-                    onUpdate={handleUpdateCandidate}
-                    onStepsChange={setPredictionSteps}
-                    onSpawn={handleSpawnManual}
-                    onCancel={() => {
-                        setIsCreationMode(false);
-                        setCreationCandidate(null);
-                    }}
-                />
-            )}
+                    {currentCoMData && visualConfig.showCenterOfMass && (
+                        <CoMInfoPanel
+                            coMData={currentCoMData}
+                            threshold={visualConfig.centerOfMassThreshold}
+                            onThresholdChange={(v) => setVisualConfig(prev => ({ ...prev, centerOfMassThreshold: v }))}
+                        />
+                    )}
 
-            {showSettings && (
-                <SettingsPanel
-                    visualConfig={visualConfig}
-                    setVisualConfig={setVisualConfig}
-                    physicsConfig={physicsConfig}
-                    setPhysicsConfig={setPhysicsConfig}
-                    onClose={() => setShowSettings(false)}
-                    onReset={() => {
-                        setVisualConfig(DEFAULT_VISUAL_CONFIG);
-                        setPhysicsConfig(DEFAULT_PHYSICS_CONFIG);
-                    }}
-                    onExport={handleExportState}
-                    onImport={handleImportState}
-                    use3D={use3D}
-                    setUse3D={setUse3D}
-                    audioState={audioState}
-                    onEnableAudio={resumeAudio}
-                    showMusicPanel={showMusicPanel}
-                    setShowMusicPanel={setShowMusicPanel}
-                />
-            )}
-
-            {showObserver && (
-                <GravityObserverPanel
-                    bodies={bodies}
-                    bodyIdA={observerBodyIds.a}
-                    bodyIdB={observerBodyIds.b}
-                    onSelectA={(id) => setObserverBodyIds(prev => ({ ...prev, a: id }))}
-                    onSelectB={(id) => setObserverBodyIds(prev => ({ ...prev, b: id }))}
-                    onClose={() => setShowObserver(false)}
-                    gConstant={physicsConfig.gravitationalConstant}
-                />
-            )}
-
-            {currentCoMData && visualConfig.showCenterOfMass && (
-                <CoMInfoPanel
-                    coMData={currentCoMData}
-                    threshold={visualConfig.centerOfMassThreshold}
-                    onThresholdChange={(v) => setVisualConfig(prev => ({ ...prev, centerOfMassThreshold: v }))}
-                />
-            )}
-
-            {false && (
-                <div className="fixed top-0 right-0 bottom-0 left-0 z-[80] pointer-events-none">
-                    <JargonMetre />
-                </div>
-            )}
+                    {false && (
+                        <div className="fixed top-0 right-0 bottom-0 left-0 z-[80] pointer-events-none">
+                            <JargonMetre />
+                        </div>
+                    )}
 
 
 
 
-            <Controls
-                isRunning={isRunning}
-                onTogglePlay={() => setIsRunning(!isRunning)}
-                onReset={handleReset}
-                onTimeReverse={handleTimeReverse}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                onZoom={(factor) => handleZoom(factor)} // Passed wrapped
-                onOpenBuilder={() => setShowBuilder(true)}
-                onOpenSettings={() => setShowSettings(true)}
-                presets={availablePresets}
-                currentPresetId={currentPresetId}
-                onSelectPreset={handlePresetChange}
-                showGrid={visualConfig.showGrid}
-                onToggleGrid={() => setVisualConfig(prev => ({ ...prev, showGrid: !prev.showGrid }))}
-                showAssistant={showAssistant}
-                onToggleAssistant={() => setShowAssistant(!showAssistant)}
-                isCreationMode={isCreationMode}
-                onToggleCreationMode={toggleCreationMode}
-                showObserver={showObserver}
-                onToggleObserver={() => setShowObserver(!showObserver)}
-                isFollowingCoM={followingCoM}
-                onToggleFollowCoM={handleToggleFollowCoM}
-                showCenterOfMass={visualConfig.showCenterOfMass}
-                onToggleShowCoM={() => setVisualConfig(prev => ({ ...prev, showCenterOfMass: !prev.showCenterOfMass }))}
-                showRocketPanel={showRocketPanel}
-                onToggleRocketPanel={() => setShowRocketPanel(!showRocketPanel)}
-            />
-            {/* Music Panel */}
-            {showMusicPanel && (
-                <MusicPanel
-                    apiKey={localStorage.getItem('gemini_api_key') || ''}
-                    onClose={() => setShowMusicPanel(false)}
-                />
-            )}
+                    <Controls
+                        isRunning={isRunning}
+                        onTogglePlay={() => setIsRunning(!isRunning)}
+                        onReset={handleReset}
+                        onTimeReverse={handleTimeReverse}
+                        speed={speed}
+                        onSpeedChange={setSpeed}
+                        onZoom={(factor) => handleZoom(factor)} // Passed wrapped
+                        onOpenBuilder={() => setShowBuilder(true)}
+                        onOpenSettings={() => setShowSettings(true)}
+                        presets={availablePresets}
+                        currentPresetId={currentPresetId}
+                        onSelectPreset={handlePresetChange}
+                        showGrid={visualConfig.showGrid}
+                        onToggleGrid={() => setVisualConfig(prev => ({ ...prev, showGrid: !prev.showGrid }))}
+                        showAssistant={showAssistant}
+                        onToggleAssistant={() => setShowAssistant(!showAssistant)}
+                        isCreationMode={isCreationMode}
+                        onToggleCreationMode={toggleCreationMode}
+                        showObserver={showObserver}
+                        onToggleObserver={() => setShowObserver(!showObserver)}
+                        isFollowingCoM={followingCoM}
+                        onToggleFollowCoM={handleToggleFollowCoM}
+                        showCenterOfMass={visualConfig.showCenterOfMass}
+                        onToggleShowCoM={() => setVisualConfig(prev => ({ ...prev, showCenterOfMass: !prev.showCenterOfMass }))}
+                        showRocketPanel={showRocketPanel}
+                        onToggleRocketPanel={() => setShowRocketPanel(!showRocketPanel)}
+                    />
+                    {/* Music Panel */}
+                    {showMusicPanel && (
+                        <MusicPanel
+                            apiKey={localStorage.getItem('gemini_api_key') || ''}
+                            onClose={() => setShowMusicPanel(false)}
+                        />
+                    )}
+                </>
+
+            </Activity>
         </div>
     );
 };
