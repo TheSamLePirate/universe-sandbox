@@ -942,7 +942,7 @@ export const PRESETS: Preset[] = [
         id: 'figure8',
         name: 'Figure-8 Loop',
         bodies: SYSTEM_FIGURE_8,
-        defaultScale: 1.5,
+        defaultScale: 3,
         description: 'Three equal masses chasing each other in a stable figure-eight pattern.'
     },
     {

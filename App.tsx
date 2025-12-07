@@ -63,7 +63,7 @@ const App: React.FC = () => {
     // --- State ---
     const isMobile = useIsMobile();
     const [showUI, setShowUI] = useState(false);
-    const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
+    const defaultPreset = PRESETS.find(p => p.id === 'figure8') || PRESETS[0];
 
     const [currentPresetId, setCurrentPresetId] = useState(defaultPreset.id);
     const [importedPreset, setImportedPreset] = useState<Preset | null>(null);
@@ -77,8 +77,8 @@ const App: React.FC = () => {
     // Enable Rocket Sound
     const { audioState, resumeAudio } = useRocketSound(bodies);
     const [particles, setParticles] = useState<Particle[]>([]);
-    const [isRunning, setIsRunning] = useState(false); // Default to false
-    const [speed, setSpeed] = useState(1.0);
+    const [isRunning, setIsRunning] = useState(true); // Default to false
+    const [speed, setSpeed] = useState(100.0);
     const [scale, setScale] = useState(defaultPreset.defaultScale);
     const [offset, setOffset] = useState<Vector2D>({ x: 0, y: 0 });
     const [selectedBodyId, setSelectedBodyId] = useState<string | null>(null);
