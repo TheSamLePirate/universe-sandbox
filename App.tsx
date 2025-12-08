@@ -171,6 +171,7 @@ const App: React.FC = () => {
     const physicsWorkerRef = useRef<Worker | null>(null);
     const isPhysicsWorkerBusyRef = useRef(false);
     const accumulatedPhysicsTimeRef = useRef(0);
+    const timeSentToWorkerRef = useRef(0); // Track time currently being processed by worker
     const workerJobIdRef = useRef(0);
     const lastBodyUpdateTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -1035,6 +1036,7 @@ const App: React.FC = () => {
             }
 
             isPhysicsWorkerBusyRef.current = false;
+            timeSentToWorkerRef.current = 0; // Worker finished, so pending time is 0 (relative to new state)
         };
 
         return () => {
@@ -1053,159 +1055,181 @@ const App: React.FC = () => {
     useEffect(() => { rocketTargetBodyIdRef.current = rocketTargetBodyId; }, [rocketTargetBodyId]);
     useEffect(() => { rocketParentBodyIdRef.current = rocketParentBodyId; }, [rocketParentBodyId]);
 
-    // Calculate rendezvous points from Flight Computer modules
+    // START of Rendezvous Calculation Effect
+    const lastRendezvousUpdateRef = useRef(0);
+    const rendezvousStateRef = useRef({ flightComputerModules, predictionPaths, predictionSteps, physicsConfig, isPredictionEnabled, bodies });
+
+    // Sync Ref
     useEffect(() => {
-        // Filter for active rendezvous modules (checking both new inputs and legacy targetBodyId)
-        const activeRendezvousModules = flightComputerModules.filter(
-            m => m.type === 'rendezvous_tracker' && m.isEnabled && (m.inputs?.target || m.targetBodyId)
-        );
+        rendezvousStateRef.current = { flightComputerModules, predictionPaths, predictionSteps, physicsConfig, isPredictionEnabled, bodies };
+    });
 
-        if (activeRendezvousModules.length === 0 || !predictionPaths || predictionPaths.length === 0) {
-            setRendezvousPoints([]);
-            return;
-        }
+    useEffect(() => {
+        const updateRendezvous = () => {
+            const now = Date.now();
+            // THROTTLE: Only run every 100ms
+            if (now - lastRendezvousUpdateRef.current < 100) return;
+            lastRendezvousUpdateRef.current = now;
 
-        const newRendezvousPoints: RendezvousSolution[] = [];
+            const { flightComputerModules, predictionPaths, predictionSteps, physicsConfig, isPredictionEnabled, bodies } = rendezvousStateRef.current;
 
-        for (const module of activeRendezvousModules) {
-            // Resolve Inputs
-            const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
-            const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
+            // Filter for active rendezvous modules (checking both new inputs and legacy targetBodyId)
+            const activeRendezvousModules = flightComputerModules.filter(
+                m => m.type === 'rendezvous_tracker' && m.isEnabled && (m.inputs?.target || m.targetBodyId)
+            );
 
-            const rocketEntity = resolveInput(rocketInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
-            const targetEntity = resolveInput(targetInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
-
-            if (!rocketEntity || !targetEntity) continue;
-
-            // Determine Rocket Path
-            let rocketPath = null;
-            let rocketBody = null;
-
-            if ('mass' in rocketEntity) { // It's a Body
-                rocketBody = rocketEntity;
-                rocketPath = predictionPaths.find(p => p.id === rocketEntity.id);
-            } else {
-                // Rocket must be a body for now to have a path (unless we support point-to-point which is trivial)
-                continue;
+            if (activeRendezvousModules.length === 0 || !predictionPaths || predictionPaths.length === 0) {
+                setRendezvousPoints([]);
+                return;
             }
 
-            if (!rocketPath || rocketPath.points.length === 0) continue;
+            const newRendezvousPoints: RendezvousSolution[] = [];
 
-            // Determine Target Path or Point
-            let targetPath = null;
-            let targetStaticPoint: Vector2D | null = null;
-            let targetBody: Body | null = null;
+            for (const module of activeRendezvousModules) {
+                // Resolve Inputs
+                const rocketInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
+                const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
 
-            if ('mass' in targetEntity) { // Target is a Body
-                targetBody = targetEntity;
-                targetPath = isPredictionEnabled ? predictionPaths.find(p => p.id === targetEntity.id) : null;
-            } else { // Target is a Point (Vector2D)
-                targetStaticPoint = targetEntity;
-            }
+                const rocketEntity = resolveInput(rocketInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
+                const targetEntity = resolveInput(targetInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant);
 
-            const maxDist = module.maxDistance || 10;
-            const totalDuration = predictionSteps * physicsConfig.timeStep;
-            const dtPerPoint = totalDuration / rocketPath.points.length;
+                if (!rocketEntity || !targetEntity) continue;
 
-            // Find first rendezvous point
-            for (let i = 0; i < rocketPath.points.length; i++) {
-                const rocketPos = rocketPath.points[i];
+                // Determine Rocket Path
+                let rocketPath = null;
+                let rocketBody = null;
 
-                let targetPos = { x: 0, y: 0 };
-                let targetVel = { x: 0, y: 0 };
-
-                if (targetStaticPoint) {
-                    targetPos = targetStaticPoint;
-                    targetVel = { x: 0, y: 0 }; // Static point has 0 velocity
-                } else if (targetPath && targetPath.points[i]) {
-                    targetPos = targetPath.points[i];
-                    // Velocity will be calculated later
-                } else if (targetBody) {
-                    // Fallback to current position if no path (or path shorter)
-                    // Ideally we should project it, but for now use current
-                    targetPos = targetBody.position;
-                    targetVel = targetBody.velocity;
+                if ('mass' in rocketEntity) { // It's a Body
+                    rocketBody = rocketEntity;
+                    rocketPath = predictionPaths.find(p => p.id === rocketEntity.id);
+                } else {
+                    // Rocket must be a body for now to have a path (unless we support point-to-point which is trivial)
+                    continue;
                 }
 
-                const dx = rocketPos.x - targetPos.x;
-                const dy = rocketPos.y - targetPos.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (!rocketPath || rocketPath.points.length === 0) continue;
 
-                if (distance <= maxDist) {
-                    // Calculate velocities at rendezvous point (numerical derivative)
-                    let rocketVel = { x: 0, y: 0 };
+                // Determine Target Path or Point
+                let targetPath = null;
+                let targetStaticPoint: Vector2D | null = null;
+                let targetBody: Body | null = null;
 
-                    if (i > 0 && i < rocketPath.points.length - 1) {
-                        // Central difference for velocity
-                        const dt = dtPerPoint;
-                        const prevRocket = rocketPath.points[i - 1];
-                        const nextRocket = rocketPath.points[i + 1];
-                        rocketVel = {
-                            x: (nextRocket.x - prevRocket.x) / (2 * dt),
-                            y: (nextRocket.y - prevRocket.y) / (2 * dt)
-                        };
+                if ('mass' in targetEntity) { // Target is a Body
+                    targetBody = targetEntity;
+                    targetPath = isPredictionEnabled ? predictionPaths.find(p => p.id === targetEntity.id) : null;
+                } else { // Target is a Point (Vector2D)
+                    targetStaticPoint = targetEntity;
+                }
 
-                        if (!targetStaticPoint) {
-                            if (targetPath && targetPath.points[i - 1] && targetPath.points[i + 1]) {
-                                const prevTarget = targetPath.points[i - 1];
-                                const nextTarget = targetPath.points[i + 1];
-                                targetVel = {
-                                    x: (nextTarget.x - prevTarget.x) / (2 * dt),
-                                    y: (nextTarget.y - prevTarget.y) / (2 * dt)
-                                };
-                            } else if (targetBody) {
-                                targetVel = targetBody.velocity;
+                const maxDist = module.maxDistance || 10;
+                const totalDuration = predictionSteps * physicsConfig.timeStep;
+                const dtPerPoint = totalDuration / rocketPath.points.length;
+
+                // Find first rendezvous point
+                for (let i = 0; i < rocketPath.points.length; i++) {
+                    const rocketPos = rocketPath.points[i];
+
+                    let targetPos = { x: 0, y: 0 };
+                    let targetVel = { x: 0, y: 0 };
+
+                    if (targetStaticPoint) {
+                        targetPos = targetStaticPoint;
+                        targetVel = { x: 0, y: 0 }; // Static point has 0 velocity
+                    } else if (targetPath && targetPath.points[i]) {
+                        targetPos = targetPath.points[i];
+                        // Velocity will be calculated later
+                    } else if (targetBody) {
+                        // Fallback to current position if no path (or path shorter)
+                        // Ideally we should project it, but for now use current
+                        targetPos = targetBody.position;
+                        targetVel = targetBody.velocity;
+                    }
+
+                    const dx = rocketPos.x - targetPos.x;
+                    const dy = rocketPos.y - targetPos.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance <= maxDist) {
+                        // Calculate velocities at rendezvous point (numerical derivative)
+                        let rocketVel = { x: 0, y: 0 };
+
+                        if (i > 0 && i < rocketPath.points.length - 1) {
+                            // Central difference for velocity
+                            const dt = dtPerPoint;
+                            const prevRocket = rocketPath.points[i - 1];
+                            const nextRocket = rocketPath.points[i + 1];
+                            rocketVel = {
+                                x: (nextRocket.x - prevRocket.x) / (2 * dt),
+                                y: (nextRocket.y - prevRocket.y) / (2 * dt)
+                            };
+
+                            if (!targetStaticPoint) {
+                                if (targetPath && targetPath.points[i - 1] && targetPath.points[i + 1]) {
+                                    const prevTarget = targetPath.points[i - 1];
+                                    const nextTarget = targetPath.points[i + 1];
+                                    targetVel = {
+                                        x: (nextTarget.x - prevTarget.x) / (2 * dt),
+                                        y: (nextTarget.y - prevTarget.y) / (2 * dt)
+                                    };
+                                } else if (targetBody) {
+                                    targetVel = targetBody.velocity;
+                                }
                             }
+                        } else if (rocketBody) {
+                            // Use current velocities for edge cases
+                            rocketVel = rocketBody.velocity;
+                            if (targetBody) targetVel = targetBody.velocity;
                         }
-                    } else if (rocketBody) {
-                        // Use current velocities for edge cases
-                        rocketVel = rocketBody.velocity;
-                        if (targetBody) targetVel = targetBody.velocity;
+
+                        // Relative velocity (ship to target)
+                        const dvx = targetVel.x - rocketVel.x;
+                        const dvy = targetVel.y - rocketVel.y;
+
+                        // Calculate prograde and radial components from rocket's perspective
+                        const rocketSpeed = Math.sqrt(rocketVel.x * rocketVel.x + rocketVel.y * rocketVel.y);
+
+                        let deltaVPrograde = 0;
+                        let deltaVRadial = 0;
+
+                        if (rocketSpeed > 0.001) {
+                            const progX = rocketVel.x / rocketSpeed;
+                            const progY = rocketVel.y / rocketSpeed;
+                            const radX = -progY;
+                            const radY = progX;
+
+                            deltaVPrograde = dvx * progX + dvy * progY;
+                            deltaVRadial = dvx * radX + dvy * radY;
+                        } else {
+                            deltaVPrograde = Math.sqrt(dvx * dvx + dvy * dvy);
+                            deltaVRadial = 0;
+                        }
+
+                        const totalDeltaV = Math.sqrt(deltaVPrograde * deltaVPrograde + deltaVRadial * deltaVRadial);
+
+                        newRendezvousPoints.push({
+                            point: rocketPos,
+                            name: module.name || 'Rendezvous',
+                            color: module.color,
+                            moduleId: module.id,
+                            timeToRendezvous: i * dtPerPoint,
+                            distance: distance,
+                            deltaVPrograde: deltaVPrograde,
+                            deltaVRadial: deltaVRadial,
+                            totalDeltaV: totalDeltaV
+                        });
+                        break; // Only show first rendezvous per module
                     }
-
-                    // Relative velocity (ship to target)
-                    const dvx = targetVel.x - rocketVel.x;
-                    const dvy = targetVel.y - rocketVel.y;
-
-                    // Calculate prograde and radial components from rocket's perspective
-                    const rocketSpeed = Math.sqrt(rocketVel.x * rocketVel.x + rocketVel.y * rocketVel.y);
-
-                    let deltaVPrograde = 0;
-                    let deltaVRadial = 0;
-
-                    if (rocketSpeed > 0.001) {
-                        const progX = rocketVel.x / rocketSpeed;
-                        const progY = rocketVel.y / rocketSpeed;
-                        const radX = -progY;
-                        const radY = progX;
-
-                        deltaVPrograde = dvx * progX + dvy * progY;
-                        deltaVRadial = dvx * radX + dvy * radY;
-                    } else {
-                        deltaVPrograde = Math.sqrt(dvx * dvx + dvy * dvy);
-                        deltaVRadial = 0;
-                    }
-
-                    const totalDeltaV = Math.sqrt(deltaVPrograde * deltaVPrograde + deltaVRadial * deltaVRadial);
-
-                    newRendezvousPoints.push({
-                        point: rocketPos,
-                        name: module.name || 'Rendezvous',
-                        color: module.color,
-                        moduleId: module.id,
-                        timeToRendezvous: i * dtPerPoint,
-                        distance: distance,
-                        deltaVPrograde: deltaVPrograde,
-                        deltaVRadial: deltaVRadial,
-                        totalDeltaV: totalDeltaV
-                    });
-                    break; // Only show first rendezvous per module
                 }
             }
-        }
 
-        setRendezvousPoints(newRendezvousPoints);
-    }, [flightComputerModules, predictionPaths, predictionSteps, physicsConfig.timeStep, isPredictionEnabled, bodies]);
+            setRendezvousPoints(newRendezvousPoints);
+        };
+
+        // Check frequently, but update logic throttles it
+        const interval = setInterval(updateRendezvous, 20);
+        return () => clearInterval(interval);
+
+    }, []); // Run once, interval handles dependencies via Ref
 
     useEffect(() => {
         if (bodies.length === 0) {
@@ -1238,7 +1262,22 @@ const App: React.FC = () => {
     }, []);
 
     // --- Animation Loop ---
+    const lastFrameTimeRef = useRef(0);
+    const TARGET_FPS = 120;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
+
     const animate = useCallback((time: number) => {
+        // FPS CAP LOGIC
+        const elapsed = time - lastFrameTimeRef.current;
+
+        if (elapsed < FRAME_INTERVAL) {
+            requestRef.current = requestAnimationFrame(animate);
+            return;
+        }
+
+        // Adjust for next frame, keeping sync
+        lastFrameTimeRef.current = time - (elapsed % FRAME_INTERVAL);
+
         // Calculate FPS
         frameCountRef.current++;
         if (time - lastFpsTimeRef.current >= 1000) {
@@ -1300,6 +1339,7 @@ const App: React.FC = () => {
 
             if (!isPhysicsWorkerBusyRef.current && physicsWorkerRef.current) {
                 const timeToSimulate = accumulatedPhysicsTimeRef.current;
+                timeSentToWorkerRef.current = timeToSimulate; // Track what we sent
                 accumulatedPhysicsTimeRef.current = 0; // Reset accumulator
 
                 isPhysicsWorkerBusyRef.current = true;
@@ -1363,6 +1403,8 @@ const App: React.FC = () => {
 
             let nextBodies = bodiesRef.current;
             if (!timeReverseStateRef.current.active) {
+                const extrapolationTime = accumulatedPhysicsTimeRef.current + timeSentToWorkerRef.current;
+
                 nextBodies = bodiesRef.current.map(b => {
                     // Only extrapolate if we have velocity
                     if (!b.velocity) return b;
@@ -1370,8 +1412,8 @@ const App: React.FC = () => {
                     return {
                         ...b,
                         position: {
-                            x: b.position.x + b.velocity.x * dt,
-                            y: b.position.y + b.velocity.y * dt
+                            x: b.position.x + b.velocity.x * extrapolationTime,
+                            y: b.position.y + b.velocity.y * extrapolationTime
                         }
                     };
                 });
@@ -1441,7 +1483,7 @@ const App: React.FC = () => {
                 nextParticles = nextParticles.slice(-MAX_PARTICLES);
             }
 
-            bodiesRef.current = nextBodies;
+            // bodiesRef.current = nextBodies; // DO NOT UPDATE REF WITH EXTRAPOLATION
             particlesRef.current = nextParticles;
             setBodies(nextBodies);
             setParticles(nextParticles);
@@ -1791,7 +1833,7 @@ const App: React.FC = () => {
                 setFlightComputerModules(data.flightComputerModules || []);
                 setModuleGroups(data.moduleGroups || []);
 
-                setTimeout(() => setIsRunning(true), 100);
+                setTimeout(() => setIsRunning(true), 1000);
                 //alert("Simulation loaded successfully!");
             } catch (err) {
                 console.error("Import error", err);

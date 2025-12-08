@@ -657,180 +657,204 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
         return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
     };
 
-    // Complete telemetry calculations for mobile display
-    const telemetry = useMemo(() => {
-        if (!selectedRocket) return null;
+    // THROTTLED TELEMETRY CALCULATION
+    // We use a Ref to access the latest state inside the interval without re-triggering the effect
+    const stateRef = useRef({
+        selectedRocket,
+        bodies,
+        physicsConfig,
+        parentBodyId,
+        targetBodyId,
+        predictionPaths,
+        predictionSteps,
+        predictSystem
+    });
 
-        const speed = Math.sqrt(selectedRocket.velocity.x ** 2 + selectedRocket.velocity.y ** 2);
-        const heading = (selectedRocket.angle || 0) * 180 / Math.PI;
+    useEffect(() => {
+        stateRef.current = {
+            selectedRocket,
+            bodies,
+            physicsConfig,
+            parentBodyId,
+            targetBodyId,
+            predictionPaths,
+            predictionSteps,
+            predictSystem
+        };
+    });
 
-        let altitude = 0;
-        let fuelPercent = 0;
-        let apoapsis = -1;
-        let periapsis = -1;
-        let period = 0;
+    const [telemetry, setTelemetry] = useState<any>(null);
 
-        if (selectedRocket.fuel && selectedRocket.maxFuel) {
-            fuelPercent = (selectedRocket.fuel / selectedRocket.maxFuel) * 100;
-        }
+    useEffect(() => {
+        const calculateTelemetry = () => {
+            const {
+                selectedRocket,
+                bodies,
+                physicsConfig,
+                parentBodyId,
+                targetBodyId,
+                predictionPaths,
+                predictionSteps,
+                predictSystem
+            } = stateRef.current;
 
-        // Orbital parameters
-        if (parentBodyId) {
-            const parent = bodies.find(b => b.id === parentBodyId);
-            if (parent) {
-                const dx = selectedRocket.position.x - parent.position.x;
-                const dy = selectedRocket.position.y - parent.position.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                altitude = dist - parent.radius;
+            if (!selectedRocket) return null;
 
-                const dvx = selectedRocket.velocity.x - parent.velocity.x;
-                const dvy = selectedRocket.velocity.y - parent.velocity.y;
-                const vSq = dvx * dvx + dvy * dvy;
+            const speed = Math.sqrt(selectedRocket.velocity.x ** 2 + selectedRocket.velocity.y ** 2);
+            const heading = (selectedRocket.angle || 0) * 180 / Math.PI;
 
-                const mu = physicsConfig.gravitationalConstant * parent.mass;
-                const E = (vSq / 2) - (mu / dist);
+            let altitude = 0;
+            let fuelPercent = 0;
+            let apoapsis = -1;
+            let periapsis = -1;
+            let period = 0;
 
-                if (E < 0) {
-                    const a = -mu / (2 * E);
-                    const h = (dx * dvy) - (dy * dvx);
-                    const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
-                    periapsis = (a * (1 - eccentricity)) - parent.radius;
-                    apoapsis = (a * (1 + eccentricity)) - parent.radius;
-                    period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
+            if (selectedRocket.fuel && selectedRocket.maxFuel) {
+                fuelPercent = (selectedRocket.fuel / selectedRocket.maxFuel) * 100;
+            }
+
+            // Orbital parameters
+            if (parentBodyId) {
+                const parent = bodies.find(b => b.id === parentBodyId);
+                if (parent) {
+                    const dx = selectedRocket.position.x - parent.position.x;
+                    const dy = selectedRocket.position.y - parent.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    altitude = dist - parent.radius;
+
+                    const dvx = selectedRocket.velocity.x - parent.velocity.x;
+                    const dvy = selectedRocket.velocity.y - parent.velocity.y;
+                    const vSq = dvx * dvx + dvy * dvy;
+
+                    const mu = physicsConfig.gravitationalConstant * parent.mass;
+                    const E = (vSq / 2) - (mu / dist);
+
+                    if (E < 0) {
+                        const a = -mu / (2 * E);
+                        const h = (dx * dvy) - (dy * dvx);
+                        const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
+                        periapsis = (a * (1 - eccentricity)) - parent.radius;
+                        apoapsis = (a * (1 + eccentricity)) - parent.radius;
+                        period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
+                    }
                 }
             }
-        }
 
-        // Target data
-        let targetDist = 0;
-        let targetName = '';
-        let targetDeltaV = 0;
-        if (targetBodyId) {
-            const target = bodies.find(b => b.id === targetBodyId);
-            if (target) {
-                targetName = target.name;
-                const dx = target.position.x - selectedRocket.position.x;
-                const dy = target.position.y - selectedRocket.position.y;
-                targetDist = Math.sqrt(dx * dx + dy * dy);
+            // Target data
+            let targetDist = 0;
+            let targetName = '';
+            let targetDeltaV = 0;
+            if (targetBodyId) {
+                const target = bodies.find(b => b.id === targetBodyId);
+                if (target) {
+                    targetName = target.name;
+                    const dx = target.position.x - selectedRocket.position.x;
+                    const dy = target.position.y - selectedRocket.position.y;
+                    targetDist = Math.sqrt(dx * dx + dy * dy);
 
-                const dvx = selectedRocket.velocity.x - target.velocity.x;
-                const dvy = selectedRocket.velocity.y - target.velocity.y;
-                targetDeltaV = Math.sqrt(dvx * dvx + dvy * dvy);
+                    const dvx = selectedRocket.velocity.x - target.velocity.x;
+                    const dvy = selectedRocket.velocity.y - target.velocity.y;
+                    targetDeltaV = Math.sqrt(dvx * dvx + dvy * dvy);
+                }
             }
-        }
 
-        // Transfer phase angle
-        let phaseAngle = 0;
-        let phaseRequired = 0;
-        let phaseError = 0;
-        let phaseReady = false;
+            // Transfer phase angle
+            let phaseAngle = 0;
+            let phaseRequired = 0;
+            let phaseError = 0;
+            let phaseReady = false;
 
-        if (parentBodyId && targetBodyId) {
-            const parent = bodies.find(b => b.id === parentBodyId);
-            const target = bodies.find(b => b.id === targetBodyId);
+            if (parentBodyId && targetBodyId) {
+                const parent = bodies.find(b => b.id === parentBodyId);
+                const target = bodies.find(b => b.id === targetBodyId);
 
-            if (parent && target) {
-                const rocketToPlanet = Math.atan2(
-                    selectedRocket.position.y - parent.position.y,
-                    selectedRocket.position.x - parent.position.x
-                );
-                const targetToPlanet = Math.atan2(
-                    target.position.y - parent.position.y,
-                    target.position.x - parent.position.x
-                );
+                if (parent && target) {
+                    const rocketToPlanet = Math.atan2(
+                        selectedRocket.position.y - parent.position.y,
+                        selectedRocket.position.x - parent.position.x
+                    );
+                    const targetToPlanet = Math.atan2(
+                        target.position.y - parent.position.y,
+                        target.position.x - parent.position.x
+                    );
 
-                let currentPhase = (targetToPlanet - rocketToPlanet) * 180 / Math.PI;
-                while (currentPhase > 180) currentPhase -= 360;
-                while (currentPhase < -180) currentPhase += 360;
-                phaseAngle = currentPhase;
+                    let currentPhase = (targetToPlanet - rocketToPlanet) * 180 / Math.PI;
+                    while (currentPhase > 180) currentPhase -= 360;
+                    while (currentPhase < -180) currentPhase += 360;
+                    phaseAngle = currentPhase;
 
-                const r1 = Math.sqrt(
-                    Math.pow(selectedRocket.position.x - parent.position.x, 2) +
-                    Math.pow(selectedRocket.position.y - parent.position.y, 2)
-                );
-                const r2 = Math.sqrt(
-                    Math.pow(target.position.x - parent.position.x, 2) +
-                    Math.pow(target.position.y - parent.position.y, 2)
-                );
+                    const r1 = Math.sqrt(
+                        Math.pow(selectedRocket.position.x - parent.position.x, 2) +
+                        Math.pow(selectedRocket.position.y - parent.position.y, 2)
+                    );
+                    const r2 = Math.sqrt(
+                        Math.pow(target.position.x - parent.position.x, 2) +
+                        Math.pow(target.position.y - parent.position.y, 2)
+                    );
 
-                const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
-                const a_transfer = (r1 + r2) / 2;
-                const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                    const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                    const a_transfer = (r1 + r2) / 2;
+                    const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
 
-                const travelTime = period_transfer / 2;
-                const targetMotion = (360 / period_target) * travelTime;
-                const requiredPhase = 180 - targetMotion;
+                    const travelTime = period_transfer / 2;
+                    const targetMotion = (360 / period_target) * travelTime;
+                    const requiredPhase = 180 - targetMotion;
 
-                let normalizedRequired = requiredPhase;
-                while (normalizedRequired > 180) normalizedRequired -= 360;
-                while (normalizedRequired < -180) normalizedRequired += 360;
-                phaseRequired = normalizedRequired;
+                    let normalizedRequired = requiredPhase;
+                    while (normalizedRequired > 180) normalizedRequired -= 360;
+                    while (normalizedRequired < -180) normalizedRequired += 360;
+                    phaseRequired = normalizedRequired;
 
-                let error = Math.abs(currentPhase - normalizedRequired);
-                // Handle wrap around error (e.g. 179 vs -179 is 2 degrees apart, not 358)
-                if (error > 180) error = 360 - error;
+                    let error = Math.abs(currentPhase - normalizedRequired);
+                    // Handle wrap around error
+                    if (error > 180) error = 360 - error;
 
-                phaseError = error;
-                phaseReady = error < 5; // Match RocketDataPanel threshold (was 15 in my previous code, 5 in RocketDataPanel)
+                    phaseError = error;
+                    phaseReady = error < 5;
+                }
             }
-        }
 
-        // Prediction Analysis
-        let timeToPe = -1;
-        let timeToAp = -1;
-        let closestApproach = -1;
+            // Prediction Analysis
+            let timeToPe = -1;
+            let timeToAp = -1;
+            let closestApproach = -1;
 
-        if (predictionPaths && predictionSteps && targetBodyId) {
-            const rocketPath = predictionPaths.find(p => p.id === selectedRocket.id);
-            const targetPath = predictSystem ? predictionPaths.find(p => p.id === targetBodyId) : null;
-            const targetBody = bodies.find(b => b.id === targetBodyId);
+            if (predictionPaths && predictionSteps && targetBodyId) {
+                const rocketPath = predictionPaths.find(p => p.id === selectedRocket.id);
+                const targetPath = predictSystem ? predictionPaths.find(p => p.id === targetBodyId) : null;
+                const targetBody = bodies.find(b => b.id === targetBodyId);
 
-            if (rocketPath && rocketPath.points.length) {
-                const totalDuration = predictionSteps * physicsConfig.timeStep;
-                const dtPerPoint = totalDuration / rocketPath.points.length;
+                if (rocketPath && rocketPath.points.length) {
+                    // Optimized Iteration: Sample every Nth point to speed up this loop on UI thread
+                    // Or just rely on the 100ms throttle.
+                    // Let's rely on Throttle first.
 
-                let minDist = Infinity;
-                let maxDist = 0;
-
-                rocketPath.points.forEach((p, idx) => {
-                    const targetPos = targetPath && targetPath.points[idx] ? targetPath.points[idx] : (targetBody?.position || { x: 0, y: 0 });
-                    const d = Math.sqrt(Math.pow(p.x - targetPos.x, 2) + Math.pow(p.y - targetPos.y, 2));
-
-                    if (d < minDist) {
-                        minDist = d;
-                        timeToPe = idx * dtPerPoint;
-                    }
-                    if (d > maxDist) {
-                        maxDist = d;
-                        timeToAp = idx * dtPerPoint;
-                    }
-                });
-                closestApproach = minDist - (targetBody?.radius || 0);
+                    let minDist = Infinity;
+                    rocketPath.points.forEach((p, idx) => {
+                        const targetPos = targetPath && targetPath.points[idx] ? targetPath.points[idx] : (targetBody?.position || { x: 0, y: 0 });
+                        const d = Math.sqrt(Math.pow(p.x - targetPos.x, 2) + Math.pow(p.y - targetPos.y, 2));
+                        if (d < minDist) minDist = d;
+                    });
+                    closestApproach = minDist;
+                }
             }
-        }
 
-        return {
-            speed,
-            heading,
-            altitude,
-            fuelPercent,
-            fuel: selectedRocket.fuel || 0,
-            landed: selectedRocket.landedOnBodyId,
-            apoapsis,
-            periapsis,
-            period,
-            targetDist,
-            targetName,
-            targetDeltaV,
-            phaseAngle,
-            phaseRequired,
-            phaseError,
-            phaseReady,
-            timeToPe,
-            timeToAp,
-            closestApproach
+            setTelemetry({
+                speed, heading, altitude, fuelPercent, apoapsis, periapsis, period,
+                targetDist, targetName, targetDeltaV,
+                phaseAngle, phaseRequired, phaseError, phaseReady,
+                timeToPe, timeToAp, closestApproach,
+                fuel: selectedRocket.fuel || 0,
+                landed: selectedRocket.landedOnBodyId
+            });
         };
-    }, [selectedRocket, bodies, parentBodyId, targetBodyId, physicsConfig, predictionPaths, predictionSteps, predictSystem]);
+
+        calculateTelemetry(); // Run immediately on mount
+        const interval = setInterval(calculateTelemetry, 100); // And then every 100ms (10Hz)
+        return () => clearInterval(interval);
+    }, []); // Empty dependency array = Runs once, interval persists
+
+
 
     // Rendezvous Calculator - finds intercept point based on predictions
     const rendezvousData = useMemo(() => {
