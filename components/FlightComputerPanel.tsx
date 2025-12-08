@@ -492,11 +492,6 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             {/* Header - Always visible */}
             <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-slate-900/50">
                 <div className="flex items-center justify-between gap-">
-                    <h2 className={`font-bold text-slate-200 ${isExpanded ? 'text-lg' : 'text-sm'}`}>
-                        {!isExpanded && modules.length > 0 && (
-                            <span className="ml-2 text-xs text-slate-500">({modules.length} modules)</span>
-                        )}
-                    </h2>
                     <div className="flex gap-0">
                         {isExpanded && (
                             <>
