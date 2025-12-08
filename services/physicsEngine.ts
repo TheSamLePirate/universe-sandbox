@@ -959,6 +959,18 @@ export const updatePhysics = (
                           const rocket = isRocketA ? currentBody : otherBody;
                           const planet = isRocketA ? otherBody : currentBody;
                           
+                          // FIX: Check if taking off (thrusting away from planet)
+                          // If so, ignore collision to prevent snapping back to surface or exploding
+                          if (rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001)) {
+                              const dx = rocket.position.x - planet.position.x;
+                              const dy = rocket.position.y - planet.position.y;
+                              // Dot product > 0 means thrusting in same direction as radial vector (away)
+                              const dot = rocket.thrust.x * dx + rocket.thrust.y * dy;
+                              if (dot > 0) {
+                                  continue;
+                              }
+                          }
+                          
                           const dvx = rocket.velocity.x - planet.velocity.x;
                           const dvy = rocket.velocity.y - planet.velocity.y;
                           const relVel = Math.sqrt(dvx*dvx + dvy*dvy);
