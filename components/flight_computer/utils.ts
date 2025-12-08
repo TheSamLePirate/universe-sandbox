@@ -1,6 +1,6 @@
 import { FlightComputerModule, FlightComputerInput, Maneuver, MarkerShape, Body, PhysicsConfig, RendezvousSolution, FlightComputerModuleType } from '../../types';
 import { resolveBooleanInput } from '../../services/orbitalMath';
-import { Activity, ArrowRightLeft, Calculator, Crosshair, Eye, Info, MapPin, MousePointer2, Move, Play, Radar, Radio, Rocket, Ruler, Speaker, Terminal, Zap, Keyboard, Sliders, Music } from 'lucide-react';
+import { Activity, ArrowRightLeft, Calculator, Crosshair, Eye, Info, MapPin, MousePointer2, Move, Play, Radar, Radio, Rocket, Ruler, Speaker, Terminal, Zap, Keyboard, Sliders, Music, CreditCard } from 'lucide-react';
 
 export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> = {
     orbit_info: Info,
@@ -25,7 +25,8 @@ export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> =
     marker: MapPin,
     keyboard: Keyboard,
     slider: Sliders,
-    music_controller: Music
+    music_controller: Music,
+    horizontal_bar: CreditCard
 };
 
 export const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [
@@ -146,4 +147,20 @@ export const isModuleActive = (
     if (!activateInput) return true; 
     const activeSignal = resolveBooleanInput(activateInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
     return activeSignal ?? true; 
+};
+
+export const interpolateColor = (color1: string, color2: string, factor: number): string => {
+    const r1 = parseInt(color1.substring(1, 3), 16);
+    const g1 = parseInt(color1.substring(3, 5), 16);
+    const b1 = parseInt(color1.substring(5, 7), 16);
+
+    const r2 = parseInt(color2.substring(1, 3), 16);
+    const g2 = parseInt(color2.substring(3, 5), 16);
+    const b2 = parseInt(color2.substring(5, 7), 16);
+
+    const r = Math.round(r1 + factor * (r2 - r1));
+    const g = Math.round(g1 + factor * (g2 - g1));
+    const b = Math.round(b1 + factor * (b2 - b1));
+
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 };

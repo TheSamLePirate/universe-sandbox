@@ -29,6 +29,7 @@ interface FlightComputerPanelProps {
     fps: number;
     simulationTime: number;
     scale: number;
+    showUI: boolean;
     updateRocket?: (id: string, updates: Partial<Body>) => void;
 }
 
@@ -41,6 +42,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'body_info', label: 'Body Info', category: 'Info' },
     { value: 'body_by', label: 'Body By', category: 'Info' },
     { value: 'marker', label: 'Marker', category: 'Visual' },
+    { value: 'horizontal_bar', label: 'Horizontal Bar', category: 'Visual' },
     { value: 'logic_gate', label: 'Logic Gate', category: 'Logic' },
     { value: 'maths', label: 'Math Operation', category: 'Logic' },
     { value: 'button', label: 'Button', category: 'Logic' },
@@ -77,6 +79,7 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     fps,
     simulationTime,
     scale,
+    showUI,
     updateRocket,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -488,14 +491,13 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
             } flex flex-col overflow-hidden`}>
             {/* Header - Always visible */}
             <div className="flex-shrink-0 p-4 border-b border-slate-700/50 bg-slate-900/50">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-">
                     <h2 className={`font-bold text-slate-200 ${isExpanded ? 'text-lg' : 'text-sm'}`}>
-                        Flight Computer
                         {!isExpanded && modules.length > 0 && (
                             <span className="ml-2 text-xs text-slate-500">({modules.length} modules)</span>
                         )}
                     </h2>
-                    <div className="flex gap-2">
+                    <div className="flex gap-0">
                         {isExpanded && (
                             <>
                                 <button

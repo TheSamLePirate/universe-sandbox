@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Body, FlightComputerModule, PhysicsConfig, FlightComputerInput, RendezvousSolution } from '../types';
 import { Edit, X, GripVertical, Check, Plus, Trash2, Settings } from 'lucide-react';
-import { MODULE_ICONS, isModuleActive, getUpdateForInput, getInput } from './flight_computer/utils';
+import { MODULE_ICONS, isModuleActive, getUpdateForInput, getInput, interpolateColor } from './flight_computer/utils';
 import { resolveScalarInput, resolveBooleanInput, resolveStringInput, resolveInput } from '../services/orbitalMath';
 import InputSelector from './flight_computer/InputSelector';
 
@@ -12,13 +12,14 @@ interface FlightComputerDashboardProps {
     rendezvousPoints?: RendezvousSolution[];
     onUpdateModule: (id: string, updates: Partial<FlightComputerModule>) => void;
     onToggleModule: (id: string) => void;
+    showUI: boolean;
 }
 
 const screenWidth = window.innerWidth;
 const screenHeight = window.innerHeight;
 
 
-const CELL_WIDTH = screenWidth / 12;
+const CELL_WIDTH = screenWidth / 4;
 const CELL_HEIGHT = screenHeight / 12;
 const GRID_GAP = 0;
 
@@ -28,7 +29,8 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     physicsConfig,
     rendezvousPoints,
     onUpdateModule,
-    onToggleModule
+    onToggleModule,
+    showUI,
 }) => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
@@ -106,8 +108,8 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
         if (typeof val === 'number') return val.toFixed(2);
 
         // Try body
-        const body = resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
-        if (body !== null) return body.name;
+        const result = resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
+        if (result && 'name' in result) return result.name;
 
         return '—';
     };
@@ -175,6 +177,53 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
             )
         }
 
+        if (module.type === 'horizontal_bar') {
+            const min = module.barMin ?? 0;
+            const max = module.barMax ?? 100;
+            const colorLow = module.barColorLow ?? '#ff0000';
+            const colorMid = module.barColorMid ?? '#ffff00';
+            const colorHigh = module.barColorHigh ?? '#00ff00';
+            const outputLabel = module.dashboardConfig?.displayOutput?.label;
+            const customLabel = module.dashboardConfig?.customLabel;
+
+            let displayLabel = customLabel || outputLabel || 'Value';
+
+            const input = getInput(module, 'value');
+            const currentValue = input
+                ? resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current) ?? 0
+                : 0;
+
+            const range = max - min;
+            const percentage = range === 0 ? 0 : Math.max(0, Math.min(1, (currentValue - min) / range));
+
+            let barColor = colorLow;
+            if (percentage < 0.5) {
+                barColor = interpolateColor(colorLow, colorMid, percentage * 2);
+            } else {
+                barColor = interpolateColor(colorMid, colorHigh, (percentage - 0.5) * 2);
+            }
+
+            return (
+                <div className="flex flex-col h-full justify-center px-0">
+                    <div className="h-full w-full bg-slate-900 border border-slate-700 overflow-hidden shadow-inner">
+                        <div
+                            className="h-full transition-all duration-300 flex items-center justify-center font-bold "
+                            style={{
+                                width: `${percentage * 100}%`,
+                                backgroundColor: barColor,
+                                boxShadow: `0 0 10px ${barColor}40`
+                            }}
+                        >
+
+                        </div>
+                        <div className="absolute bottom-0 h-full w-full flex items-center justify-center font-bold">
+                            {displayLabel}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Default: Show configured output
         const outputKey = module.dashboardConfig?.displayOutput?.key;
         const outputLabel = module.dashboardConfig?.displayOutput?.label;
@@ -229,18 +278,20 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     return (
         <div className="absolute inset-0 z-[50] pointer-events-none overflow-hidden">
             {/* Edit Mode Toggle - Always visible and interactive */}
-            <div className="absolute top-4 left-4 pointer-events-auto z-[60]">
-                <button
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg transition-all ${isEditMode
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 backdrop-blur'
-                        }`}
-                >
-                    {isEditMode ? <Check size={16} /> : <Edit size={16} />}
-                    <span className="font-medium text-sm">{isEditMode ? 'Done' : 'Edit'}</span>
-                </button>
-            </div>
+            {showUI && (
+                <div className="absolute top-4 left-4 pointer-events-auto z-[60]">
+                    <button
+                        onClick={() => setIsEditMode(!isEditMode)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg transition-all ${isEditMode
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 backdrop-blur'
+                            }`}
+                    >
+                        {isEditMode ? <Check size={16} /> : <Edit size={16} />}
+                        <span className="font-medium text-sm">{isEditMode ? 'Done' : 'Edit'}</span>
+                    </button>
+                </div>
+            )}
 
             {/* Main Dashboard Area */}
             <div

@@ -796,7 +796,8 @@ export const updatePhysics = (
         // --- LANDED ROCKET LOGIC ---
         if (body.landedOnBodyId) {
             // Check if we are applying thrust to takeoff
-            const isThrusting = body.thrust && (Math.abs(body.thrust.x) > 0.001 || Math.abs(body.thrust.y) > 0.001);
+            const isThrusting = body.thrust && (Math.abs(body.thrust.x) > 0.0001 || Math.abs(body.thrust.y) > 0.0001);
+            console.log("isThrusting:", isThrusting);
             
             if (isThrusting) {
                 body.landedOnBodyId = undefined;

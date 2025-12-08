@@ -21,6 +21,7 @@ import CustomScriptModule from './modules/CustomScriptModule';
 import KeyboardModule from './modules/KeyboardModule';
 import SliderModule from './modules/SliderModule';
 import MusicControllerModule from './modules/MusicControllerModule';
+import HorizontalBarModule from './modules/HorizontalBarModule';
 
 interface ModuleContentProps {
     module: FlightComputerModule;
@@ -58,6 +59,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'keyboard': return <KeyboardModule {...props} />;
         case 'slider': return <SliderModule {...props} />;
         case 'music_controller': return <MusicControllerModule {...props} />;
+        case 'horizontal_bar': return <HorizontalBarModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

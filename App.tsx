@@ -725,7 +725,7 @@ const App: React.FC = () => {
 
         const normalizeVector = (vec: Vector2D): Vector2D | null => {
             const mag = Math.sqrt(vec.x * vec.x + vec.y * vec.y);
-            if (mag < 1e-6) return null;
+            if (mag < 1e-8) return null;
             return { x: vec.x / mag, y: vec.y / mag };
         };
 
@@ -2639,6 +2639,48 @@ const App: React.FC = () => {
             </div>
 
 
+            <FlightComputerDashboard
+                modules={flightComputerModules}
+                bodies={bodies}
+                physicsConfig={physicsConfig}
+                rendezvousPoints={rendezvousPoints}
+                onUpdateModule={handleUpdateModule}
+                onToggleModule={handleToggleModule}
+                showUI={showUI}
+            />
+
+            <FlightComputerPanel
+                modules={flightComputerModules}
+                groups={moduleGroups}
+                bodies={bodies}
+                physicsConfig={physicsConfig}
+                onAddModule={handleAddModule}
+                onRemoveModule={handleRemoveModule}
+                onUpdateModule={handleUpdateModule}
+                onToggleModule={handleToggleModule}
+                onAddGroup={handleAddGroup}
+                onRemoveGroup={handleRemoveGroup}
+                onUpdateGroup={handleUpdateGroup}
+                onMoveModuleToGroup={handleMoveModuleToGroup}
+                onMoveGroupToGroup={handleMoveGroupToGroup}
+                onExportGroup={handleExportGroup}
+                onImportGroup={handleImportGroup}
+                rendezvousPoints={rendezvousPoints}
+                onSetFollowingBody={(id) => {
+                    if (id) {
+                        handleToggleFollow(id);
+                    } else {
+                        setFollowingBodyId(null);
+                    }
+                }}
+                fps={fps}
+                simulationTime={simulationTimeRef.current}
+                scale={scaleRef.current}
+                showUI={showUI}
+                updateRocket={updateRocket}
+            />
+
+
             <Activity mode={showUI ? 'visible' : 'hidden'}>
 
 
@@ -2695,43 +2737,8 @@ const App: React.FC = () => {
                     </div>)}
 
                     {/* Flight Computer Panel */}
-                    <FlightComputerDashboard
-                        modules={flightComputerModules}
-                        bodies={bodies}
-                        physicsConfig={physicsConfig}
-                        rendezvousPoints={rendezvousPoints}
-                        onUpdateModule={handleUpdateModule}
-                        onToggleModule={handleToggleModule}
-                    />
-                    <FlightComputerPanel
-                        modules={flightComputerModules}
-                        groups={moduleGroups}
-                        bodies={bodies}
-                        physicsConfig={physicsConfig}
-                        onAddModule={handleAddModule}
-                        onRemoveModule={handleRemoveModule}
-                        onUpdateModule={handleUpdateModule}
-                        onToggleModule={handleToggleModule}
-                        onAddGroup={handleAddGroup}
-                        onRemoveGroup={handleRemoveGroup}
-                        onUpdateGroup={handleUpdateGroup}
-                        onMoveModuleToGroup={handleMoveModuleToGroup}
-                        onMoveGroupToGroup={handleMoveGroupToGroup}
-                        onExportGroup={handleExportGroup}
-                        onImportGroup={handleImportGroup}
-                        rendezvousPoints={rendezvousPoints}
-                        onSetFollowingBody={(id) => {
-                            if (id) {
-                                handleToggleFollow(id);
-                            } else {
-                                setFollowingBodyId(null);
-                            }
-                        }}
-                        fps={fps}
-                        simulationTime={simulationTimeRef.current}
-                        scale={scaleRef.current}
-                        updateRocket={updateRocket}
-                    />
+
+
 
                     {/* Assistant */}
                     {showAssistant && (

@@ -232,7 +232,7 @@ export interface RocketSpawnConfig {
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard' | 'slider' | 'music_controller';
+export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard' | 'slider' | 'music_controller' | 'horizontal_bar';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -350,6 +350,13 @@ export interface FlightComputerModule {
     sliderMax?: number; // Maximum value (default 100)
     sliderStep?: number; // Step size (default 1)
     sliderValue?: number; // Current value
+
+    // Horizontal Bar Module Config
+    barMin?: number;
+    barMax?: number;
+    barColorLow?: string;
+    barColorMid?: string;
+    barColorHigh?: string;
 
     // Music Controller
     musicPlaying?: boolean;
