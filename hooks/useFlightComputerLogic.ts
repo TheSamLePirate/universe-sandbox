@@ -4,6 +4,7 @@ import { resolveInput, resolveScalarInput, resolveBooleanInput, resolveStringInp
 import EasySpeech from 'easy-speech';
 import { useMusic } from '../contexts/MusicContext';
 import { formatTime } from '../components/flight_computer/utils';
+import { NewBodyData } from '@/components/BuilderPanel';
 
 export const useFlightComputerLogic = (
     modules: FlightComputerModule[],
@@ -19,6 +20,24 @@ export const useFlightComputerLogic = (
     scale: number,
     onSetFollowingBody?: (bodyId: string | null) => void,
     updateRocket?: (id: string, updates: Partial<Body>) => void,
+    handlePresetChange?: (preset: string) => void,
+    setSpeed?: (speed: number) => void,
+    setIsRunning?: (isRunning: boolean) => void,
+    isRunning?: boolean,
+    speed?: number,
+    onReset?: () => void,
+    onTimeReverse?: () => void,
+    onZoom?: (factor: number) => void,
+    nbColumns?: number,
+    nbRows?: number,
+    gap?: number,
+    setNbColumns?: (nbColumns: number) => void,
+    setNbRows?: (nbRows: number) => void,
+    setGap?: (gap: number) => void,
+    handleUpdateCandidate?: (candidate: Partial<Body>) => void,
+    handleSpawnManual?: () => void,
+    setCreationCandidate?: (candidate: Body | null) => void,
+    createAndSpawnBody?: (name: string, mass: number, radius: number, color: string, position: { x: number, y: number }, velocity: { x: number, y: number }, description: string) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -183,6 +202,19 @@ export const useFlightComputerLogic = (
                             toggleModule: onToggleModule,
                             setFollowingBody: onSetFollowingBody,
                             updateRocket: updateRocket,
+                            handlePresetChange: handlePresetChange,
+                            setSpeed: setSpeed,
+                            setIsRunning: setIsRunning,
+                            onReset: onReset,
+                            onTimeReverse: onTimeReverse,
+                            onZoom: onZoom,
+                            setNbColumns: setNbColumns,
+                            setNbRows: setNbRows,
+                            setGap: setGap,
+                            handleUpdateCandidate: handleUpdateCandidate,
+                            handleSpawnManual: handleSpawnManual,
+                            setCreationCandidate: setCreationCandidate,
+                            createAndSpawnBody: createAndSpawnBody,
                         },
                         helpers: {
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
@@ -193,7 +225,12 @@ export const useFlightComputerLogic = (
                         },
                         fps,
                         simulationTime,
-                        scale
+                        scale,
+                        isRunning,
+                        speed,
+                        nbColumns,
+                        nbRows,
+                        gap,
                     };
 
                     // Prepare Console Mock

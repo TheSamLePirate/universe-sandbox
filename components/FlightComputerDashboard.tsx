@@ -13,15 +13,16 @@ interface FlightComputerDashboardProps {
     onUpdateModule: (id: string, updates: Partial<FlightComputerModule>) => void;
     onToggleModule: (id: string) => void;
     showUI: boolean;
+    nbColumns: number;
+    nbRows: number;
+    gap: number;
 }
 
 const screenWidth = window.innerWidth;
 const screenHeight = window.innerHeight;
 
 
-const CELL_WIDTH = screenWidth / 4;
-const CELL_HEIGHT = screenHeight / 12;
-const GRID_GAP = 0;
+
 
 const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     modules,
@@ -31,11 +32,19 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     onUpdateModule,
     onToggleModule,
     showUI,
+    nbColumns,
+    nbRows,
+    gap,
 }) => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
     const [dragOverCell, setDragOverCell] = useState<{ x: number, y: number } | null>(null);
     const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null); // For configuring card
+
+
+    const CELL_WIDTH = screenWidth / nbColumns;
+    const CELL_HEIGHT = screenHeight / nbRows;
+    const GRID_GAP = gap;
 
     // Memoize rendezvous map
     const rendezvousSolutionMap = useRef<Record<string, RendezvousSolution>>({});
@@ -116,6 +125,12 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
 
     const renderCardContent = (module: FlightComputerModule) => {
         // Special handling for interactive modules
+
+        if (module.isEnabled === false) {
+            return (<></>)
+
+        }
+
         if (module.type === 'button') {
             const customLabel = module.dashboardConfig?.customLabel;
             return (
@@ -330,6 +345,19 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                     const { x, y } = module.dashboardConfig!;
                     const Icon = (MODULE_ICONS[module.type] || Settings) as any;
                     const isSelected = selectedModuleId === module.id;
+
+
+                    const activateInput = getInput(module, 'activate');
+                    const activateValue = activateInput
+                        ? resolveBooleanInput(activateInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current) ?? 0
+                        : 0;
+
+
+                    if (module.isEnabled === false || activateValue === false) {
+                        console.log(module);
+                        console.log(activateValue);
+                        return null;
+                    }
 
                     return (
                         <div

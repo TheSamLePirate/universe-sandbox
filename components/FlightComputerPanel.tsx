@@ -8,6 +8,7 @@ import InputSelector from './flight_computer/InputSelector';
 import { getInput, getUpdateForInput, MODULE_ICONS, isModuleActive } from './flight_computer/utils';
 import { resolveScalarInput, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
 
+
 interface FlightComputerPanelProps {
     modules: FlightComputerModule[];
     groups: ModuleGroup[];
@@ -31,6 +32,24 @@ interface FlightComputerPanelProps {
     scale: number;
     showUI: boolean;
     updateRocket?: (id: string, updates: Partial<Body>) => void;
+    handlePresetChange?: (preset: string) => void;
+    setSpeed?: (speed: number) => void;
+    setIsRunning?: (isRunning: boolean) => void;
+    isRunning?: boolean;
+    speed?: number;
+    onReset?: () => void;
+    onTimeReverse?: () => void;
+    onZoom?: (factor: number) => void;
+    nbColumns?: number;
+    nbRows?: number;
+    gap?: number;
+    setNbColumns?: (nbColumns: number) => void;
+    setNbRows?: (nbRows: number) => void;
+    setGap?: (gap: number) => void;
+    handleUpdateCandidate?: (candidate: Partial<Body>) => void;
+    handleSpawnManual?: () => void;
+    setCreationCandidate?: (candidate: Body | null) => void;
+    createAndSpawnBody?: (name: string, mass: number, radius: number, color: string, position: { x: number, y: number }, velocity: { x: number, y: number }, description: string) => void;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -81,6 +100,24 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     scale,
     showUI,
     updateRocket,
+    handlePresetChange,
+    setSpeed,
+    setIsRunning,
+    isRunning,
+    speed,
+    onReset,
+    onTimeReverse,
+    onZoom,
+    nbColumns,
+    nbRows,
+    gap,
+    setNbColumns,
+    setNbRows,
+    setGap,
+    handleUpdateCandidate,
+    handleSpawnManual,
+    setCreationCandidate,
+    createAndSpawnBody
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -106,6 +143,24 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         scale,
         onSetFollowingBody,
         updateRocket,
+        handlePresetChange,
+        setSpeed,
+        setIsRunning,
+        isRunning,
+        speed,
+        onReset,
+        onTimeReverse,
+        onZoom,
+        nbColumns,
+        nbRows,
+        gap,
+        setNbColumns,
+        setNbRows,
+        setGap,
+        handleUpdateCandidate,
+        handleSpawnManual,
+        setCreationCandidate,
+        createAndSpawnBody
     );
 
     // Helper to get display value for collapsed group

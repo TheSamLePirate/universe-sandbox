@@ -65,12 +65,18 @@ const App: React.FC = () => {
     const [showUI, setShowUI] = useState(false);
     const defaultPreset = PRESETS.find(p => p.id === 'figure8') || PRESETS[0];
 
+    const [nbColumns, setNbColumns] = useState(4);
+    const [nbRows, setNbRows] = useState(12);
+    const [gap, setGap] = useState(0);
+
     const [currentPresetId, setCurrentPresetId] = useState(defaultPreset.id);
     const [importedPreset, setImportedPreset] = useState<Preset | null>(null);
 
+    const [importedPresets, setImportedPresets] = useState<Preset[]>([]);
+
     const availablePresets = useMemo(() => {
-        return importedPreset ? [...PRESETS, importedPreset] : PRESETS;
-    }, [importedPreset]);
+        return importedPresets.length > 0 ? [...PRESETS, ...importedPresets] : PRESETS;
+    }, [importedPresets]);
 
     const [bodies, setBodies] = useState<Body[]>(defaultPreset.bodies);
 
@@ -1786,6 +1792,15 @@ const App: React.FC = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        const fileName = file.name;
+        if (!fileName.endsWith('.json')) {
+            alert("Invalid file format. Please select a JSON file.");
+            return;
+        }
+
+        const presetName = fileName.replace('.json', '');
+        const presetId = 'imported_save_' + fileName.replace('.json', '');
+
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
@@ -1802,15 +1817,18 @@ const App: React.FC = () => {
                 }));
 
                 const newPreset: Preset = {
-                    id: 'imported_save',
-                    name: 'Imported System',
+                    id: presetId,
+                    name: presetName,
                     bodies: loadedBodies,
                     defaultScale: data.camera?.scale || 1.0,
-                    description: `Imported state from ${new Date(data.timestamp).toLocaleString()}`
+                    description: `Imported state from ${new Date(data.timestamp).toLocaleString()}`,
+                    flightComputerModules: data.flightComputerModules || [],
+                    moduleGroups: data.moduleGroups || []
                 };
 
                 setImportedPreset(newPreset);
-                setCurrentPresetId('imported_save');
+                setImportedPresets([...importedPresets, newPreset]);
+                setCurrentPresetId(presetId);
 
                 setBodies(loadedBodies);
                 bodiesRef.current = loadedBodies;
@@ -1863,6 +1881,8 @@ const App: React.FC = () => {
             lastRefinedCoMRef.current = null;
             setObserverBodyIds({ a: null, b: null });
             setPredictionPaths([]);
+            setFlightComputerModules(preset.flightComputerModules || []);
+            setModuleGroups(preset.moduleGroups || []);
             simulationTimeRef.current = 0; // Reset clock for preset
             if (id !== 'imported_save') {
                 setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.008, timeReverseDuration: 4.0 });
@@ -2066,6 +2086,20 @@ const App: React.FC = () => {
             }
         }
     };
+
+
+    //a function to be used from outside to create a body and spawn it
+    // provide in args (name, mass, radius, color, position, velocity, description)
+    const createAndSpawnBody = (name: string, mass: number, radius: number, color: string, position: { x: number, y: number }, velocity: { x: number, y: number }, description: string) => {
+        const bodyid = `manual_${Date.now()}`;
+        const newBody = createBody(bodyid, name, mass, radius, color, position.x, position.y, description);
+        newBody.velocity = velocity;
+        setBodies(prev => [...prev, newBody]);
+        bodiesRef.current = [...bodiesRef.current, newBody];
+    };
+
+
+
 
     const handleUpdateCandidate = (updates: Partial<Body>) => {
         if (!creationCandidate) return;
@@ -2689,6 +2723,9 @@ const App: React.FC = () => {
                 onUpdateModule={handleUpdateModule}
                 onToggleModule={handleToggleModule}
                 showUI={showUI}
+                nbColumns={nbColumns}
+                nbRows={nbRows}
+                gap={gap}
             />
 
             <FlightComputerPanel
@@ -2720,6 +2757,24 @@ const App: React.FC = () => {
                 scale={scaleRef.current}
                 showUI={showUI}
                 updateRocket={updateRocket}
+                handlePresetChange={handlePresetChange}
+                setSpeed={setSpeed}
+                setIsRunning={setIsRunning}
+                isRunning={isRunning}
+                speed={speed}
+                onReset={handleReset}
+                onTimeReverse={handleTimeReverse}
+                onZoom={(factor) => handleZoom(factor)}
+                nbColumns={nbColumns}
+                nbRows={nbRows}
+                gap={gap}
+                setNbColumns={setNbColumns}
+                setNbRows={setNbRows}
+                setGap={setGap}
+                handleUpdateCandidate={handleUpdateCandidate}
+                handleSpawnManual={handleSpawnManual}
+                setCreationCandidate={setCreationCandidate}
+                createAndSpawnBody={createAndSpawnBody}
             />
 
 

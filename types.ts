@@ -173,6 +173,8 @@ export interface Preset {
   bodies: Body[];
   defaultScale: number;
   description: string;
+  flightComputerModules?: FlightComputerModule[];
+  moduleGroups?: ModuleGroup[];
 }
 
 export interface SystemEvent {
@@ -409,3 +411,4 @@ export enum ConnectionStatus {
   CONNECTED = 'CONNECTED',
   ERROR = 'ERROR'
 }
+

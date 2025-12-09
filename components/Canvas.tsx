@@ -1642,7 +1642,7 @@ const Canvas: React.FC<CanvasProps> = ({
                     } else if (body.name.includes('Pomme')) {
                         drawApple(ctx, screenX, screenY, visualRadius, 1);
                     } else {
-                        const ttime = time;
+                        const ttime = time * 0;
                         //drawBeautifulPlanetOpenAi(ctx, body, screenX, screenY, visualRadius, body.color, { primaryStar, visualConfig, isGhost, time: ttime });
                         drawBeautifullPlanetGemini(ctx, body, screenX, screenY, visualRadius, { primaryStar, visualConfig, isGhost, time: ttime });
                     }

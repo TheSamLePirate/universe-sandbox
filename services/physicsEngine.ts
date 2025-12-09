@@ -57,7 +57,7 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
   return forces;
 };
 
-const createExplosion = (x: number, y: number, color: string, intensity: number): Particle[] => {
+const createExplosion = (x: number, y: number, color: string, intensity: number,dt: number): Particle[] => {
     const particles: Particle[] = [];
     const count = Math.min(300, Math.floor(intensity * 100)); // Increased multiplier from 10 to 100, cap at 5000
     
@@ -70,8 +70,8 @@ const createExplosion = (x: number, y: number, color: string, intensity: number)
             y: y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: 2.0,
-            decay: 0.01 + Math.random() * 0.01,
+            life: 200* dt,
+            decay: (0.01 + Math.random() * 0.01)*dt,
             color: color,
             size: Math.random() * 2 + 1
         });
@@ -1031,7 +1031,7 @@ export const updatePhysics = (
                       if (isRocketCollision) {
                           explosionIntensity = Math.max(explosionIntensity, 1000); // Minimum intensity of 1000 for rockets (10,000 particles)
                       }
-                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity));
+                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity,dt));
 
 
                       

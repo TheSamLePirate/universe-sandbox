@@ -8,49 +8,49 @@ import { calculateOrbitalPoints, calculateEllipsePoints, calculateForces } from 
 import { resolveInput, resolveStringInput, resolveBooleanInput } from '@/services/orbitalMath';
 
 interface Canvas3DProps {
-  bodies: Body[];
-  particles: Particle[];
-  width: number;
-  height: number;
-  scale: number;
-  offset: Vector2D;
-  onPan: (dx: number, dy: number) => void;
-  onZoom: (delta: number, clientX?: number, clientY?: number) => void;
-  onSelectBody: (id: string | null) => void;
-  selectedBodyId: string | null;
-  visualConfig: VisualConfig;
-  physicsConfig: PhysicsConfig;
-  
-  isCreationMode: boolean;
-  creationCandidate: Body | null;
-  predictionPaths: { id: string, color: string, points: Vector2D[] }[];
-  onCanvasClick: (x: number, y: number) => void;
+    bodies: Body[];
+    particles: Particle[];
+    width: number;
+    height: number;
+    scale: number;
+    offset: Vector2D;
+    onPan: (dx: number, dy: number) => void;
+    onZoom: (delta: number, clientX?: number, clientY?: number) => void;
+    onSelectBody: (id: string | null) => void;
+    selectedBodyId: string | null;
+    visualConfig: VisualConfig;
+    physicsConfig: PhysicsConfig;
 
-  isRocketMode: boolean;
-  isRocketSpawning: boolean;
-  rocketTargetBodyId?: string;
+    isCreationMode: boolean;
+    creationCandidate: Body | null;
+    predictionPaths: { id: string, color: string, points: Vector2D[] }[];
+    onCanvasClick: (x: number, y: number) => void;
 
-  observerBodyIds: { a: string | null; b: string | null };
+    isRocketMode: boolean;
+    isRocketSpawning: boolean;
+    rocketTargetBodyId?: string;
 
-  coMData: CoMData | null;
-  
-  showTransferWindow: boolean;
-  showTheoreticalOrbit: boolean;
-  followingBodyId: string | null;
-  followingCoM: boolean;
-  flightComputerModules: FlightComputerModule[];
-  rendezvousPoint?: Vector2D | null; // Legacy from RocketPanel
-  rendezvousPoints?: Array<{ 
-    point: Vector2D; 
-    name: string; 
-    color: string; 
-    moduleId: string;
-    timeToRendezvous: number;
-    distance: number;
-    deltaVPrograde: number;
-    deltaVRadial: number;
-    totalDeltaV: number;
-  }>;
+    observerBodyIds: { a: string | null; b: string | null };
+
+    coMData: CoMData | null;
+
+    showTransferWindow: boolean;
+    showTheoreticalOrbit: boolean;
+    followingBodyId: string | null;
+    followingCoM: boolean;
+    flightComputerModules: FlightComputerModule[];
+    rendezvousPoint?: Vector2D | null; // Legacy from RocketPanel
+    rendezvousPoints?: Array<{
+        point: Vector2D;
+        name: string;
+        color: string;
+        moduleId: string;
+        timeToRendezvous: number;
+        distance: number;
+        deltaVPrograde: number;
+        deltaVRadial: number;
+        totalDeltaV: number;
+    }>;
 }
 
 // ... (rest of file)
@@ -94,10 +94,10 @@ const extractVector = (value: Body | Vector2D): Vector2D => ('position' in value
 
 // --- HELPER COMPONENTS ---
 
-const BodyMesh: React.FC<{ 
-    body: Body; 
-    isSelected: boolean; 
-    onSelect: (id: string) => void; 
+const BodyMesh: React.FC<{
+    body: Body;
+    isSelected: boolean;
+    onSelect: (id: string) => void;
     visualConfig: VisualConfig;
     isGhost?: boolean;
     scale: number;
@@ -108,7 +108,7 @@ const BodyMesh: React.FC<{
 }> = ({ body, isSelected, onSelect, visualConfig, isGhost, scale, width, height, offset, onCanvasClick }) => {
     const meshRef = useRef<THREE.Mesh>(null);
     const glowTexture = useGlowTexture();
-    
+
     // Trail
     const trailPoints = useMemo(() => {
         if (!visualConfig.showTrails || !body.trail || isGhost) return [];
@@ -118,12 +118,12 @@ const BodyMesh: React.FC<{
     return (
         <group>
             {!isGhost && visualConfig.showTrails && trailPoints.length > 1 && (
-                <Line 
-                    points={trailPoints} 
-                    color={body.color} 
-                    lineWidth={1} 
-                    opacity={0.5} 
-                    transparent 
+                <Line
+                    points={trailPoints}
+                    color={body.color}
+                    lineWidth={1}
+                    opacity={0.5}
+                    transparent
                 />
             )}
 
@@ -137,9 +137,9 @@ const BodyMesh: React.FC<{
                             {/* Main flame cone */}
                             <mesh rotation={[0, 0, 0]}>
                                 <coneGeometry args={[body.radius * 1.5, body.radius * 4, 8]} />
-                                <meshBasicMaterial 
-                                    color="#ff6600" 
-                                    transparent 
+                                <meshBasicMaterial
+                                    color="#ff6600"
+                                    transparent
                                     opacity={0.8}
                                     blending={THREE.AdditiveBlending}
                                 />
@@ -147,18 +147,18 @@ const BodyMesh: React.FC<{
                             {/* Inner bright core */}
                             <mesh rotation={[0, 0, 0]}>
                                 <coneGeometry args={[body.radius * 0.8, body.radius * 3, 6]} />
-                                <meshBasicMaterial 
-                                    color="#ffff00" 
-                                    transparent 
+                                <meshBasicMaterial
+                                    color="#ffff00"
+                                    transparent
                                     opacity={0.9}
                                     blending={THREE.AdditiveBlending}
                                 />
                             </mesh>
                         </group>
                     )}
-                    
+
                     {/* Rocket Body - Cone shape pointing up (direction of travel) */}
-                    <mesh 
+                    <mesh
                         onClick={(e) => {
                             e.stopPropagation();
                             onSelect(body.id);
@@ -171,7 +171,7 @@ const BodyMesh: React.FC<{
                         receiveShadow
                     >
                         <coneGeometry args={[body.radius * 1.5, body.radius * 4, 8]} />
-                        <meshStandardMaterial 
+                        <meshStandardMaterial
                             color={body.color}
                             transparent={isGhost}
                             opacity={isGhost ? 0.5 : 1}
@@ -179,10 +179,10 @@ const BodyMesh: React.FC<{
                             metalness={0.1}
                         />
                     </mesh>
-                    
+
                     {/* Rocket fins */}
                     {[0, 120, 240].map((angle, i) => (
-                        <mesh 
+                        <mesh
                             key={i}
                             position={[
                                 Math.cos((angle * Math.PI) / 180) * body.radius * 1.2,
@@ -193,7 +193,7 @@ const BodyMesh: React.FC<{
                             castShadow
                         >
                             <boxGeometry args={[body.radius * 0.3, body.radius * 1.5, body.radius * 0.1]} />
-                            <meshStandardMaterial 
+                            <meshStandardMaterial
                                 color={body.color}
                                 transparent={isGhost}
                                 opacity={isGhost ? 0.5 : 1}
@@ -202,7 +202,7 @@ const BodyMesh: React.FC<{
                             />
                         </mesh>
                     ))}
-                    
+
                     {/* Selection Ring */}
                     {isSelected && (
                         <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, body.radius, 0]}>
@@ -210,7 +210,7 @@ const BodyMesh: React.FC<{
                             <meshBasicMaterial color="orange" side={THREE.DoubleSide} transparent opacity={0.8} />
                         </mesh>
                     )}
-                    
+
                     {/* Label - only for high mass rockets, not when selected */}
                     {!isSelected && body.mass > 100 && (
                         <Html position={[0, body.radius * 3, 0]} center distanceFactor={1000}>
@@ -222,9 +222,9 @@ const BodyMesh: React.FC<{
                 </group>
             ) : (
                 /* PLANET/STAR RENDERING */
-                <mesh 
+                <mesh
                     ref={meshRef}
-                    position={[body.position.x, -body.position.y, 0]} 
+                    position={[body.position.x, -body.position.y, 0]}
                     onClick={(e) => {
                         e.stopPropagation();
                         onSelect(body.id);
@@ -238,13 +238,13 @@ const BodyMesh: React.FC<{
                 >
                     <sphereGeometry args={[body.radius, 64, 64]} />
                     {body.isStar ? (
-                        <meshBasicMaterial 
+                        <meshBasicMaterial
                             color={body.color}
                             transparent={isGhost}
                             opacity={isGhost ? 0.5 : 1}
                         />
                     ) : (
-                        <meshStandardMaterial 
+                        <meshStandardMaterial
                             color={body.color}
                             transparent={isGhost}
                             opacity={isGhost ? 0.5 : 1}
@@ -252,7 +252,7 @@ const BodyMesh: React.FC<{
                             metalness={0.1}
                         />
                     )}
-                    
+
                     {/* Selection Ring */}
                     {isSelected && (
                         <mesh rotation={[0, 0, 0]}>
@@ -279,38 +279,38 @@ const BodyMesh: React.FC<{
                     {!body.isStar && visualConfig.showGlow && (
                         <mesh>
                             <sphereGeometry args={[body.radius * 1.15, 32, 32]} />
-                            <meshBasicMaterial 
-                                color={body.color} 
-                                transparent 
-                                opacity={0.2} 
+                            <meshBasicMaterial
+                                color={body.color}
+                                transparent
+                                opacity={0.2}
                                 depthWrite={false}
                                 blending={THREE.AdditiveBlending}
                             />
                         </mesh>
                     )}
-                    
+
                     {/* Massive Sprite Glow (Star Corona) */}
                     {body.isStar && (
                         <>
                             {/* Inner bright glow */}
                             <sprite scale={[body.radius * 6, body.radius * 6, 1]}>
-                                <spriteMaterial 
-                                    map={glowTexture} 
-                                    color={body.color} 
-                                    transparent 
-                                    opacity={0.8} 
-                                    blending={THREE.AdditiveBlending} 
+                                <spriteMaterial
+                                    map={glowTexture}
+                                    color={body.color}
+                                    transparent
+                                    opacity={0.8}
+                                    blending={THREE.AdditiveBlending}
                                     depthWrite={false}
                                 />
                             </sprite>
                             {/* Outer corona */}
                             <sprite scale={[body.radius * 12, body.radius * 12, 1]}>
-                                <spriteMaterial 
-                                    map={glowTexture} 
-                                    color={body.color} 
-                                    transparent 
-                                    opacity={0.3} 
-                                    blending={THREE.AdditiveBlending} 
+                                <spriteMaterial
+                                    map={glowTexture}
+                                    color={body.color}
+                                    transparent
+                                    opacity={0.3}
+                                    blending={THREE.AdditiveBlending}
                                     depthWrite={false}
                                 />
                             </sprite>
@@ -356,7 +356,7 @@ const PredictionLines: React.FC<{ paths: { color: string, points: Vector2D[] }[]
     return (
         <>
             {paths.map((path, i) => (
-                <Line 
+                <Line
                     key={i}
                     points={path.points.map(p => new THREE.Vector3(p.x, -p.y, 0))} // Negate Y
                     color={path.color}
@@ -372,10 +372,10 @@ const PredictionLines: React.FC<{ paths: { color: string, points: Vector2D[] }[]
     );
 };
 
-const RocketOverlay: React.FC<{ 
-    bodies: Body[]; 
-    selectedBodyId: string | null; 
-    targetBodyId?: string; 
+const RocketOverlay: React.FC<{
+    bodies: Body[];
+    selectedBodyId: string | null;
+    targetBodyId?: string;
     showTheoreticalOrbit: boolean;
     showTransferWindow: boolean;
     physicsConfig: PhysicsConfig;
@@ -399,7 +399,7 @@ const RocketOverlay: React.FC<{
         <group>
             {/* Theoretical Orbit */}
             {showTheoreticalOrbit && ellipsePoints.length > 0 && (
-                <Line 
+                <Line
                     points={ellipsePoints.map(p => new THREE.Vector3(p.x, -p.y, 0))} // Negate Y
                     color={body.color}
                     lineWidth={1}
@@ -426,29 +426,29 @@ const RocketOverlay: React.FC<{
                 <>
                     {/* Logic duplicated from Canvas.tsx for visualization */}
                     {(() => {
-                         const r2 = Math.sqrt(Math.pow(target.position.x - parent.position.x, 2) + Math.pow(target.position.y - parent.position.y, 2));
-                         const r1 = Math.sqrt(Math.pow(body.position.x - parent.position.x, 2) + Math.pow(body.position.y - parent.position.y, 2));
-                         const a_transfer = (r1 + r2) / 2;
-                         const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
-                         const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
-                         const travelTime = period_transfer / 2;
-                         const targetMotion = (360 / period_target) * travelTime;
-                         const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
-                         
-                         const rocketAngle = Math.atan2(body.position.y - parent.position.y, body.position.x - parent.position.x);
-                         const idealTargetAngle = rocketAngle + requiredPhaseRad;
-                         const idealX = parent.position.x + Math.cos(idealTargetAngle) * r2;
-                         const idealY = parent.position.y + Math.sin(idealTargetAngle) * r2;
+                        const r2 = Math.sqrt(Math.pow(target.position.x - parent.position.x, 2) + Math.pow(target.position.y - parent.position.y, 2));
+                        const r1 = Math.sqrt(Math.pow(body.position.x - parent.position.x, 2) + Math.pow(body.position.y - parent.position.y, 2));
+                        const a_transfer = (r1 + r2) / 2;
+                        const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                        const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * parent.mass));
+                        const travelTime = period_transfer / 2;
+                        const targetMotion = (360 / period_target) * travelTime;
+                        const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
 
-                         return (
-                             <>
+                        const rocketAngle = Math.atan2(body.position.y - parent.position.y, body.position.x - parent.position.x);
+                        const idealTargetAngle = rocketAngle + requiredPhaseRad;
+                        const idealX = parent.position.x + Math.cos(idealTargetAngle) * r2;
+                        const idealY = parent.position.y + Math.sin(idealTargetAngle) * r2;
+
+                        return (
+                            <>
                                 <Line points={[[parent.position.x, -parent.position.y, 0], [body.position.x, -body.position.y, 0]]} color="#22d3ee" opacity={0.4} transparent dashed /> {/* Negate Y */}
                                 <Line points={[[parent.position.x, -parent.position.y, 0], [idealX, -idealY, 0]]} color="#f97316" opacity={0.4} transparent dashed /> {/* Negate Y */}
                                 <Html position={[idealX, -idealY, 0]}> {/* Negate Y */}
                                     <div className="text-[8px] text-orange-500 font-mono">WINDOW</div>
                                 </Html>
-                             </>
-                         );
+                            </>
+                        );
                     })()}
                 </>
             )}
@@ -457,17 +457,17 @@ const RocketOverlay: React.FC<{
 };
 
 const GravitationalWaves: React.FC<{ bodies: Body[], physicsConfig: PhysicsConfig, showWaves: boolean }> = ({ bodies, physicsConfig, showWaves }) => {
-    const wavesRef = useRef<{x: number, y: number, radius: number, maxRadius: number, alpha: number, color: string, speed: number}[]>([]);
+    const wavesRef = useRef<{ x: number, y: number, radius: number, maxRadius: number, alpha: number, color: string, speed: number }[]>([]);
     const forces = useMemo(() => calculateForces(bodies, physicsConfig.gravitationalConstant), [bodies, physicsConfig.gravitationalConstant]);
 
     useFrame(() => {
         if (!showWaves) return;
-        
+
         // Spawn waves
         bodies.forEach((body, idx) => {
             if (body.mass > 10) {
                 const f = forces[idx];
-                const acceleration = Math.sqrt(f.x*f.x + f.y*f.y) / body.mass;
+                const acceleration = Math.sqrt(f.x * f.x + f.y * f.y) / body.mass;
                 if (acceleration > 0.02 && Math.random() < Math.min(0.8, acceleration * 0.5)) {
                     wavesRef.current.push({
                         x: body.position.x,
@@ -502,14 +502,14 @@ const GravitationalWaves: React.FC<{ bodies: Body[], physicsConfig: PhysicsConfi
     );
 };
 
-const ObserverOverlay: React.FC<{ 
-    bodies: Body[]; 
+const ObserverOverlay: React.FC<{
+    bodies: Body[];
     observerBodyIds: { a: string | null; b: string | null };
     physicsConfig: PhysicsConfig;
 }> = ({ bodies, observerBodyIds, physicsConfig }) => {
     const bodyA = bodies.find(b => b.id === observerBodyIds.a);
     const bodyB = bodies.find(b => b.id === observerBodyIds.b);
-    
+
     const forces = useMemo(() => calculateForces(bodies, physicsConfig.gravitationalConstant), [bodies, physicsConfig.gravitationalConstant]);
 
     if (!bodyA || !bodyB) return null;
@@ -520,7 +520,7 @@ const ObserverOverlay: React.FC<{
     const drawVector = (start: Vector2D, dir: Vector2D, length: number, color: string) => {
         return (
             <group>
-                <Line 
+                <Line
                     points={[[start.x, start.y, 0], [start.x + dir.x * length, start.y + dir.y * length, 0]]}
                     color={color}
                     lineWidth={2}
@@ -536,7 +536,7 @@ const ObserverOverlay: React.FC<{
     return (
         <group>
             {/* Connection Line */}
-            <Line 
+            <Line
                 points={[[bodyA.position.x, -bodyA.position.y, 0], [bodyB.position.x, -bodyB.position.y, 0]]} // Negate Y
                 color="#22d3ee"
                 lineWidth={2}
@@ -550,16 +550,16 @@ const ObserverOverlay: React.FC<{
             {(() => {
                 const dx = bodyB.position.x - bodyA.position.x;
                 const dy = bodyB.position.y - bodyA.position.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                const forceMag = (physicsConfig.gravitationalConstant * bodyA.mass * bodyB.mass) / (dist*dist);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const forceMag = (physicsConfig.gravitationalConstant * bodyA.mass * bodyB.mass) / (dist * dist);
                 const dirX = dx / dist;
                 const dirY = dy / dist;
                 const visualForceLen = Math.min(300, forceMag * FORCE_SCALE);
-                
+
                 return (
                     <>
-                        {drawVector(bodyA.position, {x: dirX, y: dirY}, visualForceLen, '#ef4444')}
-                        {drawVector(bodyB.position, {x: -dirX, y: -dirY}, visualForceLen, '#ef4444')}
+                        {drawVector(bodyA.position, { x: dirX, y: dirY }, visualForceLen, '#ef4444')}
+                        {drawVector(bodyB.position, { x: -dirX, y: -dirY }, visualForceLen, '#ef4444')}
                     </>
                 );
             })()}
@@ -568,29 +568,29 @@ const ObserverOverlay: React.FC<{
             {(() => {
                 const idxA = bodies.findIndex(b => b.id === bodyA.id);
                 const fA = forces[idxA];
-                const fMagA = Math.sqrt(fA.x*fA.x + fA.y*fA.y);
-                
+                const fMagA = Math.sqrt(fA.x * fA.x + fA.y * fA.y);
+
                 const idxB = bodies.findIndex(b => b.id === bodyB.id);
                 const fB = forces[idxB];
-                const fMagB = Math.sqrt(fB.x*fB.x + fB.y*fB.y);
+                const fMagB = Math.sqrt(fB.x * fB.x + fB.y * fB.y);
 
                 return (
                     <>
-                        {fMagA > 0.0001 && drawVector(bodyA.position, {x: fA.x/fMagA, y: fA.y/fMagA}, Math.min(300, fMagA * FORCE_SCALE), '#fbbf24')}
-                        {fMagB > 0.0001 && drawVector(bodyB.position, {x: fB.x/fMagB, y: fB.y/fMagB}, Math.min(300, fMagB * FORCE_SCALE), '#fbbf24')}
+                        {fMagA > 0.0001 && drawVector(bodyA.position, { x: fA.x / fMagA, y: fA.y / fMagA }, Math.min(300, fMagA * FORCE_SCALE), '#fbbf24')}
+                        {fMagB > 0.0001 && drawVector(bodyB.position, { x: fB.x / fMagB, y: fB.y / fMagB }, Math.min(300, fMagB * FORCE_SCALE), '#fbbf24')}
                     </>
                 );
             })()}
 
             {/* Velocity Vectors (Green) */}
             {(() => {
-                const vMagA = Math.sqrt(bodyA.velocity.x*bodyA.velocity.x + bodyA.velocity.y*bodyA.velocity.y);
-                const vMagB = Math.sqrt(bodyB.velocity.x*bodyB.velocity.x + bodyB.velocity.y*bodyB.velocity.y);
+                const vMagA = Math.sqrt(bodyA.velocity.x * bodyA.velocity.x + bodyA.velocity.y * bodyA.velocity.y);
+                const vMagB = Math.sqrt(bodyB.velocity.x * bodyB.velocity.x + bodyB.velocity.y * bodyB.velocity.y);
 
                 return (
                     <>
-                        {vMagA > 0.01 && drawVector(bodyA.position, {x: bodyA.velocity.x/vMagA, y: bodyA.velocity.y/vMagA}, Math.min(300, vMagA * VELOCITY_SCALE), '#4ade80')}
-                        {vMagB > 0.01 && drawVector(bodyB.position, {x: bodyB.velocity.x/vMagB, y: bodyB.velocity.y/vMagB}, Math.min(300, vMagB * VELOCITY_SCALE), '#4ade80')}
+                        {vMagA > 0.01 && drawVector(bodyA.position, { x: bodyA.velocity.x / vMagA, y: bodyA.velocity.y / vMagA }, Math.min(300, vMagA * VELOCITY_SCALE), '#4ade80')}
+                        {vMagB > 0.01 && drawVector(bodyB.position, { x: bodyB.velocity.x / vMagB, y: bodyB.velocity.y / vMagB }, Math.min(300, vMagB * VELOCITY_SCALE), '#4ade80')}
                     </>
                 );
             })()}
@@ -601,14 +601,14 @@ const ObserverOverlay: React.FC<{
 const GravityGrid: React.FC<{ bodies: Body[], visualConfig: VisualConfig, width: number, height: number, scale: number, offset: Vector2D }> = ({ bodies, visualConfig, width, height, scale, offset }) => {
     const geometryRef = useRef<THREE.BufferGeometry>(null);
     const { camera } = useThree(); // Access the 3D camera
-    
+
     useFrame(() => {
         if (!geometryRef.current || !visualConfig.showGrid) return;
 
         // Calculate grid spacing (same logic as 2D)
         const targetScreenSpacing = 15; // Reduced from 50 to increase density (more vertices)
-        const baseGridSpacing = visualConfig.gridSpacing; 
-        
+        const baseGridSpacing = visualConfig.gridSpacing;
+
         // Use camera distance to determine scale in 3D
         // visibleHeight at z=0 = 2 * cameraZ * tan(fov/2)
         // scale ~ height / visibleHeight
@@ -616,7 +616,7 @@ const GravityGrid: React.FC<{ bodies: Body[], visualConfig: VisualConfig, width:
         const fov = (camera as THREE.PerspectiveCamera).fov || 50;
         const visibleHeight = 2 * cameraZ * Math.tan((fov * Math.PI) / 360);
         const effectiveScale = height / visibleHeight;
-        
+
         const approximateWorldSpacing = targetScreenSpacing / effectiveScale;
         const power = Math.round(Math.log2(approximateWorldSpacing / baseGridSpacing));
         const renderGridSize = baseGridSpacing * Math.pow(2, power);
@@ -625,34 +625,34 @@ const GravityGrid: React.FC<{ bodies: Body[], visualConfig: VisualConfig, width:
         // Calculate view bounds based on camera position
         const centerX = camera.position.x;
         const centerY = camera.position.y;
-        
+
         // Calculate visible range with a generous buffer (4x) to cover tilt/rotation
         const aspect = width / height;
         const rangeY = visibleHeight * 2; // 2x buffer up/down
         const rangeX = visibleHeight * aspect * 2; // 2x buffer left/right
-        
+
         const startX = Math.floor((centerX - rangeX) / spacing) * spacing;
         const endX = Math.floor((centerX + rangeX) / spacing) * spacing;
         const startY = Math.floor((centerY - rangeY) / spacing) * spacing;
         const endY = Math.floor((centerY + rangeY) / spacing) * spacing;
 
         const points: number[] = [];
-        
+
         // Helper to distort point
         const getDistortedPoint = (wx: number, wy: number) => {
             let dx = 0;
             let dy = 0;
-            
+
             for (const body of bodies) {
-                if (body.mass < 10) continue; 
+                if (body.mass < 10) continue;
                 const bdx = body.position.x - wx;
                 const bdy = -body.position.y - wy; // Negate body Y to match our world space
-                const distSq = bdx*bdx + bdy*bdy;
+                const distSq = bdx * bdx + bdy * bdy;
                 if (distSq > 500000 && body.mass < 1000) continue;
                 const dist = Math.sqrt(distSq);
                 if (dist < 1) continue;
                 // Exaggerated effect: Increased multiplier from 30 to 150, max force from 60 to 300
-                const force = Math.min(300, (body.mass * 10) / (distSq + 500)); 
+                const force = Math.min(300, (body.mass * 10) / (distSq + 500));
                 dx += (bdx / dist) * force;
                 dy += (bdy / dist) * force;
             }
@@ -702,33 +702,33 @@ const CoMOverlay: React.FC<{ coMData: CoMData | null, visualConfig: VisualConfig
         <group>
             {/* Real CoM (Gray) */}
             <group position={[coMData.realCoM.x, -coMData.realCoM.y, 0]}> {/* Negate Y */}
-                <Line 
-                    points={[[-CROSS_SIZE, 0, 0], [CROSS_SIZE, 0, 0]]} 
-                    color="#6b7280" 
-                    lineWidth={1} 
-                    transparent 
-                    opacity={0.5} 
+                <Line
+                    points={[[-CROSS_SIZE, 0, 0], [CROSS_SIZE, 0, 0]]}
+                    color="#6b7280"
+                    lineWidth={1}
+                    transparent
+                    opacity={0.5}
                 />
-                <Line 
-                    points={[[0, -CROSS_SIZE, 0], [0, CROSS_SIZE, 0]]} 
-                    color="#6b7280" 
-                    lineWidth={1} 
-                    transparent 
-                    opacity={0.5} 
+                <Line
+                    points={[[0, -CROSS_SIZE, 0], [0, CROSS_SIZE, 0]]}
+                    color="#6b7280"
+                    lineWidth={1}
+                    transparent
+                    opacity={0.5}
                 />
             </group>
 
             {/* Refined CoM (Red) */}
             <group position={[coMData.refinedCoM.x, -coMData.refinedCoM.y, 0]}> {/* Negate Y */}
-                <Line 
-                    points={[[-CROSS_SIZE, 0, 0], [CROSS_SIZE, 0, 0]]} 
-                    color="#ef4444" 
-                    lineWidth={2} 
+                <Line
+                    points={[[-CROSS_SIZE, 0, 0], [CROSS_SIZE, 0, 0]]}
+                    color="#ef4444"
+                    lineWidth={2}
                 />
-                <Line 
-                    points={[[0, -CROSS_SIZE, 0], [0, CROSS_SIZE, 0]]} 
-                    color="#ef4444" 
-                    lineWidth={2} 
+                <Line
+                    points={[[0, -CROSS_SIZE, 0], [0, CROSS_SIZE, 0]]}
+                    color="#ef4444"
+                    lineWidth={2}
                 />
             </group>
         </group>
@@ -737,7 +737,7 @@ const CoMOverlay: React.FC<{ coMData: CoMData | null, visualConfig: VisualConfig
 
 
 
-const Marker3D: React.FC<{ 
+const Marker3D: React.FC<{
     id: string;
     point: Vector2D;
     color: string;
@@ -829,7 +829,7 @@ const Marker3D: React.FC<{
 };
 
 
-const FlightComputerOverlay: React.FC<{ 
+const FlightComputerOverlay: React.FC<{
     modules: FlightComputerModule[];
     bodies: Body[];
     physicsConfig: PhysicsConfig;
@@ -856,108 +856,15 @@ const FlightComputerOverlay: React.FC<{
 
     return (
         <group>
-            {modules.map(module => {
-                if (!module.isEnabled) return null;
-                
-                // Check if module is active (respects activate input)
-                const { isModuleActive } = require('./flight_computer/utils');
-                if (!isModuleActive(module, bodies, modules, physicsConfig, rendezvousSolutions || {})) return null;
 
-                const primary = module.primaryBodyId ? bodies.find(b => b.id === module.primaryBodyId) : null;
-                const reference = module.referenceBodyId ? bodies.find(b => b.id === module.referenceBodyId) : null;
-                const target = module.targetBodyId ? bodies.find(b => b.id === module.targetBodyId) : null;
-
-                if (module.type === 'orbit_info') {
-                    if (!primary || !reference) return null;
-                    const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
-                    const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);
-
-                    return (
-                        <group key={module.id}>
-                            {ellipsePoints.length > 0 && (
-                                <Line 
-                                    points={ellipsePoints.map(p => new THREE.Vector3(p.x, -p.y, 0))}
-                                    color={module.color}
-                                    lineWidth={1}
-                                    dashed
-                                    opacity={0.6}
-                                    transparent
-                                />
-                            )}
-                            {orbitalPoints?.periapsis && (
-                                <Html position={[orbitalPoints.periapsis.x, -orbitalPoints.periapsis.y, 0]}>
-                                    <div className="text-[10px] font-bold" style={{ color: module.color }}>Pe</div>
-                                </Html>
-                            )}
-                            {orbitalPoints?.apoapsis && (
-                                <Html position={[orbitalPoints.apoapsis.x, -orbitalPoints.apoapsis.y, 0]}>
-                                    <div className="text-[10px] font-bold" style={{ color: module.color }}>Ap</div>
-                                </Html>
-                            )}
-                        </group>
-                    );
-                } else if (module.type === 'transfer_window') {
-                    if (!primary || !reference || !target) return null;
-                    const r2 = Math.sqrt(Math.pow(target.position.x - reference.position.x, 2) + Math.pow(target.position.y - reference.position.y, 2));
-                    const r1 = Math.sqrt(Math.pow(primary.position.x - reference.position.x, 2) + Math.pow(primary.position.y - reference.position.y, 2));
-                    const a_transfer = (r1 + r2) / 2;
-                    const period_target = 2 * Math.PI * Math.sqrt(Math.pow(r2, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-                    const period_transfer = 2 * Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / (physicsConfig.gravitationalConstant * reference.mass));
-                    const travelTime = period_transfer / 2;
-                    const targetMotion = (360 / period_target) * travelTime;
-                    const requiredPhaseRad = (180 - targetMotion) * Math.PI / 180;
-                    const primaryAngle = Math.atan2(primary.position.y - reference.position.y, primary.position.x - reference.position.x);
-                    const idealTargetAngle = primaryAngle + requiredPhaseRad;
-                    const idealX = reference.position.x + Math.cos(idealTargetAngle) * r2;
-                    const idealY = reference.position.y + Math.sin(idealTargetAngle) * r2;
-
-                    return (
-                        <group key={module.id}>
-                            <Line points={[[reference.position.x, -reference.position.y, 0], [primary.position.x, -primary.position.y, 0]]} color={module.color} opacity={0.4} transparent dashed />
-                            <Line points={[[reference.position.x, -reference.position.y, 0], [idealX, -idealY, 0]]} color={module.color} opacity={0.4} transparent dashed />
-                            <Html position={[idealX, -idealY, 0]}>
-                                <div className="text-[8px] font-mono" style={{ color: module.color }}>WINDOW</div>
-                            </Html>
-                        </group>
-                    );
-                } else if (module.type === 'marker') {
-                    const inputs = module.inputs || {};
-                    const positionInput = inputs.position || inputs.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
-                    const point = resolveVectorInputValue(positionInput);
-                    if (!point) return null;
-
-                    const title = resolveMarkerString(inputs.marker_title, module.markerTitle ?? module.name ?? 'Marker');
-                    const description = resolveMarkerString(inputs.marker_description, module.markerDescription ?? '');
-                    const baseColor = module.markerColor || module.color || '#a855f7';
-                    const markerColor = sanitizeMarkerColor(resolveMarkerString(inputs.marker_color, baseColor), baseColor);
-                    const visible = (module.markerVisible ?? true) && resolveMarkerBoolean(inputs.marker_visible, true);
-                    if (!visible) return null;
-                    const pulse = resolveMarkerBoolean(inputs.marker_pulse, module.markerPulse ?? false);
-
-                    return (
-                        <Marker3D
-                            key={module.id}
-                            id={module.id}
-                            point={point}
-                            color={markerColor}
-                            shape={module.markerShape || 'ring'}
-                            pulse={pulse}
-                            title={title}
-                            description={description}
-                        />
-                    );
-                }
-
-                return null;
-            })}
         </group>
     );
 };
 
 // Rendezvous Marker Component
-const RendezvousMarker: React.FC<{ 
-    point: Vector2D; 
-    name: string; 
+const RendezvousMarker: React.FC<{
+    point: Vector2D;
+    name: string;
     color: string;
     timeToRendezvous?: number;
     deltaVPrograde?: number;
@@ -965,7 +872,7 @@ const RendezvousMarker: React.FC<{
     totalDeltaV?: number;
 }> = ({ point, name, color, timeToRendezvous, deltaVPrograde, deltaVRadial, totalDeltaV }) => {
     const meshRef = useRef<THREE.Group>(null);
-    
+
     // Pulsing animation
     useFrame(({ clock }) => {
         if (meshRef.current) {
@@ -973,7 +880,7 @@ const RendezvousMarker: React.FC<{
             meshRef.current.scale.set(scale, scale, scale);
         }
     });
-    
+
     // Convert hex color to rgba for background
     const hexToRgba = (hex: string, alpha: number) => {
         const r = parseInt(hex.slice(1, 3), 16);
@@ -981,7 +888,7 @@ const RendezvousMarker: React.FC<{
         const b = parseInt(hex.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
-    
+
     // Format time: only show non-zero values
     let timeStr = '';
     let secondsStr = '';
@@ -996,7 +903,7 @@ const RendezvousMarker: React.FC<{
         const hours = Math.floor(remainingAfterDays / 3600);
         const minutes = Math.floor((remainingAfterDays % 3600) / 60);
         const seconds = Math.floor(remainingAfterDays % 60);
-        
+
         const timeParts = [];
         if (years > 0) timeParts.push(`${years}y`);
         if (months > 0) timeParts.push(`${months}m`);
@@ -1004,11 +911,11 @@ const RendezvousMarker: React.FC<{
         if (hours > 0) timeParts.push(`${hours}h`);
         if (minutes > 0) timeParts.push(`${minutes}m`);
         if (seconds > 0 && timeParts.length === 0) timeParts.push(`${seconds}s`); // Show seconds only if everything else is 0
-        
+
         timeStr = timeParts.length > 0 ? timeParts.join(' ') : '0s';
         secondsStr = `${timeToRendezvous.toFixed(1)}s`;
     }
-    
+
     return (
         <group ref={meshRef} position={[point.x, -point.y, 0]}>
             {/* Outer ring */}
@@ -1016,25 +923,25 @@ const RendezvousMarker: React.FC<{
                 <ringGeometry args={[8, 10, 32]} />
                 <meshBasicMaterial color={color} transparent opacity={0.8} side={THREE.DoubleSide} />
             </mesh>
-            
+
             {/* Inner cross */}
-            <Line 
+            <Line
                 points={[[-12, 0, 0], [12, 0, 0]]}
                 color={color}
                 lineWidth={2}
             />
-            <Line 
+            <Line
                 points={[[0, -12, 0], [0, 12, 0]]}
                 color={color}
                 lineWidth={2}
             />
-            
+
             {/* Center dot */}
             <mesh>
                 <sphereGeometry args={[2, 16, 16]} />
                 <meshBasicMaterial color={color} />
             </mesh>
-            
+
             {/* Label */}
             <Html position={[0, 15, 0]} center style={{ pointerEvents: 'none' }}>
                 <div style={{
@@ -1073,7 +980,7 @@ const RendezvousMarker: React.FC<{
 
 const SceneContent: React.FC<Canvas3DProps> = (props) => {
     const { bodies, particles, visualConfig, selectedBodyId, onSelectBody, onCanvasClick, isCreationMode, creationCandidate, predictionPaths, width, height, scale, offset, isRocketMode, rocketTargetBodyId, showTheoreticalOrbit, showTransferWindow, physicsConfig, observerBodyIds, followingBodyId, followingCoM, coMData, flightComputerModules, rendezvousPoint, rendezvousPoints } = props;
-    
+
     const controlsRef = useRef<any>(null);
     const { camera } = useThree();
     const previousFollowingId = useRef<string | null>(null);
@@ -1102,49 +1009,49 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
         });
         return map;
     }, [rendezvousPoints]);
- 
+
     return (
         <>
 
             {/* NO ambient light - pure darkness except for stars */}
 
             <ambientLight intensity={0} />
-            
+
             {/* Star Point Lights - VERY STRONG */}
             {bodies.filter(b => b.isStar).map(star => (
-                <pointLight 
+                <pointLight
                     key={`light-${star.id}`}
                     position={[star.position.x, -star.position.y, 100]} // Negate Y 
-                    intensity={100000} 
+                    intensity={100000}
                     distance={100000}
                     decay={1.1}
                     castShadow
-                    shadow-mapSize={[4096*16, 4096*16]}
+                    shadow-mapSize={[4096 * 16, 4096 * 16]}
                     shadow-camera-near={1}
                     shadow-camera-far={100000}
                     shadow-bias={-0.0001}
                     shadow-radius={2}
                 />
             ))}
-            
+
             {visualConfig.showStars && <Stars radius={5000} depth={50} count={visualConfig.starDensity * 5} factor={4} saturation={0} fade speed={1} />}
 
             {/* Gravity Grid */}
-            <GravityGrid 
-                bodies={bodies} 
-                visualConfig={visualConfig} 
-                width={width} 
-                height={height} 
-                scale={scale} 
-                offset={offset} 
+            <GravityGrid
+                bodies={bodies}
+                visualConfig={visualConfig}
+                width={width}
+                height={height}
+                scale={scale}
+                offset={offset}
             />
 
             {/* Bodies */}
             {bodies.map(body => (
-                <BodyMesh 
-                    key={body.id} 
-                    body={body} 
-                    isSelected={body.id === selectedBodyId} 
+                <BodyMesh
+                    key={body.id}
+                    body={body}
+                    isSelected={body.id === selectedBodyId}
                     onSelect={onSelectBody}
                     visualConfig={visualConfig}
                     scale={scale}
@@ -1164,10 +1071,10 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             {/* Creation Mode Ghost */}
             {isCreationMode && creationCandidate && (
                 <>
-                    <BodyMesh 
-                        body={creationCandidate} 
-                        isSelected={false} 
-                        onSelect={() => {}} 
+                    <BodyMesh
+                        body={creationCandidate}
+                        isSelected={false}
+                        onSelect={() => { }}
                         visualConfig={visualConfig}
                         isGhost={true}
                         scale={scale}
@@ -1177,7 +1084,7 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
                         onCanvasClick={onCanvasClick}
                     />
                     {/* Velocity Arrow */}
-                    <Line 
+                    <Line
                         points={[
                             [creationCandidate.position.x, -creationCandidate.position.y, 0], // Negate Y
                             [creationCandidate.position.x + creationCandidate.velocity.x * 10, -(creationCandidate.position.y + creationCandidate.velocity.y * 10), 0] // Negate Y
@@ -1189,7 +1096,7 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             )}
 
             {/* Flight Computer Overlay */}
-            <FlightComputerOverlay 
+            <FlightComputerOverlay
                 modules={flightComputerModules}
                 bodies={bodies}
                 physicsConfig={physicsConfig}
@@ -1198,9 +1105,9 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
 
             {/* Rocket Overlay (Legacy/Quick View) */}
             {isRocketMode && selectedBodyId && (
-                <RocketOverlay 
-                    bodies={bodies} 
-                    selectedBodyId={selectedBodyId} 
+                <RocketOverlay
+                    bodies={bodies}
+                    selectedBodyId={selectedBodyId}
                     targetBodyId={rocketTargetBodyId}
                     showTheoreticalOrbit={showTheoreticalOrbit}
                     showTransferWindow={showTransferWindow}
@@ -1210,10 +1117,10 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
 
             {/* Observer Overlay */}
             {observerBodyIds.a && observerBodyIds.b && (
-                <ObserverOverlay 
-                    bodies={bodies} 
-                    observerBodyIds={observerBodyIds} 
-                    physicsConfig={physicsConfig} 
+                <ObserverOverlay
+                    bodies={bodies}
+                    observerBodyIds={observerBodyIds}
+                    physicsConfig={physicsConfig}
                 />
             )}
 
@@ -1223,10 +1130,10 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             {/* Rendezvous Markers */}
             {rendezvousPoint && <RendezvousMarker point={rendezvousPoint} name="RENDEZVOUS" color="#00ff88" />}
             {rendezvousPoints && rendezvousPoints.map((rdv, index) => (
-                <RendezvousMarker 
-                    key={rdv.moduleId} 
-                    point={rdv.point} 
-                    name={rdv.name} 
+                <RendezvousMarker
+                    key={rdv.moduleId}
+                    point={rdv.point}
+                    name={rdv.name}
                     color={rdv.color}
                     timeToRendezvous={rdv.timeToRendezvous}
                     deltaVPrograde={rdv.deltaVPrograde}
@@ -1239,17 +1146,17 @@ const SceneContent: React.FC<Canvas3DProps> = (props) => {
             <GravitationalWaves bodies={bodies} physicsConfig={physicsConfig} showWaves={visualConfig.showWaves} />
 
             {/* Invisible plane for clicking/raycasting at z=0 */}
-            <mesh position={[0, 0, -5]} onPointerMissed={() => !isCreationMode && onSelectBody(null)}  visible={false}>
-                 <planeGeometry args={[1000000, 1000000]} />
-                 <meshBasicMaterial transparent opacity={0} />
+            <mesh position={[0, 0, -5]} onPointerMissed={() => !isCreationMode && onSelectBody(null)} visible={false}>
+                <planeGeometry args={[1000000, 1000000]} />
+                <meshBasicMaterial transparent opacity={0} />
             </mesh>
-            
+
             {/* Grid Helper Removed - replaced by GravityGrid */}
 
-            <OrbitControls 
+            <OrbitControls
                 ref={controlsRef}
-                enablePan={true} 
-                enableZoom={true} 
+                enablePan={true}
+                enableZoom={true}
                 enableRotate={true}
                 mouseButtons={{
                     LEFT: THREE.MOUSE.PAN,

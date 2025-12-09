@@ -94,9 +94,9 @@ const PlanetPresets: Record<string, any> = Object.freeze({
     base: "#d4b483",
     accent: "#a06b3a",
     atmosphere: "rgba(240,220,190,0.35)",
-    bands: 12,
-    storms: 0.8, // High chance of storms
-    clouds: 0.0,
+    bands: 8,
+    storms: 0.99, // High chance of storms
+    clouds: 0.8,
   },
   [PlanetTypes.ICE_GIANT]: {
     base: "#7ac7d6",
@@ -172,7 +172,8 @@ export function drawBeautifullPlanetGemini(
 
   // Animation params
   const spinSpeed = 0.05 + rng() * 0.05;
-  const rotation = time * spinSpeed + (rng() * Math.PI * 2); 
+
+  const rotation = ((rng() * Math.PI * 2) + time * (0.045 + rng() * 0.11)) % (Math.PI * 2);
   const tilt = (rng() - 0.5) * 0.4; 
 
   // --- 1. Big Atmosphere Halo (Back) ---
@@ -231,7 +232,7 @@ export function drawBeautifullPlanetGemini(
 
   // --- 4. Volumetric Clouds (Two-Pass + Shadow) ---
   if (preset.clouds > 0) {
-    const cloudTex = getCloudTexture(seed, preset, texSize);
+    const cloudTex = getCloudTexture(seed, preset, texSize, time);
     
     // Pass 0: Shadows (Offset by light direction)
     // Offset creates height illusion.
@@ -269,6 +270,19 @@ export function drawBeautifullPlanetGemini(
     ctx.globalAlpha = isGhost ? 0.1 : (preset.clouds * 0.4); 
     ctx.drawImage(cloudTex, -visualRadius, -visualRadius, visualRadius * 2, visualRadius * 2);
     ctx.restore();
+  }
+
+  // C. Specular Highlight
+  if (preset.specular && !isGhost) {
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.5;
+    const specX = screenX - lx * visualRadius * 0.5;
+    const specY = screenY - ly * visualRadius * 0.5;
+    const specGrad = ctx.createRadialGradient(specX, specY, 0, specX, specY, visualRadius * 0.5);
+    specGrad.addColorStop(0, "white");
+    specGrad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = specGrad;
+    ctx.fillRect(screenX - visualRadius, screenY - visualRadius, visualRadius * 2, visualRadius * 2);
   }
 
   // --- 5. Shading & Terminator (The "3D" Look) ---
@@ -320,18 +334,7 @@ export function drawBeautifullPlanetGemini(
   ctx.fillStyle = shadowGrad;
   ctx.fillRect(screenX - visualRadius * 2, screenY - visualRadius * 2, visualRadius * 4, visualRadius * 4);
 
-  // C. Specular Highlight
-  if (preset.specular && !isGhost) {
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.5;
-    const specX = screenX - lx * visualRadius * 0.5;
-    const specY = screenY - ly * visualRadius * 0.5;
-    const specGrad = ctx.createRadialGradient(specX, specY, 0, specX, specY, visualRadius * 0.5);
-    specGrad.addColorStop(0, "white");
-    specGrad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = specGrad;
-    ctx.fillRect(screenX - visualRadius, screenY - visualRadius, visualRadius * 2, visualRadius * 2);
-  }
+  
 
   // D. City Lights (Night Side)
   if (preset.cityLights && !isGhost) {
@@ -365,9 +368,12 @@ export function drawBeautifullPlanetGemini(
 function inferPlanetType(body: CelestialBody): string {
   if (body.planetType && PlanetPresets[body.planetType]) return body.planetType;
 
-  const seed = String(body.id ?? body.mass);
+  const seed = String(body.name ?? body.mass);
   const r = mulberry32(hashString(seed));
   const m = body.mass || 0;
+
+  if (body.name.includes("Earth") || body.name.includes("Terre") ) return PlanetTypes.EARTHLIKE;
+  if (body.name.includes("Jupiter") || body.name.includes("Jupiter") ) return PlanetTypes.GAS_GIANT
 
   if (m > 300) return r() > 0.5 ? PlanetTypes.GAS_GIANT : PlanetTypes.RINGED_GAS;
   if (m > 100) return r() > 0.5 ? PlanetTypes.ICE_GIANT : PlanetTypes.RINGED_ICE;
@@ -378,6 +384,7 @@ function inferPlanetType(body: CelestialBody): string {
   if (roll < 0.5) return PlanetTypes.ICE;
   if (roll < 0.7) return PlanetTypes.OCEAN;
   if (roll < 0.85) return PlanetTypes.EARTHLIKE;
+  
   return PlanetTypes.BARREN;
 }
 
@@ -410,7 +417,7 @@ function getPlanetTexture(seed: string, type: string, preset: any, baseColor: st
   return canvas;
 }
 
-function getCloudTexture(seed: string, preset: any, size: number) {
+function getCloudTexture(seed: string, preset: any, size: number, time: number) {
   const key = `${seed}|clouds|${size}`;
   if (__cloudTexCache.has(key)) return __cloudTexCache.get(key)!;
 
@@ -420,6 +427,8 @@ function getCloudTexture(seed: string, preset: any, size: number) {
   const ctx = canvas.getContext("2d")!;
   const R = size / 2;
   ctx.translate(R, R);
+
+
   const rng = mulberry32(hashString(seed + "clouds"));
 
   const noiseFn = createNoise2D(rng);
@@ -430,6 +439,11 @@ function getCloudTexture(seed: string, preset: any, size: number) {
   const scale = 3.5;
   const cutoff = 0.35; // Lower cutoff for more clouds
   
+
+  //move the noise with time
+  const t = time*10;
+
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
        const nx = (x - size/2) / (size/2);
@@ -442,7 +456,7 @@ function getCloudTexture(seed: string, preset: any, size: number) {
        const u = nx * scale;
        const v = ny * scale;
 
-       let n = fbm(u, v, 5, noiseFn); 
+       let n = fbm(u + t, v + t, 5, noiseFn); 
        n = (n + 1) / 2; 
 
        if (n > cutoff) {
@@ -477,12 +491,12 @@ function getCityLightsTexture(seed: string, size: number) {
   ctx.translate(R, R);
   const rng = mulberry32(hashString(seed + "lights"));
   
-  for(let i=0; i<50; i++) {
+  for(let i=0; i<500; i++) {
       const angle = rng() * Math.PI * 2;
       const dist = rng() * R * 0.95;
       const cx = Math.cos(angle) * dist;
       const cy = Math.sin(angle) * dist;
-      const r = rng() * (size * 0.04);
+      const r = rng() * (size * 0.1);
       
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
       grad.addColorStop(0, "rgba(255, 230, 180, 1)");
