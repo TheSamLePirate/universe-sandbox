@@ -412,3 +412,23 @@ export enum ConnectionStatus {
   ERROR = 'ERROR'
 }
 
+export interface SlideImage {
+  id: string;
+  url: string;
+  title?: string;
+  description?: string;
+  alt?: string;
+}
+
+export interface SlideshowRef {
+  next: () => void;
+  prev: () => void;
+  showImage: (id: string) => void;
+}
+
+export interface SlideshowProps {
+  images: SlideImage[];
+  initialId?: string;
+  className?: string;
+}
+

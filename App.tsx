@@ -26,6 +26,18 @@ import useIsMobile from './hooks/useIsMobile';
 import { useRocketSound } from './hooks/useRocketSound';
 import JargonMetre from './components/JargonMetre';
 
+import { SlideshowRef } from './types';
+import { Image, ArrowLeft, ArrowRight, PlayCircle } from 'lucide-react';
+
+import { PLACEHOLDER_IMAGES } from './data/userImages';
+import { FullPageSlideshow } from './components/FullPageSlideshow';
+
+
+
+
+
+
+
 const MODULE_COLOR_PALETTE = ['#a855f7', '#22d3ee', '#f97316', '#10b981', '#f43f5e', '#facc15', '#6366f1', '#ef4444', '#06b6d4', '#fb923c'];
 
 const sanitizeHexColor = (value?: string | null): string | null => {
@@ -191,6 +203,68 @@ const App: React.FC = () => {
     const predictionBodyIdsRef = useRef(predictionBodyIds);
     const rocketTargetBodyIdRef = useRef(rocketTargetBodyId);
     const rocketParentBodyIdRef = useRef(rocketParentBodyId);
+
+    const slideshowRef = useRef<SlideshowRef>(null);
+    const [showImageSlideShow, setShowImageSlideShow] = useState(false);
+
+    // Example handlers calling the exposed component API
+    const handleNext = () => slideshowRef.current?.next();
+    const handlePrev = () => slideshowRef.current?.prev();
+    const handleJumpToForest = () => slideshowRef.current?.showImage('forest-4');
+    const handleJumpToImage = (imageId: string) => slideshowRef.current?.showImage(imageId);
+
+
+
+    type importedPreset = {
+        name: string;
+        preset: SimulationSaveData;
+    };
+
+    type importedComputerModule = {
+        name: string;
+        module: string;
+    };
+
+
+    const [presetsToImport, setPresetsToImport] = useState<importedPreset[]>([]);
+    const [computerModulesToImport, setComputerModulesToImport] = useState<importedComputerModule[]>([]);
+
+
+    //tapi in 192.168.1.100:3009/api/presets that return [{name:<filename sans .json>, preset:<content of the file>}]
+    useEffect(() => {
+        const fetchFiles = async () => {
+            const presets = await fetch('http://192.168.1.109:3009/api/presets').then(res => res.json());
+            setPresetsToImport(JSON.parse(presets) as importedPreset[]);
+            const computerModules = await fetch('http://192.168.1.109:3009/api/flightComputerModules').then(res => res.json());
+            setComputerModulesToImport(JSON.parse(computerModules) as importedComputerModule[]);
+        };
+        fetchFiles();
+    }, []);
+
+    //import the presets.
+    useEffect(() => {
+        const importPresets = () => {
+            //forEach preset, call handleImportState
+            presetsToImport.forEach(preset => {
+
+                handleImportStateFromJsonAsPreset(preset.preset, preset.name);
+            });
+        };
+        importPresets();
+    }, [presetsToImport]);
+
+    //import the computer modules.
+    useEffect(() => {
+        const importComputerModules = () => {
+            //forEach computer module, call handleImportState
+            computerModulesToImport.forEach(computerModule => {
+                handleImportGroupFromJson(computerModule.module);
+            });
+        };
+        importComputerModules();
+    }, [computerModulesToImport]);
+
+
 
     const timeReverseStateRef = useRef<{
         active: boolean;
@@ -370,6 +444,83 @@ const App: React.FC = () => {
         a.download = `${group.name.replace(/[^a-z0-9]/gi, '_')}_group.json`;
         a.click();
         URL.revokeObjectURL(url);
+    };
+
+
+    const handleImportGroupFromJson = async (textData: string) => {
+
+
+        const data = textData as any;
+        console.log(data);
+
+        // Generate new IDs to avoid conflicts
+        const idMap = new Map<string, string>();
+        const timestamp = Date.now();
+
+        const groups = data?.groups as ModuleGroup[];
+        const modules = data?.modules as FlightComputerModule[];
+
+        const randomId = () => Math.floor(Math.random() * 1000000).toString();
+
+        // Map old IDs to new IDs
+        groups.forEach((g: ModuleGroup, idx: number) => {
+            idMap.set(g.id, `fc_group_${timestamp}_${idx}_${randomId()}`);
+        });
+        modules.forEach((m: FlightComputerModule, idx: number) => {
+            idMap.set(m.id, `fc_module_${timestamp}_${idx}_${randomId()}`);
+        });
+
+        // Update groups with new IDs
+        const newGroups: ModuleGroup[] = groups.map((g: ModuleGroup) => ({
+            ...g,
+            id: idMap.get(g.id)!,
+            parentGroupId: g.parentGroupId ? (idMap.get(g.parentGroupId) || null) : null,
+            displayOutput: g.displayOutput ? {
+                ...g.displayOutput,
+                moduleId: idMap.get(g.displayOutput.moduleId) || g.displayOutput.moduleId
+            } : undefined
+        }));
+
+        // Update modules with new IDs
+        const newModules: FlightComputerModule[] = data.modules.map((m: FlightComputerModule) => {
+            const newModule = {
+                ...m,
+                id: idMap.get(m.id)!,
+                groupId: m.groupId ? (idMap.get(m.groupId) || null) : null
+            };
+
+            // Update input references in modules
+            if (m.inputs) {
+                const newInputs: Record<string, FlightComputerInput> = {};
+                Object.entries(m.inputs).forEach(([key, input]) => {
+                    // Check if this is a module reference (value format: "moduleId:outputKey")
+                    if (input.type === 'module_output') {
+                        const [moduleId, outputKey] = input.value.split(':');
+                        if (outputKey) {
+                            // This is a module reference
+                            const newModuleId = idMap.get(moduleId) || moduleId;
+                            newInputs[key] = {
+                                ...input,
+                                value: `${newModuleId}:${outputKey}`
+                            };
+                        } else {
+                            newInputs[key] = input;
+                        }
+                    } else {
+                        newInputs[key] = input;
+                    }
+                });
+                newModule.inputs = newInputs;
+            }
+
+            return newModule;
+        });
+
+        // Add to existing state (don't clear)
+        setModuleGroups(prev => [...prev, ...newGroups]);
+        setFlightComputerModules(prev => [...prev, ...newModules]);
+
+
     };
 
     const handleImportGroup = () => {
@@ -1788,6 +1939,21 @@ const App: React.FC = () => {
         }
     };
 
+    const handleImportStateFromJsonAsPreset = (saveDate: SimulationSaveData, name: string) => {
+        const data: SimulationSaveData = saveDate;
+        const preset: Preset = {
+            id: 'imported_preset_' + name,
+            name: name,
+            bodies: data.bodies,
+            defaultScale: data.camera?.scale || 1.0,
+            description: 'Imported preset from JSON',
+            flightComputerModules: data.flightComputerModules || [],
+            moduleGroups: data.moduleGroups || []
+        };
+        availablePresets.push(preset);
+        //setCurrentPresetId(preset.id);
+    }
+
     const handleImportState = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1863,6 +2029,7 @@ const App: React.FC = () => {
     };
 
     const handlePresetChange = (id: string) => {
+        console.log("handlePresetChange", id);
         const preset = availablePresets.find(p => p.id === id);
         if (preset) {
             setCurrentPresetId(id);
@@ -1890,7 +2057,7 @@ const App: React.FC = () => {
             if (id !== 'imported_save') {
                 setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.008, timeReverseDuration: 4.0 });
             }
-            setTimeout(() => setIsRunning(true), 100);
+            setTimeout(() => setIsRunning(true), 1000);
         }
     };
 
@@ -2786,6 +2953,10 @@ const App: React.FC = () => {
                 handleSpawnManual={handleSpawnManual}
                 setCreationCandidate={setCreationCandidate}
                 createAndSpawnBody={createAndSpawnBody}
+                setShowImageSlideShow={setShowImageSlideShow}
+                nextImage={handleNext}
+                prevImage={handlePrev}
+                handleJumpToImage={handleJumpToImage}
             />
 
 
@@ -3075,8 +3246,25 @@ const App: React.FC = () => {
                             onClose={() => setShowMusicPanel(false)}
                         />
                     )}
+
+
                 </>
 
+            </Activity>
+
+            <Activity mode={showImageSlideShow ? 'visible' : 'hidden'}>
+
+                <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-screen bg-gray-900 overflow-hidden font-sans z-[100]">
+
+                    {/* The Slideshow Component occupying full screen */}
+                    <div className="fixed top-0 left-0 right-0 bottom-0">
+                        <FullPageSlideshow
+                            ref={slideshowRef}
+                            images={PLACEHOLDER_IMAGES}
+                            className="h-full w-full"
+                        />
+                    </div>
+                </div>
             </Activity>
         </div>
     );

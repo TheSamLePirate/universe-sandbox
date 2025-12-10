@@ -38,6 +38,10 @@ export const useFlightComputerLogic = (
     handleSpawnManual?: () => void,
     setCreationCandidate?: (candidate: Body | null) => void,
     createAndSpawnBody?: (name: string, mass: number, radius: number, color: string, position: { x: number, y: number }, velocity: { x: number, y: number }, description: string) => void,
+    setShowImageSlideShow?: (show: boolean) => void,
+    nextImage?: () => void,
+    prevImage?: () => void,
+    handleJumpToImage?: (imageId: string) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -52,13 +56,13 @@ export const useFlightComputerLogic = (
         if (!module.isEnabled) return false;
         const activateInput = module.inputs?.activate;
         if (!activateInput) return true; // Default to true if no input connected
-        
+
         // Resolve input
         const activeSignal = resolveBooleanInput(activateInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-        
+
         // If input is connected but resolves to null (e.g. invalid target), default to false for safety? 
         // Or default to true? Let's default to false if signal is missing but input is defined.
-        return activeSignal ?? true; 
+        return activeSignal ?? true;
     };
 
     // Audio Context for Beep Module
@@ -74,7 +78,7 @@ export const useFlightComputerLogic = (
     // --- Follow Module & Button Reset Logic & Custom Script ---
     useEffect(() => {
         const activeIds = new Set(modules.map(m => m.id));
-        
+
         // Cleanup
         Array.from(followModuleTriggerStateRef.current.keys()).forEach(id => {
             if (!activeIds.has(id)) followModuleTriggerStateRef.current.delete(id);
@@ -131,11 +135,11 @@ export const useFlightComputerLogic = (
                 const triggerInput = module.inputs?.trigger;
                 // Default to false if not connected
                 let shouldRun = resolveBooleanInput(triggerInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
-                
+
                 // Check Manual Trigger
                 const lastManualTrigger = module.customScriptManualTrigger || 0;
                 const prevManualTrigger = manualTriggerStateRef.current.get(module.id) || 0;
-                
+
                 if (lastManualTrigger > prevManualTrigger) {
                     shouldRun = true;
                     manualTriggerStateRef.current.set(module.id, lastManualTrigger);
@@ -160,9 +164,9 @@ export const useFlightComputerLogic = (
                     for (let i = 0; i < count; i++) {
                         const key = `input_${i}`;
                         const inputDef = module.inputs?.[key];
-                        
+
                         let val: any = null;
-                        
+
                         // Try resolving as scalar first (most common for math)
                         const scalarVal = resolveScalarInput(inputDef, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                         if (scalarVal !== null) {
@@ -188,6 +192,51 @@ export const useFlightComputerLogic = (
                         }
                         inputs.push(val);
                     }
+                    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+                    function map01ToPI(v) { return (v * 2 * Math.PI) - Math.PI; }
+
+                    async function getApiValue({
+                        baseUrl = "http://localhost:3009",
+                        valueName = "value",
+                        sleepTime = "sleepTime",
+                    } = {}) {
+                        await sleep(sleepTime)
+                        const url = `${baseUrl.replace(/\/+$/, "")}/api/${encodeURIComponent(valueName)}`;
+                        const r = await fetch(url, { method: "GET" });
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+                        return data?.[valueName];
+                    }
+
+                    async function getApiValueAndReset({
+                        baseUrl = "http://localhost:3009",
+                        valueName = "value",
+                        sleepTime = "sleepTime",
+                    } = {}) {
+                        await sleep(sleepTime)
+                        const url = `${baseUrl.replace(/\/+$/, "")}/apiR/${encodeURIComponent(valueName)}`
+                        const r = await fetch(url, { method: "GET" });
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+                        return data?.[valueName];
+                    }
+
+                    async function postApiValue({ baseUrl = "http://localhost:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
+                        await sleep(sleepTime);
+                        const res = await fetch(`${baseUrl}/api/${valueName}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ value }),
+                        });
+                        if (!res.ok) throw new Error(`GET /value failed: ${res.status}`);
+                        const data = await res.json();
+                        return data[valueName]; // float 0..1
+                    }
+
+
+
 
                     // Prepare Game Context
                     const game = {
@@ -215,6 +264,15 @@ export const useFlightComputerLogic = (
                             handleSpawnManual: handleSpawnManual,
                             setCreationCandidate: setCreationCandidate,
                             createAndSpawnBody: createAndSpawnBody,
+                            setShowImageSlideShow: setShowImageSlideShow,
+                            nextImage: nextImage,
+                            prevImage: prevImage,
+                            handleJumpToImage: handleJumpToImage,
+                            getApiValue: getApiValue,
+                            getApiValueAndReset: getApiValueAndReset,
+                            postApiValue: postApiValue,
+                            sleep: sleep,
+                            map01ToPI: map01ToPI
                         },
                         helpers: {
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
@@ -257,7 +315,7 @@ export const useFlightComputerLogic = (
                         // We can't define AsyncFunction directly in TS/ES5 safely without polyfills or tricks, 
                         // but new Function with 'async' works if environment supports it (modern browsers do).
                         // Alternative: (async () => {}).constructor
-                        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+                        const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 
                         (async () => {
                             try {
@@ -265,7 +323,7 @@ export const useFlightComputerLogic = (
                                 //check if customScriptCode is valid async function by checking if it contains 'async' keyword
                                 if (!module.customScriptCode.includes('async')) {
                                     mockConsole.error('Custom script must be an async function');
-                                    onUpdateModule(module.id, { 
+                                    onUpdateModule(module.id, {
                                         customScriptLastResult: 0,
                                         customScriptLogs: logs.slice(-5),
                                         customScriptAsyncState: false
@@ -282,12 +340,12 @@ export const useFlightComputerLogic = (
                                         throw e;
                                     }
                                 `);
-                                
+
                                 const result = await func(inputs, mockConsole, game);
-                                
+
                                 // On completion
                                 scriptLogsRef.current.set(module.id, logs);
-                                onUpdateModule(module.id, { 
+                                onUpdateModule(module.id, {
                                     customScriptLastResult: result,
                                     customScriptLogs: logs.slice(-5),
                                     customScriptAsyncState: true
@@ -296,7 +354,7 @@ export const useFlightComputerLogic = (
                                 const errorLog = `Async Error: ${e.message}`;
                                 logs.push(errorLog);
                                 scriptLogsRef.current.set(module.id, logs);
-                                onUpdateModule(module.id, { 
+                                onUpdateModule(module.id, {
                                     customScriptLogs: logs.slice(-5),
                                     customScriptAsyncState: true
                                 });
@@ -318,7 +376,7 @@ export const useFlightComputerLogic = (
                                     return null;
                                 }
                             `);
-                            
+
                             const result = func(inputs, mockConsole, game);
 
                             // Only update if changed to avoid render loop
@@ -326,10 +384,10 @@ export const useFlightComputerLogic = (
                             const resultChanged = JSON.stringify(result) !== JSON.stringify(prevResult);
                             const prevLogs = scriptLogsRef.current.get(module.id) || [];
                             const logsChanged = JSON.stringify(logs) !== JSON.stringify(prevLogs);
-                            
+
                             if (resultChanged || logsChanged) {
                                 scriptLogsRef.current.set(module.id, logs);
-                                onUpdateModule(module.id, { 
+                                onUpdateModule(module.id, {
                                     customScriptLastResult: result,
                                     customScriptLogs: logs.slice(-5), // Keep last 5 logs for UI
                                     customScriptAsyncState: true // Always true for sync
@@ -353,17 +411,17 @@ export const useFlightComputerLogic = (
     useEffect(() => {
         // Init Audio Context on user interaction if needed
         const initAudio = () => {
-             const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
-             if (AudioContextClass && !audioContextRef.current) {
-                 audioContextRef.current = new AudioContextClass();
-             }
-             if (audioContextRef.current?.state === 'suspended') {
-                 audioContextRef.current.resume();
-             }
+            const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+            if (AudioContextClass && !audioContextRef.current) {
+                audioContextRef.current = new AudioContextClass();
+            }
+            if (audioContextRef.current?.state === 'suspended') {
+                audioContextRef.current.resume();
+            }
         };
-        
+
         window.addEventListener('click', initAudio);
-        
+
         // Init EasySpeech
         EasySpeech.init({ maxTimeout: 5000, interval: 250 }).catch(e => console.error('EasySpeech init failed', e));
 
@@ -375,18 +433,18 @@ export const useFlightComputerLogic = (
         const ctx = audioContextRef.current;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        
+
         osc.type = 'sine';
         osc.frequency.value = frequency;
-        
+
         const now = ctx.currentTime;
         gain.gain.setValueAtTime(0, now);
         gain.gain.linearRampToValueAtTime(0.3, now + 0.01);
         gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        
+
         osc.connect(gain);
         gain.connect(ctx.destination);
-        
+
         osc.start(now);
         osc.stop(now + 0.1);
     };
@@ -400,11 +458,11 @@ export const useFlightComputerLogic = (
                 const pitch = module.beepPitch || 800;
                 const rate = module.beepRate || 2;
                 const prevState = prevBeepInputStateRef.current.get(module.id) || false;
-                
+
                 if (input !== null) {
                     let shouldBeep = false;
                     const now = Date.now();
-                    
+
                     if (mode === 'rising' && input && !prevState) {
                         shouldBeep = true;
                     } else if (mode === 'falling' && !input && prevState) {
@@ -422,7 +480,7 @@ export const useFlightComputerLogic = (
                         if (module.beepSoundType === 'speak' && mode !== 'continuous') {
                             const dynamicText = resolveStringInput(module.inputs?.text, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                             const textToSpeak = dynamicText || module.beepSpeakText;
-                            
+
                             if (textToSpeak) {
                                 EasySpeech.speak({
                                     text: textToSpeak,
@@ -437,7 +495,7 @@ export const useFlightComputerLogic = (
                         }
                     }
                 }
-                
+
                 if (input !== null) {
                     prevBeepInputStateRef.current.set(module.id, input);
                 }
@@ -446,20 +504,20 @@ export const useFlightComputerLogic = (
     }, [bodies, modules, physicsConfig, rendezvousSolutionMap]);
 
     // --- Music Controller Logic ---
-    const { 
-        play: musicPlay, 
-        pause: musicPause, 
-        setVolume: setMusicVolume, 
-        updatePrompt: updateMusicPrompt, 
+    const {
+        play: musicPlay,
+        pause: musicPause,
+        setVolume: setMusicVolume,
+        updatePrompt: updateMusicPrompt,
         prompts: musicPrompts,
-        playbackState: musicPlaybackState, 
+        playbackState: musicPlaybackState,
         volume: musicVolumeValue,
         reverbMix,
         lowpassCutoff,
         setReverbMix,
         setLowpassCutoff
     } = useMusic();
-    
+
     useEffect(() => {
         modules.forEach(module => {
             if (module.type === 'music_controller' && isModuleActive(module)) {
@@ -469,7 +527,7 @@ export const useFlightComputerLogic = (
                 const volumeInput = module.inputs?.volume;
                 const reverbInput = module.inputs?.reverb_mix;
                 const lowpassInput = module.inputs?.lowpass_cutoff;
-                
+
                 // Shuffle Inputs (2x prompt + weight)
                 const playVal = resolveBooleanInput(playInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                 const pauseVal = resolveBooleanInput(pauseInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
@@ -508,29 +566,29 @@ export const useFlightComputerLogic = (
 
                 // Update Prompts
                 const updateMPrompt = (pid: string, textIn?: FlightComputerInput, weightIn?: FlightComputerInput, fallbackText?: string, fallbackWeight?: number) => {
-                     const textVal = resolveStringInput(textIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-                     const weightVal = resolveScalarInput(weightIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-                     
-                     // Prioritize dynamic input, fallback to manual
-                     const finalText = textVal || fallbackText;
-                     const finalWeight = weightVal !== null ? weightVal : fallbackWeight;
+                    const textVal = resolveStringInput(textIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                    const weightVal = resolveScalarInput(weightIn, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
 
-                     if (musicPrompts.has(pid)) {
-                         const p = musicPrompts.get(pid)!;
-                         const updates: Partial<typeof p> = {};
-                         
-                         if (finalText && finalText !== p.text) updates.text = finalText;
-                         
-                         if (finalWeight !== undefined && finalWeight !== null && typeof finalWeight === 'number') {
-                             if (Math.abs(finalWeight - p.weight) > 0.01) {
-                                 updates.weight = finalWeight;
-                             }
-                         }
-                         
-                         if (Object.keys(updates).length > 0) {
-                             updateMusicPrompt(pid, updates);
-                         }
-                     }
+                    // Prioritize dynamic input, fallback to manual
+                    const finalText = textVal || fallbackText;
+                    const finalWeight = weightVal !== null ? weightVal : fallbackWeight;
+
+                    if (musicPrompts.has(pid)) {
+                        const p = musicPrompts.get(pid)!;
+                        const updates: Partial<typeof p> = {};
+
+                        if (finalText && finalText !== p.text) updates.text = finalText;
+
+                        if (finalWeight !== undefined && finalWeight !== null && typeof finalWeight === 'number') {
+                            if (Math.abs(finalWeight - p.weight) > 0.01) {
+                                updates.weight = finalWeight;
+                            }
+                        }
+
+                        if (Object.keys(updates).length > 0) {
+                            updateMusicPrompt(pid, updates);
+                        }
+                    }
                 };
 
                 // Handle 4 channels
@@ -541,14 +599,14 @@ export const useFlightComputerLogic = (
                     const m = module as any;
                     const manualText = m[`musicPromptText${i}`];
                     const manualWeight = m[`musicPromptWeight${i}`];
-                    
+
                     updateMPrompt(`prompt-${i}`, tInput, wInput, manualText, manualWeight);
                 });
 
                 // Update Module Outputs (State Feedback)
                 const isPlaying = musicPlaybackState === 'playing';
                 const currentVol = musicVolumeValue;
-                
+
                 const stateChanged = module.musicPlaying !== isPlaying;
                 const volChanged = module.musicVolume === undefined || Math.abs(module.musicVolume - currentVol) > 0.001;
 
