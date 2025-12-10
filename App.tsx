@@ -63,7 +63,7 @@ const App: React.FC = () => {
     // --- State ---
     const isMobile = useIsMobile();
     const [showUI, setShowUI] = useState(false);
-    const defaultPreset = PRESETS.find(p => p.id === 'figure8') || PRESETS[0];
+    const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
 
     const [nbColumns, setNbColumns] = useState(4);
     const [nbRows, setNbRows] = useState(12);
@@ -1881,8 +1881,11 @@ const App: React.FC = () => {
             lastRefinedCoMRef.current = null;
             setObserverBodyIds({ a: null, b: null });
             setPredictionPaths([]);
-            setFlightComputerModules(preset.flightComputerModules || []);
-            setModuleGroups(preset.moduleGroups || []);
+            //add flightcomputer module and preset modules if not empty and not undefined and not null
+            const mergedModules = preset.flightComputerModules && preset.flightComputerModules.length > 0 ? preset.flightComputerModules.concat(flightComputerModules) : flightComputerModules;
+            const mergedModuleGroups = preset.moduleGroups && preset.moduleGroups.length > 0 ? preset.moduleGroups.concat(moduleGroups) : moduleGroups;
+            setFlightComputerModules(mergedModules);
+            setModuleGroups(mergedModuleGroups);
             simulationTimeRef.current = 0; // Reset clock for preset
             if (id !== 'imported_save') {
                 setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.008, timeReverseDuration: 4.0 });
@@ -2096,6 +2099,14 @@ const App: React.FC = () => {
         newBody.velocity = velocity;
         setBodies(prev => [...prev, newBody]);
         bodiesRef.current = [...bodiesRef.current, newBody];
+    };
+
+    //test create and spawn body
+    const testCreateAndSpawnBody = () => {
+        createAndSpawnBody(
+            'Test Body',
+            20, 8, '#4ECDC4', { x: 0, y: 0 }, { x: 0, y: 0 }, 'Test body'
+        );
     };
 
 

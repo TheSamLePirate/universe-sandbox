@@ -24,24 +24,49 @@ const normalizeValue = (v) => {
 
 // GET /api/:dataName  -> { "<dataName>": <value> }
 app.get("/api/:dataName", (req, res) => {
-  console.log("Get " + new Date().toISOString());
+  
   const { dataName } = req.params;
 
+  const returnValueError={ [dataName]: 0,error:"not found"};
+
   if (!isValidName(dataName)) {
-    return res.status(400).json({ error: "invalid dataName" });
+    return res.json(returnValueError);
   }
 
   if (!sharedValues.has(dataName)) {
-    return res.status(404).json({ error: "not found" });
+    return res.json(returnValueError);
   }
 
+  //console.log("Get " + dataName + " = " + sharedValues.get(dataName));
+
   return res.json({ [dataName]: sharedValues.get(dataName) });
+});
+
+// GET /api/:dataName  -> { "<dataName>": <value> }
+// returns the value of a variable and remove it from the sharedValues map
+app.get("/apiR/:dataName", (req, res) => {
+  
+  const { dataName } = req.params;
+
+  const returnValueError={ [dataName]: 0,error:"not found"};
+
+  if (!isValidName(dataName)) {
+    return res.json(returnValueError);
+  }
+
+  if (!sharedValues.has(dataName)) {
+    return res.json(returnValueError);
+  }
+
+  const returnValue={ [dataName]: sharedValues.get(dataName) };
+  sharedValues.delete(dataName);
+  return res.json(returnValue);
 });
 
 // POST /api/:dataName with body { "value": <string|number> } -> { "<dataName>": <value> }
 // creates or updates
 app.post("/api/:dataName", (req, res) => {
-  console.log("Post " + new Date().toISOString());
+  //console.log("Post " + new Date().toISOString());
   const { dataName } = req.params;
 
   if (!isValidName(dataName)) {
@@ -54,6 +79,7 @@ app.post("/api/:dataName", (req, res) => {
   }
 
   sharedValues.set(dataName, value);
+  //console.log(dataName + " = " + value);
   return res.json({ [dataName]: sharedValues.get(dataName) });
 });
 
