@@ -78,6 +78,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'maneuver_executor', label: 'Maneuver Executor', category: 'Actions' },
     { value: 'follow', label: 'Follow', category: 'Actions' },
     { value: 'music_controller', label: 'Music Controller', category: 'Actions' },
+    { value: 'edge_detector', label: 'Edge Detector', category: 'Logic' },
     { value: 'custom_script', label: 'Custom Script', category: 'Advanced' },
 ];
 

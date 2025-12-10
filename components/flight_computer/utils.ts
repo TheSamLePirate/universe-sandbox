@@ -26,7 +26,8 @@ export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> =
     keyboard: Keyboard,
     slider: Sliders,
     music_controller: Music,
-    horizontal_bar: CreditCard
+    horizontal_bar: CreditCard,
+    edge_detector: Activity
 };
 
 export const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [
@@ -71,7 +72,7 @@ export const getUpdateForInput = (module: FlightComputerModule, key: string, inp
     } else {
         newInputs[key] = input;
     }
-    
+
     // Also update legacy fields for backward compatibility where possible
     const legacyUpdates: any = {};
     if (input && input.type === 'body') {
@@ -79,9 +80,9 @@ export const getUpdateForInput = (module: FlightComputerModule, key: string, inp
         if (key === 'reference') legacyUpdates.referenceBodyId = input.value;
         if (key === 'target') legacyUpdates.targetBodyId = input.value;
     } else if (input === undefined) {
-         if (key === 'primary') legacyUpdates.primaryBodyId = undefined;
-         if (key === 'reference') legacyUpdates.referenceBodyId = undefined;
-         if (key === 'target') legacyUpdates.targetBodyId = undefined;
+        if (key === 'primary') legacyUpdates.primaryBodyId = undefined;
+        if (key === 'reference') legacyUpdates.referenceBodyId = undefined;
+        if (key === 'target') legacyUpdates.targetBodyId = undefined;
     }
 
     return { inputs: newInputs, ...legacyUpdates };
@@ -89,7 +90,7 @@ export const getUpdateForInput = (module: FlightComputerModule, key: string, inp
 
 export const formatTime = (totalSeconds: number): string => {
     if (totalSeconds <= 0) return '---';
-    
+
     const seconds = Math.floor(totalSeconds);
     const years = Math.floor(seconds / (365.25 * 24 * 3600));
     const months = Math.floor((seconds % (365.25 * 24 * 3600)) / (30.44 * 24 * 3600));
@@ -97,7 +98,7 @@ export const formatTime = (totalSeconds: number): string => {
     const hours = Math.floor((seconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     const parts = [];
     if (years > 0) parts.push(`${years}y`);
     if (months > 0) parts.push(months < 10 ? `0${months}mo` : `${months}mo`);
@@ -107,7 +108,7 @@ export const formatTime = (totalSeconds: number): string => {
     else if (parts.length > 0) parts.push('00m');
     if (secs > 0) parts.push(secs < 10 ? `0${secs}s` : `${secs}s`);
     else if (parts.length > 0) parts.push('00s');
-    
+
     return parts.length > 0 ? parts.join(' ') : `${totalSeconds.toFixed(1)}s`;
 };
 
@@ -122,7 +123,7 @@ export const formatRendezvousTime = (seconds: number) => {
     const hours = Math.floor(remainingAfterDays / 3600);
     const minutes = Math.floor((remainingAfterDays % 3600) / 60);
     const secs = Math.floor(remainingAfterDays % 60);
-    
+
     const timeParts = [];
     if (years > 0) timeParts.push(`${years}y`);
     if (months > 0) timeParts.push(`${months}m`);
@@ -130,23 +131,23 @@ export const formatRendezvousTime = (seconds: number) => {
     if (hours > 0) timeParts.push(`${hours}h`);
     if (minutes > 0) timeParts.push(`${minutes}m`);
     if (secs > 0 && timeParts.length === 0) timeParts.push(`${secs}s`);
-    
-    
+
+
     return timeParts.length > 0 ? timeParts.join(' ') : '0s';
 };
 
 export const isModuleActive = (
-    module: FlightComputerModule, 
-    bodies: Body[], 
-    modules: FlightComputerModule[], 
-    physicsConfig: PhysicsConfig, 
+    module: FlightComputerModule,
+    bodies: Body[],
+    modules: FlightComputerModule[],
+    physicsConfig: PhysicsConfig,
     rendezvousSolutionMap: Record<string, RendezvousSolution>
 ): boolean => {
     if (!module.isEnabled) return false;
     const activateInput = module.inputs?.activate;
-    if (!activateInput) return true; 
+    if (!activateInput) return true;
     const activeSignal = resolveBooleanInput(activateInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-    return activeSignal ?? true; 
+    return activeSignal ?? true;
 };
 
 export const interpolateColor = (color1: string, color2: string, factor: number): string => {

@@ -23,6 +23,8 @@ import SliderModule from './modules/SliderModule';
 import MusicControllerModule from './modules/MusicControllerModule';
 import HorizontalBarModule from './modules/HorizontalBarModule';
 
+import EdgeDetectorModule from './modules/EdgeDetectorModule';
+
 interface ModuleContentProps {
     module: FlightComputerModule;
     bodies: Body[];
@@ -60,6 +62,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'slider': return <SliderModule {...props} />;
         case 'music_controller': return <MusicControllerModule {...props} />;
         case 'horizontal_bar': return <HorizontalBarModule {...props} />;
+        case 'edge_detector': return <EdgeDetectorModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

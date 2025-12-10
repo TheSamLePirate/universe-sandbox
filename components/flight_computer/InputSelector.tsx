@@ -241,6 +241,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             if (m.type === 'keyboard') {
                                 options.push(<option key={`${m.id}:state`} value={`${m.id}:state`}>{m.name || 'Keyboard'} - State (Pressed)</option>);
                             }
+                            if (m.type === 'edge_detector') {
+                                options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Edge Detector'} - Triggered</option>);
+                            }
                         }
 
                         // String Outputs

@@ -617,6 +617,50 @@ export const useFlightComputerLogic = (
                     });
                 }
             }
+
+
+            // Edge Detector Logic
+            if (module.type === 'edge_detector' && isModuleActive(module)) {
+                const signalInput = module.inputs?.signal;
+                const signalValue = resolveBooleanInput(signalInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+
+                const lastState = module.edgeLastState ?? false; // Default to false if not set
+                const mode = module.edgeMode || 'rising';
+
+                let triggered = false;
+
+                if (mode === 'rising') {
+                    if (signalValue && !lastState) {
+                        triggered = true;
+                    }
+                } else { // falling
+                    if (!signalValue && lastState) {
+                        triggered = true;
+                    }
+                }
+
+                // If triggered, it stays true for ONLY ONE FRAME (current tick).
+                // However, React state updates are async/batched.
+                // If we set triggered=true, we need it to go back to false next tick.
+                // But `edgeLastState` needs to be updated to `signalValue` persistently.
+
+                // Problem: If we update state, it triggers re-render and re-execution of this hook.
+                // If we set `edgeTriggered: true`, next frame we need `edgeTriggered: false`.
+
+                // State updates:
+                // 1. Update edgeLastState if it changed.
+                // 2. Update edgeTriggered.
+
+                const stateChanged = signalValue !== lastState;
+                const wasTriggered = module.edgeTriggered;
+
+                if (stateChanged || triggered !== wasTriggered) {
+                    onUpdateModule(module.id, {
+                        edgeLastState: signalValue,
+                        edgeTriggered: triggered
+                    });
+                }
+            }
         });
     }, [modules, bodies, physicsConfig, rendezvousSolutionMap, musicPlaybackState, musicVolumeValue, musicPrompts, musicPlay, musicPause, setMusicVolume, updateMusicPrompt, onUpdateModule]);
 
