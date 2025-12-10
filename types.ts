@@ -234,7 +234,33 @@ export interface RocketSpawnConfig {
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';
 
-export type FlightComputerModuleType = 'orbit_info' | 'transfer_window' | 'trajectory_prediction' | 'circularize_guide' | 'rendezvous_tracker' | 'track_distance' | 'track_velocity' | 'notify' | 'logic_gate' | 'beep' | 'thrust_burst' | 'maneuver_executor' | 'button' | 'selector' | 'follow' | 'maths' | 'body_info' | 'body_by' | 'custom_script' | 'marker' | 'keyboard' | 'slider' | 'music_controller' | 'horizontal_bar' | 'edge_detector';
+export type FlightComputerModuleType =
+  | 'orbit_info'
+  | 'transfer_window'
+  | 'trajectory_prediction'
+  | 'circularize_guide'
+  | 'rendezvous_tracker'
+  | 'track_distance'
+  | 'track_velocity'
+  | 'body_info'
+  | 'body_by'
+  | 'notify'
+  | 'logic_gate'
+  | 'beep'
+  | 'thrust_burst'
+  | 'maneuver_executor'
+  | 'button'
+  | 'selector'
+  | 'follow'
+  | 'maths'
+  | 'custom_script'
+  | 'marker'
+  | 'keyboard'
+  | 'slider'
+  | 'music_controller'
+  | 'horizontal_bar'
+  | 'edge_detector'
+  | 'change_detector';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -378,6 +404,10 @@ export interface FlightComputerModule {
   edgeMode?: 'rising' | 'falling';
   edgeLastState?: boolean;
   edgeTriggered?: boolean;
+
+  // Change Detector Module Config
+  changeLastValue?: string | number | boolean;
+  changeTriggered?: boolean;
 
   // Dashboard Configuration
   dashboardConfig?: {

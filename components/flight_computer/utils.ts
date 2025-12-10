@@ -27,7 +27,8 @@ export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> =
     slider: Sliders,
     music_controller: Music,
     horizontal_bar: CreditCard,
-    edge_detector: Activity
+    edge_detector: Activity,
+    change_detector: ArrowRightLeft
 };
 
 export const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [

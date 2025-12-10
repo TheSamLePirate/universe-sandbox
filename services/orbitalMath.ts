@@ -655,6 +655,8 @@ export const resolveBooleanInput = (
             return module.musicPlaying ?? false;
         } else if (module.type === 'edge_detector' && outputKey === 'triggered') {
             return module.edgeTriggered ?? false;
+        } else if (module.type === 'change_detector' && outputKey === 'triggered') {
+            return module.changeTriggered ?? false;
         }
     }
     return null;

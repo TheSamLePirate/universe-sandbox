@@ -24,6 +24,7 @@ import MusicControllerModule from './modules/MusicControllerModule';
 import HorizontalBarModule from './modules/HorizontalBarModule';
 
 import EdgeDetectorModule from './modules/EdgeDetectorModule';
+import ChangeDetectorModule from './modules/ChangeDetectorModule';
 
 interface ModuleContentProps {
     module: FlightComputerModule;
@@ -63,6 +64,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'music_controller': return <MusicControllerModule {...props} />;
         case 'horizontal_bar': return <HorizontalBarModule {...props} />;
         case 'edge_detector': return <EdgeDetectorModule {...props} />;
+        case 'change_detector': return <ChangeDetectorModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

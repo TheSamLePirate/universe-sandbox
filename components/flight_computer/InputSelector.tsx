@@ -244,6 +244,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             if (m.type === 'edge_detector') {
                                 options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Edge Detector'} - Triggered</option>);
                             }
+                            if (m.type === 'change_detector') {
+                                options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Change Detector'} - Triggered</option>);
+                            }
                         }
 
                         // String Outputs

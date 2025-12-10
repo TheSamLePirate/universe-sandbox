@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "exportDate": "2025-12-09T12:36:57.371Z",
+  "exportDate": "2025-12-10T17:05:08.057Z",
   "rootGroup": {
-    "id": "fc_group_1765283802843",
+    "id": "fc_group_1765386264200",
     "name": "ChangeScene",
     "color": "#10b981",
     "isCollapsed": true,
@@ -10,7 +10,7 @@
   },
   "groups": [
     {
-      "id": "fc_group_1765283802843",
+      "id": "fc_group_1765386264200",
       "name": "ChangeScene",
       "color": "#10b981",
       "isCollapsed": true,
@@ -19,7 +19,7 @@
   ],
   "modules": [
     {
-      "id": "fc_mod_1765283639937",
+      "id": "fc_module_1765386256768_0_741623",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "",
@@ -28,30 +28,48 @@
       "inputs": {
         "trigger": {
           "type": "module_output",
-          "value": "fc_module_1765283655378_1:result",
-          "label": "GetValue - result"
+          "value": "fc_mod_1765386268767:triggered",
+          "label": "Module - triggered"
         }
       },
-      "groupId": "fc_group_1765283802843",
+      "groupId": "fc_group_1765386264200",
       "customScriptCode": "game.actions.handlePresetChange(\"figure8\");game.action.reset();"
     },
     {
-      "id": "fc_module_1765283655378_1",
+      "id": "fc_module_1765386256768_1_641133",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "f8_1",
       "referenceBodyId": "f8_1",
       "color": "#f97316",
       "inputs": {},
-      "groupId": "fc_group_1765283802843",
+      "groupId": "fc_group_1765386264200",
       "customScriptCode": "const sleep = (ms) => new Promise((r) => setTimeout(r, ms));\nfunction map01ToPI(v) { return (v * 2 * Math.PI) - Math.PI;}\n\nasync function getSharedValue({\n  baseUrl = \"http://localhost:3009\",\n  valueName = \"value\",\n  sleepTime = \"sleepTime\",\n} = {}) {\n  await sleep(sleepTime)\n  const url = `${baseUrl.replace(/\\/+$/, \"\")}/apiR/${encodeURIComponent(valueName)}`;\n\n  const r = await fetch(url, { method: \"GET\" });\n\n  const data = await r.json().catch(() => ({}));\n  if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);\n\n  return data?.[valueName];\n}\n\nconst baseUrl = \"http://localhost:3009\";\nconst valueName = \"Figure8\";\nconst sleepTime = 200;\nconst got = await getSharedValue({ baseUrl, valueName ,sleepTime});\n\nreturn got===1?true:false;",
       "name": "GetValue",
       "customScriptMode": "async",
       "customScriptContinuousRun": true,
-      "customScriptAsyncState": true,
+      "customScriptAsyncState": false,
       "customScriptLogs": [],
       "customScriptLastResult": false,
       "customScriptOutputType": "boolean"
+    },
+    {
+      "id": "fc_mod_1765386268767",
+      "type": "edge_detector",
+      "isEnabled": true,
+      "primaryBodyId": "",
+      "referenceBodyId": "",
+      "color": "#6366f1",
+      "inputs": {
+        "signal": {
+          "type": "module_output",
+          "value": "fc_module_1765386256768_1_641133:result",
+          "label": "GetValue - result"
+        }
+      },
+      "groupId": "fc_group_1765386264200",
+      "edgeLastState": false,
+      "edgeTriggered": false
     }
   ]
 }

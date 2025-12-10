@@ -2017,7 +2017,7 @@ const App: React.FC = () => {
                 setFlightComputerModules(data.flightComputerModules || []);
                 setModuleGroups(data.moduleGroups || []);
 
-                setTimeout(() => setIsRunning(true), 1000);
+                setTimeout(() => setIsRunning(true), 100);
                 //alert("Simulation loaded successfully!");
             } catch (err) {
                 console.error("Import error", err);

@@ -650,7 +650,6 @@ export const useFlightComputerLogic = (
                 // State updates:
                 // 1. Update edgeLastState if it changed.
                 // 2. Update edgeTriggered.
-
                 const stateChanged = signalValue !== lastState;
                 const wasTriggered = module.edgeTriggered;
 
@@ -658,6 +657,58 @@ export const useFlightComputerLogic = (
                     onUpdateModule(module.id, {
                         edgeLastState: signalValue,
                         edgeTriggered: triggered
+                    });
+                }
+            }
+
+            // Change Detector Logic
+            if (module.type === 'change_detector' && isModuleActive(module)) {
+                const valueInput = module.inputs?.value;
+                let currentValue: string | number | boolean | null = null;
+
+                // Try resolving as scalar
+                const scalarVal = resolveScalarInput(valueInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                if (scalarVal !== null) {
+                    currentValue = scalarVal;
+                } else {
+                    // Try boolean
+                    const boolVal = resolveBooleanInput(valueInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                    if (boolVal !== null) {
+                        currentValue = boolVal;
+                    } else {
+                        // Try string
+                        const stringVal = resolveStringInput(valueInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                        if (stringVal !== null) {
+                            currentValue = stringVal;
+                        }
+                    }
+                }
+
+                // Initial undefined check
+                // If one of them is undefined, we treat it as no change or handle init
+                const lastValue = module.changeLastValue;
+                const wasTriggered = module.changeTriggered;
+
+                // Check if value actually changed
+                // Use rigid equality, but handle the case where we might switch types?
+                // The input might switch from scalar to string if user changes selection.
+                const valueChanged = currentValue !== lastValue && currentValue !== null;
+
+                if (lastValue === undefined && currentValue !== null) {
+                    // Initialize without triggering
+                    onUpdateModule(module.id, {
+                        changeLastValue: currentValue,
+                        changeTriggered: false
+                    });
+                } else if (valueChanged) {
+                    onUpdateModule(module.id, {
+                        changeLastValue: currentValue,
+                        changeTriggered: true
+                    });
+                } else if (wasTriggered) {
+                    // Reset trigger (pulse)
+                    onUpdateModule(module.id, {
+                        changeTriggered: false
                     });
                 }
             }
