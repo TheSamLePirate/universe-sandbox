@@ -33,7 +33,7 @@
         }
       },
       "groupId": "fc_group_1765386264200",
-      "customScriptCode": "game.actions.handlePresetChange(\"figure8\");game.action.reset();"
+      "customScriptCode": "game.actions.handlePresetChange(\"imported_preset_2Ships\");"
     },
     {
       "id": "fc_module_1765386256768_1_641133",

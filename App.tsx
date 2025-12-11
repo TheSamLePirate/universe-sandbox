@@ -1941,6 +1941,7 @@ const App: React.FC = () => {
 
     const handleImportStateFromJsonAsPreset = (saveDate: SimulationSaveData, name: string) => {
         const data: SimulationSaveData = saveDate;
+        console.log('imported_preset_' + name);
         const preset: Preset = {
             id: 'imported_preset_' + name,
             name: name,

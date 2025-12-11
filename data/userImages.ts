@@ -3,9 +3,9 @@ import { SlideImage } from '../types';
 export const PLACEHOLDER_IMAGES: SlideImage[] = [
   {
     id: "nature-1",
-    url: "https://picsum.photos/seed/nature1/1920/1080",
-    title: "Mountain Serenity",
-    description: "A peaceful view of the high peaks during sunrise."
+    url: "https://www.imagesdoc.com/wp-content/uploads/sites/33/2018/10/Einstein-_-Sasse-44.jpg",
+    title: "Albert Einstein",
+    description: "Le seul scientifique officiellement autorisé à tirer la langue sur les photos :p"
   },
   {
     id: "city-2",
