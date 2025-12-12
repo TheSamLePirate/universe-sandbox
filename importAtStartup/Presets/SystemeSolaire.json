@@ -244,5 +244,8 @@
       "x": 15.856425784786197,
       "y": -27.2620422146044
     }
-  }
+  },
+  "followBodyId": null,
+  "followCenterOfMass": true,
+  "speed": 1.0
 }

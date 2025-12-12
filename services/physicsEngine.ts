@@ -41,6 +41,21 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
             const fx = f * dx;
             const fy = f * dy;
 
+            //if A dontAttractButMove
+            //apply force on A but not on B
+
+            if (dontAttractButMove.includes(bodyA.name)) {
+                forces[i].x += fx;
+                forces[i].y += fy;
+                continue;
+            }
+
+            if (dontAttractButMove.includes(bodyB.name)) {
+                forces[j].x -= fx;
+                forces[j].y -= fy;
+                continue;
+            }
+
             // If not part of attractButDontMove, apply force
             if (!attractButDontMove.includes(bodyA.name)) {
                 forces[i].x += fx;

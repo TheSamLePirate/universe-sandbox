@@ -102,7 +102,7 @@ const App: React.FC = () => {
     const { audioState, resumeAudio } = useRocketSound(bodies);
     const [particles, setParticles] = useState<Particle[]>([]);
     const [isRunning, setIsRunning] = useState(true); // Default to false
-    const [speed, setSpeed] = useState(100.0);
+    const [speed, setSpeed] = useState(1.0);
     const [scale, setScale] = useState(defaultPreset.defaultScale);
     const [offset, setOffset] = useState<Vector2D>({ x: 0, y: 0 });
     const [selectedBodyId, setSelectedBodyId] = useState<string | null>(null);
@@ -1886,6 +1886,7 @@ const App: React.FC = () => {
     const handleReset = () => {
         const preset = availablePresets.find(p => p.id === currentPresetId) || availablePresets[0];
         const freshBodies = JSON.parse(JSON.stringify(preset.bodies));
+        console.log(preset);
 
         setIsRunning(false);
         workerJobIdRef.current++; // Invalidate pending physics jobs
@@ -1893,10 +1894,10 @@ const App: React.FC = () => {
         particlesRef.current = [];
         setBodies(freshBodies);
         setParticles([]);
-        setOffset({ x: 0, y: 0 });
-        setScale(preset.defaultScale);
-        setFollowingBodyId(null);
-        setFollowingCoM(true);
+        setScale(preset.camera?.scale || 1.0);
+        setOffset(preset.camera?.offset || { x: 0, y: 0 });
+        setFollowingBodyId(preset.followBodyId || null);
+        setFollowingCoM(preset.followCenterOfMass || false);
         lastRefinedCoMRef.current = null;
         setObserverBodyIds({ a: null, b: null });
         setPredictionPaths([]);
@@ -1926,7 +1927,9 @@ const App: React.FC = () => {
                 offset: offset
             },
             flightComputerModules: flightComputerModules,
-            moduleGroups: moduleGroups
+            moduleGroups: moduleGroups,
+            followBodyId: followingBodyId,
+            followCenterOfMass: followingCoM
         };
 
         try {
@@ -1955,7 +1958,11 @@ const App: React.FC = () => {
             defaultScale: data.camera?.scale || 1.0,
             description: 'Imported preset from JSON',
             flightComputerModules: data.flightComputerModules || [],
-            moduleGroups: data.moduleGroups || []
+            moduleGroups: data.moduleGroups || [],
+            camera: data.camera || { scale: 1.0, offset: { x: 0, y: 0 } },
+            followBodyId: data.followBodyId || null,
+            followCenterOfMass: data.followCenterOfMass || false,
+            speed: data.speed || 1.0
         };
         availablePresets.push(preset);
         //setCurrentPresetId(preset.id);
@@ -1996,8 +2003,14 @@ const App: React.FC = () => {
                     defaultScale: data.camera?.scale || 1.0,
                     description: `Imported state from ${new Date(data.timestamp).toLocaleString()}`,
                     flightComputerModules: data.flightComputerModules || [],
-                    moduleGroups: data.moduleGroups || []
+                    moduleGroups: data.moduleGroups || [],
+                    camera: data.camera || { scale: 1.0, offset: { x: 0, y: 0 } },
+                    followBodyId: data.followBodyId || null,
+                    followCenterOfMass: data.followCenterOfMass || false,
+                    speed: data.speed || 1.0
                 };
+
+
 
                 setImportedPreset(newPreset);
                 setImportedPresets([...importedPresets, newPreset]);
@@ -2009,13 +2022,13 @@ const App: React.FC = () => {
                 setPhysicsConfig(data.physicsConfig);
 
                 setScale(data.camera?.scale || 1.0);
-                setOffset({ x: 0, y: 0 });
+                setOffset(data.camera?.offset || { x: 0, y: 0 });
 
                 setParticles([]);
                 particlesRef.current = [];
                 setSelectedBodyId(null);
-                setFollowingBodyId(null);
-                setFollowingCoM(true);
+                setFollowingBodyId(data.followBodyId || null);
+                setFollowingCoM(data.followCenterOfMass || true);
                 lastRefinedCoMRef.current = null;
                 setObserverBodyIds({ a: null, b: null });
                 setPredictionPaths([]);
@@ -2047,11 +2060,11 @@ const App: React.FC = () => {
             setParticles([]);
             bodiesRef.current = freshBodies;
             particlesRef.current = [];
-            setScale(preset.defaultScale);
-            setOffset({ x: 0, y: 0 });
+            setScale(preset.camera?.scale || 1.0);
+            setOffset(preset.camera?.offset || { x: 0, y: 0 });
             setSelectedBodyId(null);
-            setFollowingBodyId(null);
-            setFollowingCoM(true);
+            setFollowingBodyId(preset.followBodyId || null);
+            setFollowingCoM(preset.followCenterOfMass || false);
             lastRefinedCoMRef.current = null;
             setObserverBodyIds({ a: null, b: null });
             setPredictionPaths([]);
@@ -2060,6 +2073,7 @@ const App: React.FC = () => {
             const mergedModuleGroups = preset.moduleGroups && preset.moduleGroups.length > 0 ? preset.moduleGroups.concat(moduleGroups) : moduleGroups;
             setFlightComputerModules(mergedModules);
             setModuleGroups(mergedModuleGroups);
+            setSpeed(preset.speed || 1.0);
             simulationTimeRef.current = 0; // Reset clock for preset
             if (id !== 'imported_save') {
                 setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.008, timeReverseDuration: 4.0 });

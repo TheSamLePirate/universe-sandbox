@@ -150,6 +150,9 @@ export interface SimulationSaveData {
   };
   flightComputerModules?: FlightComputerModule[];
   moduleGroups?: ModuleGroup[];
+  followBodyId?: string;
+  followCenterOfMass?: boolean;
+  speed?: number;
 }
 
 export interface SimulationState {
@@ -175,6 +178,13 @@ export interface Preset {
   description: string;
   flightComputerModules?: FlightComputerModule[];
   moduleGroups?: ModuleGroup[];
+  camera?: {
+    scale: number;
+    offset: Vector2D;
+  };
+  followBodyId?: string;
+  followCenterOfMass?: boolean;
+  speed?: number;
 }
 
 export interface SystemEvent {

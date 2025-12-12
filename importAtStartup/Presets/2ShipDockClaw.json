@@ -462,6 +462,9 @@
       "y": -661.2155062249855
     }
   },
+  "followBodyId": "rocket_17644009932498",
+  "followCenterOfMass": false,
+  "speed": 1.0,
   "flightComputerModules": [
     {
       "id": "fc_module_1765057685542_0",

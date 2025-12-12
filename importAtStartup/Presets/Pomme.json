@@ -81,5 +81,8 @@
     }
   },
   "flightComputerModules": [],
-  "moduleGroups": []
+  "moduleGroups": [],
+  "followBodyId": "manual_1765461787038",
+  "followCenterOfMass": false,
+  "speed": 1.0
 }
