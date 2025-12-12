@@ -260,7 +260,8 @@ export type FlightComputerModuleType =
   | 'music_controller'
   | 'horizontal_bar'
   | 'edge_detector'
-  | 'change_detector';
+  | 'change_detector'
+  | 'wait';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -409,6 +410,15 @@ export interface FlightComputerModule {
   changeLastValue?: string | number | boolean;
   changeTriggered?: boolean;
 
+  // Wait Module Config
+  waitStartTime?: number; // Timestamp of when wait started
+  waitDuration?: number; // Configured duration in ms
+  waitActive?: boolean; // Internal state to track if we are currently waiting
+  waitTriggered?: boolean; // Output state (true after wait finished)
+  waitRemainingTime?: number; // ms
+  waitLastStartSignal?: boolean; // Edge detection for start signal
+  waitMode?: 'simulation' | 'realtime';
+
   // Dashboard Configuration
   dashboardConfig?: {
     x: number;
@@ -467,3 +477,15 @@ export interface SlideshowProps {
   className?: string;
 }
 
+
+export interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
+export interface WebcamState {
+  stream: MediaStream | null;
+  error: string | null;
+  isLoading: boolean;
+  permissionDenied: boolean;
+}

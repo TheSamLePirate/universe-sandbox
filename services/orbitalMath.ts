@@ -657,6 +657,8 @@ export const resolveBooleanInput = (
             return module.edgeTriggered ?? false;
         } else if (module.type === 'change_detector' && outputKey === 'triggered') {
             return module.changeTriggered ?? false;
+        } else if (module.type === 'wait' && outputKey === 'triggered') {
+            return module.waitTriggered ?? false;
         }
     }
     return null;

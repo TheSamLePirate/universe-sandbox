@@ -209,6 +209,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             if (m.type === 'slider') {
                                 options.push(<option key={`${m.id}:value`} value={`${m.id}:value`}>{m.name || 'Slider'} - Value</option>);
                             }
+                            if (m.type === 'wait') {
+                                options.push(<option key={`${m.id}:remaining_time`} value={`${m.id}:remaining_time`}>{m.name || 'Wait'} - Remaining Time (ms)</option>);
+                            }
                         }
 
                         // Boolean Outputs
@@ -246,6 +249,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             }
                             if (m.type === 'change_detector') {
                                 options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Change Detector'} - Triggered</option>);
+                            }
+                            if (m.type === 'wait') {
+                                options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Wait'} - Triggered</option>);
                             }
                         }
 

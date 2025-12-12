@@ -54,6 +54,7 @@ interface FlightComputerPanelProps {
     nextImage?: () => void;
     prevImage?: () => void;
     handleJumpToImage?: (imageId: string) => void;
+    setShowCameraViewer?: (show: boolean) => void;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -81,6 +82,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'edge_detector', label: 'Edge Detector', category: 'Logic' },
     { value: 'change_detector', label: 'Change Detector', category: 'Logic' },
     { value: 'custom_script', label: 'Custom Script', category: 'Advanced' },
+    { value: 'wait', label: 'Wait / Timer', category: 'Logic' },
 ];
 
 const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
@@ -127,7 +129,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     setShowImageSlideShow,
     nextImage,
     prevImage,
-    handleJumpToImage
+    handleJumpToImage,
+    setShowCameraViewer
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -174,7 +177,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         setShowImageSlideShow,
         nextImage,
         prevImage,
-        handleJumpToImage
+        handleJumpToImage,
+        setShowCameraViewer
     );
 
     // Helper to get display value for collapsed group

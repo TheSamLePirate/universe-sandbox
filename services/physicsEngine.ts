@@ -5,62 +5,65 @@ export type { PhysicsResult };
 import { calculateTransferInfo } from './orbitalMath';
 
 // Reduced softening for better accuracy at close range (allows tighter slingshots)
-const SOFTENING = 0.15; 
+const SOFTENING = 0.15;
 // Velocity threshold for a safe landing (relative velocity magnitude)
 const LANDING_MAX_VELOCITY = 3;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
-const FUEL_CONSUMPTION_RATE = 500; 
+const FUEL_CONSUMPTION_RATE = 500;
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
 const nameExcludedFromGravity = ['FakeSun', 'FakeStar', 'FakePlanet'];
-const attractButDontMove = ['FakeTerre'];
+const attractButDontMove = ['FakeTerre', 'FakeTerre'];
+const dontAttractButMove = ['Pomme'];
 
 export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
-  const forces: Vector2D[] = bodies.map(() => ({ x: 0, y: 0 }));
+    const forces: Vector2D[] = bodies.map(() => ({ x: 0, y: 0 }));
 
-  for (let i = 0; i < bodies.length; i++) {
-    for (let j = i + 1; j < bodies.length; j++) {
+    for (let i = 0; i < bodies.length; i++) {
+        for (let j = i + 1; j < bodies.length; j++) {
 
-      if (nameExcludedFromGravity.includes(bodies[i].name) || nameExcludedFromGravity.includes(bodies[j].name)) continue;
+            if (nameExcludedFromGravity.includes(bodies[i].name) || nameExcludedFromGravity.includes(bodies[j].name)) continue;
 
-      
-      const bodyA = bodies[i];
-      const bodyB = bodies[j];
 
-      const dx = bodyB.position.x - bodyA.position.x;
-      const dy = bodyB.position.y - bodyA.position.y;
-      const distSq = dx * dx + dy * dy;
-      const dist = Math.sqrt(distSq);
+            const bodyA = bodies[i];
+            const bodyB = bodies[j];
 
-      // Newton's Law of Universal Gravitation
-      const f = (gConst * bodyA.mass * bodyB.mass) / (distSq * dist + SOFTENING);
+            const dx = bodyB.position.x - bodyA.position.x;
+            const dy = bodyB.position.y - bodyA.position.y;
+            const distSq = dx * dx + dy * dy;
+            const dist = Math.sqrt(distSq);
 
-      const fx = f * dx;
-      const fy = f * dy;
-      
-      // If not part of attractButDontMove, apply force
-      if (!attractButDontMove.includes(bodyA.name)) {
-        forces[i].x += fx;
-        forces[i].y += fy;
-      }
+            // Newton's Law of Universal Gravitation
+            const f = (gConst * bodyA.mass * bodyB.mass) / (distSq * dist + SOFTENING);
 
-      // If not part of attractButDontMove, apply force
-      if (!attractButDontMove.includes(bodyB.name)) {
-        forces[j].x -= fx;
-        forces[j].y -= fy;
-      }
+            const fx = f * dx;
+            const fy = f * dy;
+
+            // If not part of attractButDontMove, apply force
+            if (!attractButDontMove.includes(bodyA.name)) {
+                forces[i].x += fx;
+                forces[i].y += fy;
+            }
+
+            // If not part of attractButDontMove, apply force
+            if (!attractButDontMove.includes(bodyB.name)) {
+                forces[j].x -= fx;
+                forces[j].y -= fy;
+            }
+
+
+        }
     }
-  }
 
-  return forces;
+    return forces;
 };
 
-const createExplosion = (x: number, y: number, color: string, intensity: number,dt: number): Particle[] => {
+const createExplosion = (x: number, y: number, color: string, intensity: number, dt: number): Particle[] => {
     const particles: Particle[] = [];
     const count = Math.min(300, Math.floor(intensity * 100)); // Increased multiplier from 10 to 100, cap at 5000
-    
+
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * 10 + 5;
@@ -70,8 +73,8 @@ const createExplosion = (x: number, y: number, color: string, intensity: number,
             y: y,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: 200* dt,
-            decay: (0.01 + Math.random() * 0.01)*dt,
+            life: 200 * dt,
+            decay: (0.01 + Math.random() * 0.01) * dt,
             color: color,
             size: Math.random() * 2 + 1
         });
@@ -81,8 +84,8 @@ const createExplosion = (x: number, y: number, color: string, intensity: number,
 
 // --- ORBITAL MANEUVER MATH ---
 const normalize = (v: Vector2D) => {
-    const m = Math.sqrt(v.x*v.x + v.y*v.y);
-    return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m};
+    const m = Math.sqrt(v.x * v.x + v.y * v.y);
+    return m === 0 ? { x: 0, y: 0 } : { x: v.x / m, y: v.y / m };
 };
 
 export const calculateOrbitalManeuver = (
@@ -99,7 +102,7 @@ export const calculateOrbitalManeuver = (
     // Relative Position/Velocity
     const relPos = { x: rocket.position.x - target.position.x, y: rocket.position.y - target.position.y };
     const relVel = { x: rocket.velocity.x - target.velocity.x, y: rocket.velocity.y - target.velocity.y };
-    const r = Math.sqrt(relPos.x*relPos.x + relPos.y*relPos.y);
+    const r = Math.sqrt(relPos.x * relPos.x + relPos.y * relPos.y);
 
     if (type === 'auto_circularize') {
         const mu = gConst * target.mass;
@@ -110,17 +113,17 @@ export const calculateOrbitalManeuver = (
         // Choose tangent closest to current velocity direction
         const dot1 = t1.x * relVel.x + t1.y * relVel.y;
         const desiredDir = dot1 > 0 ? t1 : t2;
-        
+
         const desiredVel = { x: desiredDir.x * v_circ_mag, y: desiredDir.y * v_circ_mag };
         const deltaVVec = { x: desiredVel.x - relVel.x, y: desiredVel.y - relVel.y };
-        
+
         return {
-            deltaV: Math.sqrt(deltaVVec.x*deltaVVec.x + deltaVVec.y*deltaVVec.y),
+            deltaV: Math.sqrt(deltaVVec.x * deltaVVec.x + deltaVVec.y * deltaVVec.y),
             angle: Math.atan2(deltaVVec.y, deltaVVec.x)
         };
     } else if (type === 'auto_land') {
         // Kill Relative Velocity
-        const dvMag = Math.sqrt(relVel.x*relVel.x + relVel.y*relVel.y);
+        const dvMag = Math.sqrt(relVel.x * relVel.x + relVel.y * relVel.y);
         const dvAngle = Math.atan2(-relVel.y, -relVel.x);
         return { deltaV: dvMag, angle: dvAngle };
     } else if (type === 'auto_transfer') {
@@ -137,15 +140,15 @@ export const calculateOrbitalManeuver = (
                 if (other.id === rocket.id || other.isRocket || other.id === target.id) return;
                 const dx = other.position.x - rocket.position.x;
                 const dy = other.position.y - rocket.position.y;
-                const distSq = dx*dx + dy*dy;
-                const gForce = other.mass / distSq; 
+                const distSq = dx * dx + dy * dy;
+                const gForce = other.mass / distSq;
                 if (gForce > strongestG) {
                     strongestG = gForce;
                     parent = other;
                 }
             });
         }
-        
+
         if (!parent) return null;
 
         const mu = gConst * parent.mass;
@@ -153,24 +156,24 @@ export const calculateOrbitalManeuver = (
         // 1. Calculate Rocket State relative to Parent
         const rPos = { x: rocket.position.x - parent.position.x, y: rocket.position.y - parent.position.y };
         const rVel = { x: rocket.velocity.x - parent.velocity.x, y: rocket.velocity.y - parent.velocity.y };
-        const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
-        const v1 = Math.sqrt(rVel.x*rVel.x + rVel.y*rVel.y);
+        const r1 = Math.sqrt(rPos.x * rPos.x + rPos.y * rPos.y);
+        const v1 = Math.sqrt(rVel.x * rVel.x + rVel.y * rVel.y);
 
         // 2. Calculate Target State relative to Parent
         const tPos = { x: target.position.x - parent.position.x, y: target.position.y - parent.position.y };
         const tVel = { x: target.velocity.x - parent.velocity.x, y: target.velocity.y - parent.velocity.y };
-        const rTargetCurr = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
-        const vTargetCurr = Math.sqrt(tVel.x*tVel.x + tVel.y*tVel.y);
+        const rTargetCurr = Math.sqrt(tPos.x * tPos.x + tPos.y * tPos.y);
+        const vTargetCurr = Math.sqrt(tVel.x * tVel.x + tVel.y * tVel.y);
 
         // 3. Determine r2 (Destination Radius)
         // Use Semi-Major Axis of target to handle eccentricity better
-        const targetEnergy = (vTargetCurr*vTargetCurr)/2 - mu/rTargetCurr;
+        const targetEnergy = (vTargetCurr * vTargetCurr) / 2 - mu / rTargetCurr;
         if (targetEnergy >= 0) return null; // Hyperbolic/Parabolic target orbit not supported
-        const r2 = -mu / (2 * targetEnergy); 
+        const r2 = -mu / (2 * targetEnergy);
 
         // 4. Hohmann Transfer Calculation
         const transferEnergy = -mu / (r1 + r2);
-        const vNeeded = Math.sqrt(2 * (transferEnergy + mu/r1));
+        const vNeeded = Math.sqrt(2 * (transferEnergy + mu / r1));
         const deltaVMag = vNeeded - v1;
 
         // 5. Direction (Prograde or Retrograde)
@@ -183,31 +186,31 @@ export const calculateOrbitalManeuver = (
         };
     } else if (type === 'auto_intercept') {
         const timeOfFlight = Number(param) || 30;
-        
-        const steps = 50; 
+
+        const steps = 50;
         const dt = timeOfFlight / steps;
-        
+
         const predResult = predictSystemTrajectories(bodies, steps, dt, gConst, [target.id]);
         const targetPath = predResult.find(p => p.id === target.id);
-        
+
         if (!targetPath || targetPath.points.length === 0) return null;
         const finalPos = targetPath.points[targetPath.points.length - 1];
 
         let parent = null;
         if (parentId) parent = bodies.find(b => b.id === parentId);
         if (!parent) {
-             let strongestG = 0;
-             bodies.forEach(other => {
-                 if (other.id === rocket.id || other.isRocket || other.id === target.id) return;
-                 const dx = other.position.x - rocket.position.x;
-                 const dy = other.position.y - rocket.position.y;
-                 const distSq = dx*dx + dy*dy;
-                 const gForce = other.mass / distSq; 
-                 if (gForce > strongestG) {
-                     strongestG = gForce;
-                     parent = other;
-                 }
-             });
+            let strongestG = 0;
+            bodies.forEach(other => {
+                if (other.id === rocket.id || other.isRocket || other.id === target.id) return;
+                const dx = other.position.x - rocket.position.x;
+                const dy = other.position.y - rocket.position.y;
+                const distSq = dx * dx + dy * dy;
+                const gForce = other.mass / distSq;
+                if (gForce > strongestG) {
+                    strongestG = gForce;
+                    parent = other;
+                }
+            });
         }
         if (!parent) return null;
         const mu = gConst * parent.mass;
@@ -220,9 +223,9 @@ export const calculateOrbitalManeuver = (
         if (lambert) {
             const vCurrentRel = { x: rocket.velocity.x - parent.velocity.x, y: rocket.velocity.y - parent.velocity.y };
             const dv = { x: lambert.v1.x - vCurrentRel.x, y: lambert.v1.y - vCurrentRel.y };
-            
+
             return {
-                deltaV: Math.sqrt(dv.x*dv.x + dv.y*dv.y),
+                deltaV: Math.sqrt(dv.x * dv.x + dv.y * dv.y),
                 angle: Math.atan2(dv.y, dv.x)
             };
         }
@@ -232,124 +235,124 @@ export const calculateOrbitalManeuver = (
 };
 
 export const updatePhysics = (
-    bodies: Body[], 
-    totalDt: number, 
-    gConst: number, 
+    bodies: Body[],
+    totalDt: number,
+    gConst: number,
     trailLength: number,
     enableCollisions: boolean
 ): PhysicsResult => {
-  
-  // Adaptive Sub-stepping
-  const TARGET_DT = 0.008;
-  const numSteps = Math.ceil(Math.abs(totalDt) / TARGET_DT);
-  const steps = Math.min(numSteps, 100); 
-  const dt = totalDt / steps;
 
-  let currentBodies = bodies;
-  let allNewParticles: Particle[] = [];
-  let systemEvents: SystemEvent[] = [];
+    // Adaptive Sub-stepping
+    const TARGET_DT = 0.008;
+    const numSteps = Math.ceil(Math.abs(totalDt) / TARGET_DT);
+    const steps = Math.min(numSteps, 100);
+    const dt = totalDt / steps;
 
-  for (let s = 0; s < steps; s++) {
-      // 1. Calculate Forces (Gravity)
-      const forces = calculateForces(currentBodies, gConst);
+    let currentBodies = bodies;
+    let allNewParticles: Particle[] = [];
+    let systemEvents: SystemEvent[] = [];
 
-      // 2. Flight Computer & Thrust
-      currentBodies = currentBodies.map((body, idx) => {
-          let updatedBody = { ...body };
+    for (let s = 0; s < steps; s++) {
+        // 1. Calculate Forces (Gravity)
+        const forces = calculateForces(currentBodies, gConst);
 
-          // --- ROCKET LOGIC ---
-          if (updatedBody.isRocket) {
-              
-              // A. Identify Parent Body (for SAS / Navigation)
-              let parent: Body | null = null;
-              
-              // 1. Prefer explicit user selection
-              if (updatedBody.orbitReferenceId) {
-                  parent = currentBodies.find(b => b.id === updatedBody.orbitReferenceId) || null;
-              }
-              
-              // 2. Fallback to strongest gravity
-              if (!parent) {
-                  let strongestG = 0;
-                  currentBodies.forEach(other => {
-                      if (other.id === updatedBody.id || other.isRocket) return;
-                      const dx = other.position.x - updatedBody.position.x;
-                      const dy = other.position.y - updatedBody.position.y;
-                      const distSq = dx*dx + dy*dy;
-                      const gForce = other.mass / distSq; 
-                      if (gForce > strongestG) {
-                          strongestG = gForce;
-                          parent = other;
-                      }
-                  });
-              }
+        // 2. Flight Computer & Thrust
+        currentBodies = currentBodies.map((body, idx) => {
+            let updatedBody = { ...body };
 
-              // B. SAS Autopilot
-              if (updatedBody.sasMode && updatedBody.sasMode !== 'off' && parent) {
-                  const relVx = updatedBody.velocity.x - parent.velocity.x;
-                  const relVy = updatedBody.velocity.y - parent.velocity.y;
-                  const relX = updatedBody.position.x - parent.position.x;
-                  const relY = updatedBody.position.y - parent.position.y;
-                  
-                  let targetAngle = updatedBody.angle || 0;
+            // --- ROCKET LOGIC ---
+            if (updatedBody.isRocket) {
 
-                  if (updatedBody.sasMode === 'prograde') {
-                      targetAngle = Math.atan2(relVy, relVx);
-                  } else if (updatedBody.sasMode === 'retrograde') {
-                      targetAngle = Math.atan2(relVy, relVx) + Math.PI;
-                  } else if (updatedBody.sasMode === 'radial_out') {
-                      targetAngle = Math.atan2(relY, relX);
-                  } else if (updatedBody.sasMode === 'radial_in') {
-                      targetAngle = Math.atan2(relY, relX) + Math.PI;
-                  }
-                  updatedBody.angle = targetAngle;
-              }
+                // A. Identify Parent Body (for SAS / Navigation)
+                let parent: Body | null = null;
 
-              // C. Process Maneuvers
-              if (updatedBody.maneuvers && updatedBody.maneuvers.length > 0) {
-                  // Find first 'active' maneuver. 
-                  const activeIdx = updatedBody.maneuvers.findIndex(m => m.status === 'active');
-                  
-                  if (activeIdx !== -1) {
-                      let m = { ...updatedBody.maneuvers[activeIdx] };
-                      
-                      // Handle Instant Starts
-                      if (m.type === 'rotate') {
-                          updatedBody.angle = (updatedBody.angle || 0) + ((m.param as number) * Math.PI / 180);
-                          m.status = 'completed';
-                          m.progress = 1;
-                      } 
-                      else if (m.type === 'sas') {
-                          updatedBody.sasMode = m.param as any;
-                          // Store reference body for SAS if provided
-                          if (m.parentBodyId) {
-                              updatedBody.orbitReferenceId = m.parentBodyId;
-                          }
-                          m.status = 'completed';
-                          m.progress = 1;
-                      }
-                      else if (m.type === 'change_simulation_speed') {
-                          systemEvents.push({
-                              type: 'set_speed',
-                              value: Number(m.param) || 1.0
-                          });
-                          m.status = 'completed';
-                          m.progress = 1;
-                      }
-                      else if (m.type.startsWith('auto_')) {
-                          const target = currentBodies.find(b => b.id === m.targetBodyId);
-                          // Use explicitly recorded parent or fallback to current parent
-                          const refParentId = m.parentBodyId || (parent ? parent.id : undefined);
-                          
-                          if (target) {
+                // 1. Prefer explicit user selection
+                if (updatedBody.orbitReferenceId) {
+                    parent = currentBodies.find(b => b.id === updatedBody.orbitReferenceId) || null;
+                }
+
+                // 2. Fallback to strongest gravity
+                if (!parent) {
+                    let strongestG = 0;
+                    currentBodies.forEach(other => {
+                        if (other.id === updatedBody.id || other.isRocket) return;
+                        const dx = other.position.x - updatedBody.position.x;
+                        const dy = other.position.y - updatedBody.position.y;
+                        const distSq = dx * dx + dy * dy;
+                        const gForce = other.mass / distSq;
+                        if (gForce > strongestG) {
+                            strongestG = gForce;
+                            parent = other;
+                        }
+                    });
+                }
+
+                // B. SAS Autopilot
+                if (updatedBody.sasMode && updatedBody.sasMode !== 'off' && parent) {
+                    const relVx = updatedBody.velocity.x - parent.velocity.x;
+                    const relVy = updatedBody.velocity.y - parent.velocity.y;
+                    const relX = updatedBody.position.x - parent.position.x;
+                    const relY = updatedBody.position.y - parent.position.y;
+
+                    let targetAngle = updatedBody.angle || 0;
+
+                    if (updatedBody.sasMode === 'prograde') {
+                        targetAngle = Math.atan2(relVy, relVx);
+                    } else if (updatedBody.sasMode === 'retrograde') {
+                        targetAngle = Math.atan2(relVy, relVx) + Math.PI;
+                    } else if (updatedBody.sasMode === 'radial_out') {
+                        targetAngle = Math.atan2(relY, relX);
+                    } else if (updatedBody.sasMode === 'radial_in') {
+                        targetAngle = Math.atan2(relY, relX) + Math.PI;
+                    }
+                    updatedBody.angle = targetAngle;
+                }
+
+                // C. Process Maneuvers
+                if (updatedBody.maneuvers && updatedBody.maneuvers.length > 0) {
+                    // Find first 'active' maneuver. 
+                    const activeIdx = updatedBody.maneuvers.findIndex(m => m.status === 'active');
+
+                    if (activeIdx !== -1) {
+                        let m = { ...updatedBody.maneuvers[activeIdx] };
+
+                        // Handle Instant Starts
+                        if (m.type === 'rotate') {
+                            updatedBody.angle = (updatedBody.angle || 0) + ((m.param as number) * Math.PI / 180);
+                            m.status = 'completed';
+                            m.progress = 1;
+                        }
+                        else if (m.type === 'sas') {
+                            updatedBody.sasMode = m.param as any;
+                            // Store reference body for SAS if provided
+                            if (m.parentBodyId) {
+                                updatedBody.orbitReferenceId = m.parentBodyId;
+                            }
+                            m.status = 'completed';
+                            m.progress = 1;
+                        }
+                        else if (m.type === 'change_simulation_speed') {
+                            systemEvents.push({
+                                type: 'set_speed',
+                                value: Number(m.param) || 1.0
+                            });
+                            m.status = 'completed';
+                            m.progress = 1;
+                        }
+                        else if (m.type.startsWith('auto_')) {
+                            const target = currentBodies.find(b => b.id === m.targetBodyId);
+                            // Use explicitly recorded parent or fallback to current parent
+                            const refParentId = m.parentBodyId || (parent ? parent.id : undefined);
+
+                            if (target) {
                                 // CONTINUOUS CONTROL FOR CIRCULARIZE (Closed Loop)
                                 if (m.type === 'auto_circularize') {
                                     const res = calculateOrbitalManeuver(updatedBody, target, 'auto_circularize', gConst, currentBodies, refParentId);
-                                    
+
                                     // Use a tight tolerance for "perfect" circularization
-                                    if (res && res.deltaV > 0.05) { 
+                                    if (res && res.deltaV > 0.05) {
                                         let thrustMag = MAX_ROCKET_THRUST;
-                                        
+
                                         // Proportional control for final approach to prevent overshoot/oscillation
                                         // If deltaV is small, scale down thrust
                                         if (res.deltaV < 0.5) {
@@ -360,7 +363,7 @@ export const updatePhysics = (
                                             x: Math.cos(res.angle) * thrustMag,
                                             y: Math.sin(res.angle) * thrustMag
                                         };
-                                        
+
                                         // Store initial DeltaV for progress bar
                                         if (!(m as any).initialDeltaV) {
                                             (m as any).initialDeltaV = res.deltaV;
@@ -375,7 +378,7 @@ export const updatePhysics = (
                                         m.progress = 1;
                                         updatedBody.thrust = { x: 0, y: 0 };
                                     }
-                                } 
+                                }
                                 // ONE-SHOT BURN CALCULATION FOR OTHERS (Transfer, Land)
                                 else {
                                     if (m.type === 'auto_land') {
@@ -388,16 +391,16 @@ export const updatePhysics = (
                                         // PRECISE BURN CALCULATION
                                         // Use a fixed thrust that is high enough to be precise but low enough to be stable
                                         // Or use max thrust.
-                                        let thrust = MAX_ROCKET_THRUST; 
-                                        
+                                        let thrust = MAX_ROCKET_THRUST;
+
                                         // Calculate burn duration
                                         // Since fuel is weightless, Mass is CONSTANT.
                                         // F = ma => a = F/m
                                         // dv = a * t => t = dv / a = dv / (F/m) = (dv * m) / F
-                                        
+
                                         const mass = updatedBody.mass;
                                         const duration = (mass * res.deltaV) / thrust;
-                                        
+
                                         // Store the absolute burn angle (not relative to heading)
                                         m.type = 'burn';
                                         m.thrust = thrust;
@@ -412,650 +415,650 @@ export const updatePhysics = (
                                         m.status = 'completed';
                                     }
                                 }
-                          } else {
-                              m.status = 'completed';
-                          }
-                      }
-                      // Handle wait_for_transfer
-                      else if (m.type === 'wait_for_transfer') {
+                            } else {
+                                m.status = 'completed';
+                            }
+                        }
+                        // Handle wait_for_transfer
+                        else if (m.type === 'wait_for_transfer') {
 
-                        //This is the correct way to calculate the transfer and set to completed
-                          const target = currentBodies.find(b => b.id === m.targetBodyId);
-                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
-                          
-                          if (!refParent && target) {
-                              // Auto-detect parent (most massive body)
-                              refParent = currentBodies.filter(b => !b.isRocket && b.id !== target.id).sort((a,b) => b.mass - a.mass)[0];
-                          }
-                          
-                          if (target && refParent) {
-                              // Calculate current phase angle
-                              //The correct One for transfer window
+                            //This is the correct way to calculate the transfer and set to completed
+                            const target = currentBodies.find(b => b.id === m.targetBodyId);
+                            let refParent = currentBodies.find(b => b.id === m.parentBodyId);
 
-                              const rPos = { x: updatedBody.position.x - refParent.position.x, y: updatedBody.position.y - refParent.position.y };
-                              const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
-                              
-                              const angle1 = Math.atan2(rPos.y, rPos.x);
-                              const angle2 = Math.atan2(tPos.y, tPos.x);
-                              
-                              let currentPhase = angle2 - angle1;
-                              while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
-                              while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
-                              
-                              // Calculate required phase angle for Hohmann transfer
-                              const r1 = Math.sqrt(rPos.x*rPos.x + rPos.y*rPos.y);
-                              const r2 = Math.sqrt(tPos.x*tPos.x + tPos.y*tPos.y);
-                              const mu = gConst * refParent.mass;
-                              
-                              // Calculate angular momentum to determine direction (prograde vs retrograde)
-                              const tVel = { x: target.velocity.x - refParent.velocity.x, y: target.velocity.y - refParent.velocity.y };
-                              const h = tPos.x * tVel.y - tPos.y * tVel.x;
-                              const direction = h >= 0 ? 1 : -1;
+                            if (!refParent && target) {
+                                // Auto-detect parent (most massive body)
+                                refParent = currentBodies.filter(b => !b.isRocket && b.id !== target.id).sort((a, b) => b.mass - a.mass)[0];
+                            }
 
-                              const a_transfer = (r1 + r2) / 2;
-                              const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
-                              
-                              // Use signed omega to account for retrograde motion (e.g. time reverse)
-                              const omega_target = direction * Math.sqrt(mu / Math.pow(r2, 3));
-                              const angle_change = omega_target * t_transfer;
-                              
-                              // PI - angle_change works for both prograde and retrograde 
-                              // because PI and -PI are congruent modulo 2PI
-                              let requiredPhase = Math.PI - angle_change;
-                              while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
-                              while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
+                            if (target && refParent) {
+                                // Calculate current phase angle
+                                //The correct One for transfer window
 
+                                const rPos = { x: updatedBody.position.x - refParent.position.x, y: updatedBody.position.y - refParent.position.y };
+                                const tPos = { x: target.position.x - refParent.position.x, y: target.position.y - refParent.position.y };
 
-                              
-                              // Check if within error margin
-                              // Use a very tight margin for precision
-                              const errorMargin = 0.5 * Math.PI / 180; // 0.5 degrees
-                              let diff = Math.abs(currentPhase - requiredPhase);
-                              if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                                const angle1 = Math.atan2(rPos.y, rPos.x);
+                                const angle2 = Math.atan2(tPos.y, tPos.x);
 
-                              //every 2 sec console log diff
-                              
-                              //console.log(diff);
+                                let currentPhase = angle2 - angle1;
+                                while (currentPhase > Math.PI) currentPhase -= 2 * Math.PI;
+                                while (currentPhase < -Math.PI) currentPhase += 2 * Math.PI;
 
-                              //m.progress = Math.max(0, Math.min(1, 1 - (diff / errorMargin)));
-                            const transferInfo=calculateTransferInfo(updatedBody, refParent,target,gConst);
-                            diff=Math.abs(transferInfo.errorAngle);
-                            const error=Math.abs(transferInfo.error);
+                                // Calculate required phase angle for Hohmann transfer
+                                const r1 = Math.sqrt(rPos.x * rPos.x + rPos.y * rPos.y);
+                                const r2 = Math.sqrt(tPos.x * tPos.x + tPos.y * tPos.y);
+                                const mu = gConst * refParent.mass;
+
+                                // Calculate angular momentum to determine direction (prograde vs retrograde)
+                                const tVel = { x: target.velocity.x - refParent.velocity.x, y: target.velocity.y - refParent.velocity.y };
+                                const h = tPos.x * tVel.y - tPos.y * tVel.x;
+                                const direction = h >= 0 ? 1 : -1;
+
+                                const a_transfer = (r1 + r2) / 2;
+                                const t_transfer = Math.PI * Math.sqrt(Math.pow(a_transfer, 3) / mu);
+
+                                // Use signed omega to account for retrograde motion (e.g. time reverse)
+                                const omega_target = direction * Math.sqrt(mu / Math.pow(r2, 3));
+                                const angle_change = omega_target * t_transfer;
+
+                                // PI - angle_change works for both prograde and retrograde 
+                                // because PI and -PI are congruent modulo 2PI
+                                let requiredPhase = Math.PI - angle_change;
+                                while (requiredPhase > Math.PI) requiredPhase -= 2 * Math.PI;
+                                while (requiredPhase < -Math.PI) requiredPhase += 2 * Math.PI;
 
 
-                            //map error that is between 0 and 180 from 1 to 0 (0 -> 1, 180 -> 0)
-                            const progress = 1 - diff / Math.PI;
-                            m.progress = Math.max(0, Math.min(0.99, progress));
-                              
+
+                                // Check if within error margin
+                                // Use a very tight margin for precision
+                                const errorMargin = 0.5 * Math.PI / 180; // 0.5 degrees
+                                let diff = Math.abs(currentPhase - requiredPhase);
+                                if (diff > Math.PI) diff = 2 * Math.PI - diff;
+
+                                //every 2 sec console log diff
+
+                                //console.log(diff);
+
+                                //m.progress = Math.max(0, Math.min(1, 1 - (diff / errorMargin)));
+                                const transferInfo = calculateTransferInfo(updatedBody, refParent, target, gConst);
+                                diff = Math.abs(transferInfo.errorAngle);
+                                const error = Math.abs(transferInfo.error);
 
 
-                              
-                              
-                              if (diff < errorMargin) {
-                                  m.status = 'completed';
-                                  m.progress = 1;
-                              }
-                          } else {
-                              m.status = 'completed';
-                          }
-                      }
-                      // Handle wait_for_altitude
-                      else if (m.type === 'wait_for_altitude') {
-                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
-                          
-                          if (!refParent) {
-                              // Auto-detect parent (most massive body)
-                              refParent = currentBodies.filter(b => !b.isRocket).sort((a,b) => b.mass - a.mass)[0];
-                          }
-                          
-                          if (refParent) {
-                              const dx = updatedBody.position.x - refParent.position.x;
-                              const dy = updatedBody.position.y - refParent.position.y;
-                              const distance = Math.sqrt(dx*dx + dy*dy);
-                              const altitude = distance - refParent.radius; // Altitude above surface
-                              
-                              // Parse param: "altitude:direction" or just altitude for backward compatibility
-                              let targetAltitude = 100;
-                              let direction: 'ascending' | 'descending' = 'ascending';
-                              
-                              if (typeof m.param === 'string' && m.param.includes(':')) {
-                                  const parts = m.param.split(':');
-                                  targetAltitude = Number(parts[0]) || 100;
-                                  direction = parts[1] as 'ascending' | 'descending';
-                              } else {
-                                  targetAltitude = Number(m.param) || 100;
-                              }
-                              
-                              // Store previous altitude to detect direction of change
-                              if (m.progress === 0 && !m.startTime) {
-                                  m.startTime = Date.now();
-                                  (m as any).previousAltitude = altitude;
-                              }
-                              
-                              // Capture initial altitude for progress bar (idempotent)
-                              if (m.initialAltitude === undefined) {
-                                  m.initialAltitude = altitude;
-                              }
-                              
-                              const previousAltitude = (m as any).previousAltitude || altitude;
-                              const isAscending = altitude > previousAltitude;
-                              const isDescending = altitude < previousAltitude;
-                              
-                              // Calculate Progress
-                              if (m.initialAltitude !== undefined) {
-                                  const totalChange = Math.abs(targetAltitude - m.initialAltitude);
-                                  const currentChange = Math.abs(altitude - m.initialAltitude);
+                                //map error that is between 0 and 180 from 1 to 0 (0 -> 1, 180 -> 0)
+                                const progress = 1 - diff / Math.PI;
+                                m.progress = Math.max(0, Math.min(0.99, progress));
 
-                                  const percentageOfTravel = 1-Math.abs((targetAltitude-altitude)/m.initialAltitude);
-                                  if (totalChange > 0.001) {
-                                      m.progress = Math.min(1, Math.max(0, percentageOfTravel));
-                                  }
-                              }
 
-                              // Check if we've reached the target altitude in the correct direction
-                              if (direction === 'ascending') {
-                                  // Wait for altitude to be rising and reach target
-                                  if (altitude >= targetAltitude && (isAscending || previousAltitude < targetAltitude)) {
-                                      m.status = 'completed';
-                                      m.progress = 1;
-                                  }
-                              } else {
-                                  // Wait for altitude to be falling and reach target
-                                  if (altitude <= targetAltitude && (isDescending || previousAltitude > targetAltitude)) {
-                                      m.status = 'completed';
-                                      m.progress = 1;
-                                  }
-                              }
-                              
-                              // Update previous altitude for next frame
-                              (m as any).previousAltitude = altitude;
-                          } else {
-                              m.status = 'completed';
-                          }
-                      }
-                      // Handle manual_node
-                      else if (m.type === 'manual_node') {
-                          if (m.timeFromNow !== undefined) {
-                              m.timeFromNow -= dt;
-                              
-                              if (m.timeFromNow <= 0) {
-                                  // Convert to BURN
-                                  const dvP = m.deltaVPrograde || 0;
-                                  const dvR = m.deltaVRadial || 0;
-                                  const totalDV = Math.sqrt(dvP*dvP + dvR*dvR);
-                                  const angleFromPrograde = Math.atan2(dvR, dvP);
-                                  
-                                  m.type = 'burn';
-                                  m.thrust = MAX_ROCKET_THRUST;
-                                  m.duration = (updatedBody.mass * totalDV) / MAX_ROCKET_THRUST;
-                                  m.angleOffset = angleFromPrograde;
-                                  m.progress = 0;
-                                  
-                                  // Force SAS to Prograde so angleOffset works correctly
-                                  // (angleOffset is added to Heading, and SAS Prograde keeps Heading = Velocity Angle)
-                                  updatedBody.sasMode = 'prograde';
-                                  
-                                  // If we have a parent, use it for SAS reference
-                                  if (m.parentBodyId) {
-                                      updatedBody.orbitReferenceId = m.parentBodyId;
-                                  }
-                              }
-                          } else {
-                              // If no time set, execute immediately
-                              m.timeFromNow = 0;
-                          }
-                      }
-                      // Handle burn_until_altitude
-                      else if (m.type === 'burn_until_altitude') {
-                          let refParent = currentBodies.find(b => b.id === m.parentBodyId);
-                          
-                          if (!refParent) {
-                              // Auto-detect parent (most massive body)
-                              refParent = currentBodies.filter(b => !b.isRocket).sort((a,b) => b.mass - a.mass)[0];
-                          }
-                          
-                          if (refParent) {
-                              const dx = updatedBody.position.x - refParent.position.x;
-                              const dy = updatedBody.position.y - refParent.position.y;
-                              const distance = Math.sqrt(dx*dx + dy*dy);
-                              const altitude = distance - refParent.radius;
-                              const targetAltitude = Number(m.param) || 100;
-                              
-                              if (altitude >= targetAltitude) {
-                                  // Target reached, complete maneuver
-                                  m.status = 'completed';
-                                  m.progress = 1;
-                                  updatedBody.thrust = { x: 0, y: 0 };
-                              } else {
-                                  // Continue burning in specified direction
-                                  const heading = updatedBody.angle || 0;
-                                  const thrustAngle = heading + (m.angleOffset || 0);
-                                  const thrust = m.thrust || 0.005;
-                                  
-                                  updatedBody.thrust = {
-                                      x: Math.cos(thrustAngle) * thrust,
-                                      y: Math.sin(thrustAngle) * thrust
-                                  };
-                                  
-                                  // Capture initial altitude if not set
-                                  if (m.initialAltitude === undefined) {
-                                      m.initialAltitude = altitude;
-                                  }
-                                  
-                                  // Calculate progress based on distance covered towards target
-                                  if (m.initialAltitude !== undefined) {
-                                      const totalDist = Math.abs(targetAltitude - m.initialAltitude);
-                                      const currentDist = Math.abs(altitude - m.initialAltitude);
-                                      if (totalDist > 0.001) {
-                                          m.progress = Math.min(1, Math.max(0, currentDist / totalDist));
-                                      } else {
-                                          m.progress = 0;
-                                      }
-                                  } else {
-                                      m.progress = 0;
-                                  }
-                              }
-                          } else {
-                              m.status = 'completed';
-                          }
-                      }
 
-                      // Handle Time-Based (Burn/Wait)
-                      if (m.status === 'active' && (m.type === 'burn' || m.type === 'wait')) {
-                          if (m.type === 'burn') {
-                              // Check if this burn uses accurate deltaV tracking
-                              const useAccurateDV = m.targetDeltaV !== undefined && m.targetDeltaV > 0;
-                              
-                              // Store initial velocity if not already stored (first frame of burn)
-                              if (useAccurateDV && !(m as any).initialVelocity) {
-                                  (m as any).initialVelocity = { 
-                                      x: updatedBody.velocity.x, 
-                                      y: updatedBody.velocity.y 
-                                  };
-                              }
-                              
-                              // Check if this is an absolute angle (from auto-maneuvers) or relative offset
-                              let thrustAngle;
-                              if (m.param === 'absolute') {
-                                  // Use the angle directly (it's already absolute)
-                                  thrustAngle = m.angleOffset;
-                              } else {
-                                  // Traditional burn: angle is relative to rocket's heading/orientation
-                                  const heading = updatedBody.angle || 0;
-                                  thrustAngle = heading + m.angleOffset;
-                              }
-                              
-                              // Check if we've achieved target deltaV (for accurate burns)
-                              if (useAccurateDV && (m as any).initialVelocity) {
-                                  const dvX = updatedBody.velocity.x - (m as any).initialVelocity.x;
-                                  const dvY = updatedBody.velocity.y - (m as any).initialVelocity.y;
-                                  const currentDV = Math.sqrt(dvX * dvX + dvY * dvY);
-                                  m.appliedDeltaV = currentDV;
-                                  
-                                  // Complete if we've reached or exceeded target deltaV
-                                  if (currentDV >= m.targetDeltaV) {
-                                      m.progress = 1;
-                                      m.status = 'completed';
-                                      updatedBody.thrust = { x: 0, y: 0 };
-                                  } else {
-                                      // Continue burning - update progress based on deltaV
-                                      m.progress = currentDV / m.targetDeltaV;
-                                  }
-                              }
-                              
-                              // Only apply thrust if not completed
-                              if (m.status === 'active') {
-                                  // TIME-STEP INDEPENDENT BURN LOGIC
-                                  // Check how much time is remaining in the burn
-                                  const remainingTime = m.duration * (1 - m.progress);
-                                  
-                                  // If remaining time is less than dt, we only burn for remainingTime
-                                  const burnDt = Math.min(dt, remainingTime);
-                                  
-                                  if (burnDt > 0) {
-                                      // Apply thrust for this partial step
-                                      // We apply the force scaled by the fraction of the step we are burning
-                                      // F_effective = F_actual * (burnDt / dt)
-                                      const scale = burnDt / dt;
-                                      
-                                      updatedBody.thrust = {
-                                          x: Math.cos(thrustAngle) * m.thrust * scale,
-                                          y: Math.sin(thrustAngle) * m.thrust * scale
-                                      };
-                                  } else {
-                                      updatedBody.thrust = { x: 0, y: 0 };
-                                  }
 
-                                  // For non-accurate burns, use time-based completion
-                                  if (!useAccurateDV) {
-                                      if (m.duration > 0) {
-                                          const progressInc = dt / m.duration;
-                                          m.progress += progressInc;
-                                          if (m.progress >= 1) {
-                                              m.progress = 1;
-                                              m.status = 'completed';
-                                              updatedBody.thrust = { x: 0, y: 0 };
-                                          }
-                                      } else {
-                                          m.status = 'completed';
-                                      }
-                                  }
-                              }
-                          } else {
-                              // Wait maneuver
-                              updatedBody.thrust = { x: 0, y: 0 };
-                              if (m.duration > 0) {
-                                  const progressInc = dt / m.duration;
-                                  m.progress += progressInc;
-                                  if (m.progress >= 1) {
-                                      m.progress = 1;
-                                      m.status = 'completed';
-                                  }
-                              } else {
-                                  m.status = 'completed';
-                              }
-                          }
-                      }
 
-                      // Save updated maneuver
-                      const newManeuvers = [...updatedBody.maneuvers];
-                      newManeuvers[activeIdx] = m;
-                      updatedBody.maneuvers = newManeuvers;
-                  }
-              }
-          }
+                                if (diff < errorMargin) {
+                                    m.status = 'completed';
+                                    m.progress = 1;
+                                }
+                            } else {
+                                m.status = 'completed';
+                            }
+                        }
+                        // Handle wait_for_altitude
+                        else if (m.type === 'wait_for_altitude') {
+                            let refParent = currentBodies.find(b => b.id === m.parentBodyId);
 
-          if (updatedBody.thrust && (Math.abs(updatedBody.thrust.x) > 0 || Math.abs(updatedBody.thrust.y) > 0)) {
-              // Check Fuel
-              if (updatedBody.isRocket && updatedBody.fuel !== undefined && updatedBody.fuel <= 0) {
-                  // Out of fuel
-                  updatedBody.thrust = { x: 0, y: 0 };
-                  updatedBody.fuel = 0;
-              } else {
-                  // Apply Thrust Force
-                  forces[idx].x += updatedBody.thrust.x;
-                  forces[idx].y += updatedBody.thrust.y;
+                            if (!refParent) {
+                                // Auto-detect parent (most massive body)
+                                refParent = currentBodies.filter(b => !b.isRocket).sort((a, b) => b.mass - a.mass)[0];
+                            }
 
-                  // Consume Fuel
-                  if (updatedBody.isRocket && updatedBody.fuel !== undefined) {
-                      const thrustMag = Math.sqrt(updatedBody.thrust.x**2 + updatedBody.thrust.y**2);
-                      const consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt;
-                      updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
-                      
-                      // WEIGHTLESS FUEL: Do NOT update mass.
-                      // Mass remains constant (Dry Mass + Fuel Mass is fixed, or just Dry Mass).
-                      // This ensures constant acceleration for precise maneuvers.
-                  }
-              }
-          }
-          return updatedBody;
-      });
+                            if (refParent) {
+                                const dx = updatedBody.position.x - refParent.position.x;
+                                const dy = updatedBody.position.y - refParent.position.y;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                const altitude = distance - refParent.radius; // Altitude above surface
 
-      // 3. Move Bodies
-      const movedBodies = currentBodies.map((body, index) => {
-        // --- LANDED ROCKET LOGIC ---
-        if (body.landedOnBodyId) {
-            // Check if we are applying thrust to takeoff
-            const isThrusting = body.thrust && (Math.abs(body.thrust.x) > 0.0001 || Math.abs(body.thrust.y) > 0.0001);
-            
-            if (isThrusting) {
-                body.landedOnBodyId = undefined;
-                return {
-                    ...body,
-                    landedOnBodyId: undefined,
-                    landingAngle: undefined, // Clear landing angle so it can be recalculated on next landing
-                    dockingRelativePosition: undefined, // Clear docking relative position
-                    dockingRelativeAngle: undefined // Clear docking relative angle
-                };
+                                // Parse param: "altitude:direction" or just altitude for backward compatibility
+                                let targetAltitude = 100;
+                                let direction: 'ascending' | 'descending' = 'ascending';
+
+                                if (typeof m.param === 'string' && m.param.includes(':')) {
+                                    const parts = m.param.split(':');
+                                    targetAltitude = Number(parts[0]) || 100;
+                                    direction = parts[1] as 'ascending' | 'descending';
+                                } else {
+                                    targetAltitude = Number(m.param) || 100;
+                                }
+
+                                // Store previous altitude to detect direction of change
+                                if (m.progress === 0 && !m.startTime) {
+                                    m.startTime = Date.now();
+                                    (m as any).previousAltitude = altitude;
+                                }
+
+                                // Capture initial altitude for progress bar (idempotent)
+                                if (m.initialAltitude === undefined) {
+                                    m.initialAltitude = altitude;
+                                }
+
+                                const previousAltitude = (m as any).previousAltitude || altitude;
+                                const isAscending = altitude > previousAltitude;
+                                const isDescending = altitude < previousAltitude;
+
+                                // Calculate Progress
+                                if (m.initialAltitude !== undefined) {
+                                    const totalChange = Math.abs(targetAltitude - m.initialAltitude);
+                                    const currentChange = Math.abs(altitude - m.initialAltitude);
+
+                                    const percentageOfTravel = 1 - Math.abs((targetAltitude - altitude) / m.initialAltitude);
+                                    if (totalChange > 0.001) {
+                                        m.progress = Math.min(1, Math.max(0, percentageOfTravel));
+                                    }
+                                }
+
+                                // Check if we've reached the target altitude in the correct direction
+                                if (direction === 'ascending') {
+                                    // Wait for altitude to be rising and reach target
+                                    if (altitude >= targetAltitude && (isAscending || previousAltitude < targetAltitude)) {
+                                        m.status = 'completed';
+                                        m.progress = 1;
+                                    }
+                                } else {
+                                    // Wait for altitude to be falling and reach target
+                                    if (altitude <= targetAltitude && (isDescending || previousAltitude > targetAltitude)) {
+                                        m.status = 'completed';
+                                        m.progress = 1;
+                                    }
+                                }
+
+                                // Update previous altitude for next frame
+                                (m as any).previousAltitude = altitude;
+                            } else {
+                                m.status = 'completed';
+                            }
+                        }
+                        // Handle manual_node
+                        else if (m.type === 'manual_node') {
+                            if (m.timeFromNow !== undefined) {
+                                m.timeFromNow -= dt;
+
+                                if (m.timeFromNow <= 0) {
+                                    // Convert to BURN
+                                    const dvP = m.deltaVPrograde || 0;
+                                    const dvR = m.deltaVRadial || 0;
+                                    const totalDV = Math.sqrt(dvP * dvP + dvR * dvR);
+                                    const angleFromPrograde = Math.atan2(dvR, dvP);
+
+                                    m.type = 'burn';
+                                    m.thrust = MAX_ROCKET_THRUST;
+                                    m.duration = (updatedBody.mass * totalDV) / MAX_ROCKET_THRUST;
+                                    m.angleOffset = angleFromPrograde;
+                                    m.progress = 0;
+
+                                    // Force SAS to Prograde so angleOffset works correctly
+                                    // (angleOffset is added to Heading, and SAS Prograde keeps Heading = Velocity Angle)
+                                    updatedBody.sasMode = 'prograde';
+
+                                    // If we have a parent, use it for SAS reference
+                                    if (m.parentBodyId) {
+                                        updatedBody.orbitReferenceId = m.parentBodyId;
+                                    }
+                                }
+                            } else {
+                                // If no time set, execute immediately
+                                m.timeFromNow = 0;
+                            }
+                        }
+                        // Handle burn_until_altitude
+                        else if (m.type === 'burn_until_altitude') {
+                            let refParent = currentBodies.find(b => b.id === m.parentBodyId);
+
+                            if (!refParent) {
+                                // Auto-detect parent (most massive body)
+                                refParent = currentBodies.filter(b => !b.isRocket).sort((a, b) => b.mass - a.mass)[0];
+                            }
+
+                            if (refParent) {
+                                const dx = updatedBody.position.x - refParent.position.x;
+                                const dy = updatedBody.position.y - refParent.position.y;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                const altitude = distance - refParent.radius;
+                                const targetAltitude = Number(m.param) || 100;
+
+                                if (altitude >= targetAltitude) {
+                                    // Target reached, complete maneuver
+                                    m.status = 'completed';
+                                    m.progress = 1;
+                                    updatedBody.thrust = { x: 0, y: 0 };
+                                } else {
+                                    // Continue burning in specified direction
+                                    const heading = updatedBody.angle || 0;
+                                    const thrustAngle = heading + (m.angleOffset || 0);
+                                    const thrust = m.thrust || 0.005;
+
+                                    updatedBody.thrust = {
+                                        x: Math.cos(thrustAngle) * thrust,
+                                        y: Math.sin(thrustAngle) * thrust
+                                    };
+
+                                    // Capture initial altitude if not set
+                                    if (m.initialAltitude === undefined) {
+                                        m.initialAltitude = altitude;
+                                    }
+
+                                    // Calculate progress based on distance covered towards target
+                                    if (m.initialAltitude !== undefined) {
+                                        const totalDist = Math.abs(targetAltitude - m.initialAltitude);
+                                        const currentDist = Math.abs(altitude - m.initialAltitude);
+                                        if (totalDist > 0.001) {
+                                            m.progress = Math.min(1, Math.max(0, currentDist / totalDist));
+                                        } else {
+                                            m.progress = 0;
+                                        }
+                                    } else {
+                                        m.progress = 0;
+                                    }
+                                }
+                            } else {
+                                m.status = 'completed';
+                            }
+                        }
+
+                        // Handle Time-Based (Burn/Wait)
+                        if (m.status === 'active' && (m.type === 'burn' || m.type === 'wait')) {
+                            if (m.type === 'burn') {
+                                // Check if this burn uses accurate deltaV tracking
+                                const useAccurateDV = m.targetDeltaV !== undefined && m.targetDeltaV > 0;
+
+                                // Store initial velocity if not already stored (first frame of burn)
+                                if (useAccurateDV && !(m as any).initialVelocity) {
+                                    (m as any).initialVelocity = {
+                                        x: updatedBody.velocity.x,
+                                        y: updatedBody.velocity.y
+                                    };
+                                }
+
+                                // Check if this is an absolute angle (from auto-maneuvers) or relative offset
+                                let thrustAngle;
+                                if (m.param === 'absolute') {
+                                    // Use the angle directly (it's already absolute)
+                                    thrustAngle = m.angleOffset;
+                                } else {
+                                    // Traditional burn: angle is relative to rocket's heading/orientation
+                                    const heading = updatedBody.angle || 0;
+                                    thrustAngle = heading + m.angleOffset;
+                                }
+
+                                // Check if we've achieved target deltaV (for accurate burns)
+                                if (useAccurateDV && (m as any).initialVelocity) {
+                                    const dvX = updatedBody.velocity.x - (m as any).initialVelocity.x;
+                                    const dvY = updatedBody.velocity.y - (m as any).initialVelocity.y;
+                                    const currentDV = Math.sqrt(dvX * dvX + dvY * dvY);
+                                    m.appliedDeltaV = currentDV;
+
+                                    // Complete if we've reached or exceeded target deltaV
+                                    if (currentDV >= m.targetDeltaV) {
+                                        m.progress = 1;
+                                        m.status = 'completed';
+                                        updatedBody.thrust = { x: 0, y: 0 };
+                                    } else {
+                                        // Continue burning - update progress based on deltaV
+                                        m.progress = currentDV / m.targetDeltaV;
+                                    }
+                                }
+
+                                // Only apply thrust if not completed
+                                if (m.status === 'active') {
+                                    // TIME-STEP INDEPENDENT BURN LOGIC
+                                    // Check how much time is remaining in the burn
+                                    const remainingTime = m.duration * (1 - m.progress);
+
+                                    // If remaining time is less than dt, we only burn for remainingTime
+                                    const burnDt = Math.min(dt, remainingTime);
+
+                                    if (burnDt > 0) {
+                                        // Apply thrust for this partial step
+                                        // We apply the force scaled by the fraction of the step we are burning
+                                        // F_effective = F_actual * (burnDt / dt)
+                                        const scale = burnDt / dt;
+
+                                        updatedBody.thrust = {
+                                            x: Math.cos(thrustAngle) * m.thrust * scale,
+                                            y: Math.sin(thrustAngle) * m.thrust * scale
+                                        };
+                                    } else {
+                                        updatedBody.thrust = { x: 0, y: 0 };
+                                    }
+
+                                    // For non-accurate burns, use time-based completion
+                                    if (!useAccurateDV) {
+                                        if (m.duration > 0) {
+                                            const progressInc = dt / m.duration;
+                                            m.progress += progressInc;
+                                            if (m.progress >= 1) {
+                                                m.progress = 1;
+                                                m.status = 'completed';
+                                                updatedBody.thrust = { x: 0, y: 0 };
+                                            }
+                                        } else {
+                                            m.status = 'completed';
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Wait maneuver
+                                updatedBody.thrust = { x: 0, y: 0 };
+                                if (m.duration > 0) {
+                                    const progressInc = dt / m.duration;
+                                    m.progress += progressInc;
+                                    if (m.progress >= 1) {
+                                        m.progress = 1;
+                                        m.status = 'completed';
+                                    }
+                                } else {
+                                    m.status = 'completed';
+                                }
+                            }
+                        }
+
+                        // Save updated maneuver
+                        const newManeuvers = [...updatedBody.maneuvers];
+                        newManeuvers[activeIdx] = m;
+                        updatedBody.maneuvers = newManeuvers;
+                    }
+                }
             }
 
-            //if landedOnRocket, this is docking. I should stay at this position relatively to the rocket landedOnBodyId (even if the rocket landedOnBodyId moves and rotate)
-            if(body.landedOnBodyId.includes("rocket_")) {
-                 const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
-                 if (parent) {
-                     // 1. Initialize relative position/angle if not set
-                     let relPos = body.dockingRelativePosition;
-                     let relAngle = body.dockingRelativeAngle;
+            if (updatedBody.thrust && (Math.abs(updatedBody.thrust.x) > 0 || Math.abs(updatedBody.thrust.y) > 0)) {
+                // Check Fuel
+                if (updatedBody.isRocket && updatedBody.fuel !== undefined && updatedBody.fuel <= 0) {
+                    // Out of fuel
+                    updatedBody.thrust = { x: 0, y: 0 };
+                    updatedBody.fuel = 0;
+                } else {
+                    // Apply Thrust Force
+                    forces[idx].x += updatedBody.thrust.x;
+                    forces[idx].y += updatedBody.thrust.y;
 
-                     if (!relPos || relAngle === undefined) {
-                         // Calculate current relative position in parent's local space
-                         const dx = body.position.x - parent.position.x;
-                         const dy = body.position.y - parent.position.y;
-                         
-                         // Rotate by negative parent angle to get local space coordinates
-                         const parentAngle = parent.angle || 0;
-                         const cos = Math.cos(-parentAngle);
-                         const sin = Math.sin(-parentAngle);
-                         
-                         relPos = {
-                             x: dx * cos - dy * sin,
-                             y: dx * sin + dy * cos
-                         };
-                         
-                         relAngle = (body.angle || 0) - parentAngle;
-                         
-                         // We return immediately with stored values to ensure stability from next frame
-                         return {
-                             ...body,
-                             dockingRelativePosition: relPos,
-                             dockingRelativeAngle: relAngle
-                         };
-                     }
+                    // Consume Fuel
+                    if (updatedBody.isRocket && updatedBody.fuel !== undefined) {
+                        const thrustMag = Math.sqrt(updatedBody.thrust.x ** 2 + updatedBody.thrust.y ** 2);
+                        const consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt;
+                        updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
 
-                     // 2. Update Position & Angle based on Parent
-                     const parentAngle = parent.angle || 0;
-                     const cos = Math.cos(parentAngle);
-                     const sin = Math.sin(parentAngle);
+                        // WEIGHTLESS FUEL: Do NOT update mass.
+                        // Mass remains constant (Dry Mass + Fuel Mass is fixed, or just Dry Mass).
+                        // This ensures constant acceleration for precise maneuvers.
+                    }
+                }
+            }
+            return updatedBody;
+        });
 
-                     // Rotate local position by parent angle to get world space offset
-                     const worldOffsetX = relPos.x * cos - relPos.y * sin;
-                     const worldOffsetY = relPos.x * sin + relPos.y * cos;
+        // 3. Move Bodies
+        const movedBodies = currentBodies.map((body, index) => {
+            // --- LANDED ROCKET LOGIC ---
+            if (body.landedOnBodyId) {
+                // Check if we are applying thrust to takeoff
+                const isThrusting = body.thrust && (Math.abs(body.thrust.x) > 0.0001 || Math.abs(body.thrust.y) > 0.0001);
 
-                     const newX = parent.position.x + worldOffsetX;
-                     const newY = parent.position.y + worldOffsetY;
-                     const newAngle = parentAngle + relAngle;
+                if (isThrusting) {
+                    body.landedOnBodyId = undefined;
+                    return {
+                        ...body,
+                        landedOnBodyId: undefined,
+                        landingAngle: undefined, // Clear landing angle so it can be recalculated on next landing
+                        dockingRelativePosition: undefined, // Clear docking relative position
+                        dockingRelativeAngle: undefined // Clear docking relative angle
+                    };
+                }
 
-                     return {
-                         ...body,
-                         position: { x: newX, y: newY },
-                         angle: newAngle,
-                         velocity: { ...parent.velocity }, // Match velocity exactly
-                         trail: [] // Optional: clear trail or let it generate
-                     };
+                //if landedOnRocket, this is docking. I should stay at this position relatively to the rocket landedOnBodyId (even if the rocket landedOnBodyId moves and rotate)
+                if (body.landedOnBodyId.includes("rocket_")) {
+                    const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
+                    if (parent) {
+                        // 1. Initialize relative position/angle if not set
+                        let relPos = body.dockingRelativePosition;
+                        let relAngle = body.dockingRelativeAngle;
 
-                 } else {
-                    // Parent not found, undock
+                        if (!relPos || relAngle === undefined) {
+                            // Calculate current relative position in parent's local space
+                            const dx = body.position.x - parent.position.x;
+                            const dy = body.position.y - parent.position.y;
+
+                            // Rotate by negative parent angle to get local space coordinates
+                            const parentAngle = parent.angle || 0;
+                            const cos = Math.cos(-parentAngle);
+                            const sin = Math.sin(-parentAngle);
+
+                            relPos = {
+                                x: dx * cos - dy * sin,
+                                y: dx * sin + dy * cos
+                            };
+
+                            relAngle = (body.angle || 0) - parentAngle;
+
+                            // We return immediately with stored values to ensure stability from next frame
+                            return {
+                                ...body,
+                                dockingRelativePosition: relPos,
+                                dockingRelativeAngle: relAngle
+                            };
+                        }
+
+                        // 2. Update Position & Angle based on Parent
+                        const parentAngle = parent.angle || 0;
+                        const cos = Math.cos(parentAngle);
+                        const sin = Math.sin(parentAngle);
+
+                        // Rotate local position by parent angle to get world space offset
+                        const worldOffsetX = relPos.x * cos - relPos.y * sin;
+                        const worldOffsetY = relPos.x * sin + relPos.y * cos;
+
+                        const newX = parent.position.x + worldOffsetX;
+                        const newY = parent.position.y + worldOffsetY;
+                        const newAngle = parentAngle + relAngle;
+
+                        return {
+                            ...body,
+                            position: { x: newX, y: newY },
+                            angle: newAngle,
+                            velocity: { ...parent.velocity }, // Match velocity exactly
+                            trail: [] // Optional: clear trail or let it generate
+                        };
+
+                    } else {
+                        // Parent not found, undock
+                        return { ...body, landedOnBodyId: undefined };
+                    }
+                }
+
+                // Find parent to stick to
+                const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
+                if (parent) {
+                    // Store the landing angle to maintain fixed position on surface
+                    // If not stored yet, calculate and store it
+                    if (body.landingAngle === undefined) {
+                        const dx = body.position.x - parent.position.x;
+                        const dy = body.position.y - parent.position.y;
+                        body.landingAngle = Math.atan2(dy, dx);
+                    }
+
+                    const surfaceDist = parent.radius + body.radius;
+                    const newX = parent.position.x + Math.cos(body.landingAngle) * surfaceDist;
+                    const newY = parent.position.y + Math.sin(body.landingAngle) * surfaceDist;
+
+                    return {
+                        ...body,
+                        position: { x: newX, y: newY },
+                        velocity: { ...parent.velocity },
+                        trail: []
+                    };
+                } else {
                     return { ...body, landedOnBodyId: undefined };
-                 }
-            }
-
-            // Find parent to stick to
-            const parent = currentBodies.find(b => b.id === body.landedOnBodyId);
-            if (parent) {
-                // Store the landing angle to maintain fixed position on surface
-                // If not stored yet, calculate and store it
-                if (body.landingAngle === undefined) {
-                    const dx = body.position.x - parent.position.x;
-                    const dy = body.position.y - parent.position.y;
-                    body.landingAngle = Math.atan2(dy, dx);
-                }
-                
-                const surfaceDist = parent.radius + body.radius;
-                const newX = parent.position.x + Math.cos(body.landingAngle) * surfaceDist;
-                const newY = parent.position.y + Math.sin(body.landingAngle) * surfaceDist;
-                
-                return {
-                    ...body,
-                    position: { x: newX, y: newY },
-                    velocity: { ...parent.velocity },
-                    trail: [] 
-                };
-            } else {
-                return { ...body, landedOnBodyId: undefined };
-            }
-        }
-
-        // --- STANDARD PHYSICS ---
-        const ax = forces[index].x / body.mass;
-        const ay = forces[index].y / body.mass;
-
-        const newVx = body.velocity.x + ax * dt;
-        const newVy = body.velocity.y + ay * dt;
-
-        const newX = body.position.x + newVx * dt;
-        const newY = body.position.y + newVy * dt;
-
-        let newTrail = body.trail;
-        if (s === steps - 1) {
-            // Only add trail points 50% of the time to reduce memory
-            if (Math.random() > 0.5) { 
-                newTrail = [...body.trail, { x: newX, y: newY }];
-                // Aggressive trail limiting - max 50 points per body
-                const limit = trailLength || 150;;
-                if (newTrail.length > limit) {
-                    newTrail = newTrail.slice(-limit);
                 }
             }
+
+            // --- STANDARD PHYSICS ---
+            const ax = forces[index].x / body.mass;
+            const ay = forces[index].y / body.mass;
+
+            const newVx = body.velocity.x + ax * dt;
+            const newVy = body.velocity.y + ay * dt;
+
+            const newX = body.position.x + newVx * dt;
+            const newY = body.position.y + newVy * dt;
+
+            let newTrail = body.trail;
+            if (s === steps - 1) {
+                // Only add trail points 50% of the time to reduce memory
+                if (Math.random() > 0.5) {
+                    newTrail = [...body.trail, { x: newX, y: newY }];
+                    // Aggressive trail limiting - max 50 points per body
+                    const limit = trailLength || 150;;
+                    if (newTrail.length > limit) {
+                        newTrail = newTrail.slice(-limit);
+                    }
+                }
+            }
+
+            return {
+                ...body,
+                velocity: { x: newVx, y: newVy },
+                position: { x: newX, y: newY },
+                trail: newTrail,
+            };
+        });
+
+        // 4. Resolve Collisions
+        if (!enableCollisions) {
+            currentBodies = movedBodies;
+        } else {
+            const survivedBodies: Body[] = [];
+            const mergedIndices = new Set<number>();
+
+            for (let i = 0; i < movedBodies.length; i++) {
+                if (mergedIndices.has(i)) continue;
+
+                let currentBody = { ...movedBodies[i] };
+
+                for (let j = i + 1; j < movedBodies.length; j++) {
+                    if (mergedIndices.has(j)) continue;
+
+                    const otherBody = movedBodies[j];
+                    const dx = currentBody.position.x - otherBody.position.x;
+                    const dy = currentBody.position.y - otherBody.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = (currentBody.radius + otherBody.radius);
+
+                    if (dist < minDist) {
+                        // COLLISION
+                        const isRocketA = !!currentBody.isRocket;
+                        const isRocketB = !!otherBody.isRocket;
+                        const isApple = currentBody.name.includes("Pomme") || otherBody.name.includes("Pomme");
+
+
+                        if (isRocketA !== isRocketB || isApple) {
+                            const rocket = isRocketA ? currentBody : otherBody;
+                            const planet = isRocketA ? otherBody : currentBody;
+
+                            // FIX: Check if taking off (thrusting away from planet)
+                            // If so, ignore collision to prevent snapping back to surface or exploding
+                            if (rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001)) {
+                                const dx = rocket.position.x - planet.position.x;
+                                const dy = rocket.position.y - planet.position.y;
+                                // Dot product > 0 means thrusting in same direction as radial vector (away)
+                                const dot = rocket.thrust.x * dx + rocket.thrust.y * dy;
+                                if (dot > 0) {
+                                    continue;
+                                }
+                            }
+
+                            const dvx = rocket.velocity.x - planet.velocity.x;
+                            const dvy = rocket.velocity.y - planet.velocity.y;
+                            const relVel = Math.sqrt(dvx * dvx + dvy * dvy);
+
+                            const maxVel = isApple ? 100 : LANDING_MAX_VELOCITY;
+
+                            if (relVel < maxVel) {
+                                if (isRocketA) {
+                                    currentBody.landedOnBodyId = planet.id;
+                                    currentBody.velocity = { ...planet.velocity };
+                                    const landAngle = Math.atan2(currentBody.position.y - otherBody.position.y, currentBody.position.x - otherBody.position.x);
+                                    currentBody.position = {
+                                        x: otherBody.position.x + Math.cos(landAngle) * (otherBody.radius + currentBody.radius),
+                                        y: otherBody.position.y + Math.sin(landAngle) * (otherBody.radius + currentBody.radius)
+                                    };
+                                    continue;
+                                } else {
+                                    movedBodies[j] = {
+                                        ...otherBody,
+                                        landedOnBodyId: currentBody.id,
+                                        velocity: { ...currentBody.velocity },
+                                        position: {
+                                            x: currentBody.position.x - (dx / dist) * (currentBody.radius + otherBody.radius),
+                                            y: currentBody.position.y - (dy / dist) * (currentBody.radius + otherBody.radius)
+                                        }
+                                    };
+                                    continue;
+                                }
+                            }
+                        }
+
+                        mergedIndices.add(j);
+
+                        const totalMass = currentBody.mass + otherBody.mass;
+                        const vX = (currentBody.velocity.x * currentBody.mass + otherBody.velocity.x * otherBody.mass) / totalMass;
+                        const vY = (currentBody.velocity.y * currentBody.mass + otherBody.velocity.y * otherBody.mass) / totalMass;
+
+                        const newRadius = Math.cbrt(Math.pow(currentBody.radius, 3) + Math.pow(otherBody.radius, 3));
+
+
+                        const lightBody = currentBody.mass > otherBody.mass ? otherBody : currentBody;
+                        const heavyBody = currentBody.mass > otherBody.mass ? currentBody : otherBody;
+
+                        const pX = (currentBody.position.x * currentBody.mass + otherBody.position.x * otherBody.mass) / totalMass;
+                        const pY = (currentBody.position.y * currentBody.mass + otherBody.position.y * otherBody.mass) / totalMass;
+
+                        //collision point is at the intersection of the two circles
+                        const collisionPointX = currentBody.position.x + (otherBody.position.x - currentBody.position.x) * (currentBody.radius / (currentBody.radius + otherBody.radius));
+                        const collisionPointY = currentBody.position.y + (otherBody.position.y - currentBody.position.y) * (currentBody.radius / (currentBody.radius + otherBody.radius));
+
+
+                        // Calculate intensity on the collision based on masses and speeds
+                        const intensity = Math.sqrt(lightBody.mass) + Math.sqrt(heavyBody.mass) + Math.sqrt(lightBody.velocity.x * lightBody.velocity.x + lightBody.velocity.y * lightBody.velocity.y) + Math.sqrt(heavyBody.velocity.x * heavyBody.velocity.x + heavyBody.velocity.y * heavyBody.velocity.y);
+
+                        // Create explosion particles
+                        // For rockets, use minimum intensity to ensure visible explosion
+                        const isRocketCollision = isRocketA || isRocketB;
+                        let explosionIntensity = intensity;
+                        if (isRocketCollision) {
+                            explosionIntensity = Math.max(explosionIntensity, 1000); // Minimum intensity of 1000 for rockets (10,000 particles)
+                        }
+                        allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity, dt));
+
+
+
+                        currentBody = {
+                            ...currentBody,
+                            mass: totalMass,
+                            radius: newRadius,
+                            position: { x: pX, y: pY },
+                            velocity: { x: vX, y: vY },
+                            name: currentBody.mass > otherBody.mass ? currentBody.name : otherBody.name,
+                            description: `${currentBody.name} merged with ${otherBody.name}`,
+                            trail: currentBody.mass > otherBody.mass ? currentBody.trail : otherBody.trail,
+                            landedOnBodyId: undefined
+
+                        };
+                    }
+                }
+                survivedBodies.push(currentBody);
+            }
+            currentBodies = survivedBodies;
         }
+    }
 
-        return {
-          ...body,
-          velocity: { x: newVx, y: newVy },
-          position: { x: newX, y: newY },
-          trail: newTrail,
-        };
-      });
-
-      // 4. Resolve Collisions
-      if (!enableCollisions) {
-          currentBodies = movedBodies;
-      } else {
-          const survivedBodies: Body[] = [];
-          const mergedIndices = new Set<number>();
-
-          for (let i = 0; i < movedBodies.length; i++) {
-              if (mergedIndices.has(i)) continue;
-
-              let currentBody = { ...movedBodies[i] };
-              
-              for (let j = i + 1; j < movedBodies.length; j++) {
-                  if (mergedIndices.has(j)) continue;
-
-                  const otherBody = movedBodies[j];
-                  const dx = currentBody.position.x - otherBody.position.x;
-                  const dy = currentBody.position.y - otherBody.position.y;
-                  const dist = Math.sqrt(dx * dx + dy * dy);
-                  const minDist = (currentBody.radius + otherBody.radius); 
-
-                  if (dist < minDist) {
-                      // COLLISION
-                      const isRocketA = !!currentBody.isRocket;
-                      const isRocketB = !!otherBody.isRocket;
-                      const isApple = currentBody.name.includes("Pomme") || otherBody.name.includes("Pomme");
-
-                      
-                      if (isRocketA !== isRocketB || isApple) {
-                          const rocket = isRocketA ? currentBody : otherBody;
-                          const planet = isRocketA ? otherBody : currentBody;
-                          
-                          // FIX: Check if taking off (thrusting away from planet)
-                          // If so, ignore collision to prevent snapping back to surface or exploding
-                          if (rocket.thrust && (Math.abs(rocket.thrust.x) > 0.0001 || Math.abs(rocket.thrust.y) > 0.0001)) {
-                              const dx = rocket.position.x - planet.position.x;
-                              const dy = rocket.position.y - planet.position.y;
-                              // Dot product > 0 means thrusting in same direction as radial vector (away)
-                              const dot = rocket.thrust.x * dx + rocket.thrust.y * dy;
-                              if (dot > 0) {
-                                  continue;
-                              }
-                          }
-                          
-                          const dvx = rocket.velocity.x - planet.velocity.x;
-                          const dvy = rocket.velocity.y - planet.velocity.y;
-                          const relVel = Math.sqrt(dvx*dvx + dvy*dvy);
-
-                          const maxVel = isApple ? 100 : LANDING_MAX_VELOCITY;
-
-                          if (relVel < maxVel) {
-                              if (isRocketA) {
-                                  currentBody.landedOnBodyId = planet.id;
-                                  currentBody.velocity = { ...planet.velocity };
-                                  const landAngle = Math.atan2(currentBody.position.y - otherBody.position.y, currentBody.position.x - otherBody.position.x);
-                                  currentBody.position = {
-                                      x: otherBody.position.x + Math.cos(landAngle) * (otherBody.radius + currentBody.radius),
-                                      y: otherBody.position.y + Math.sin(landAngle) * (otherBody.radius + currentBody.radius)
-                                  };
-                                  continue;
-                              } else {
-                                  movedBodies[j] = {
-                                      ...otherBody,
-                                      landedOnBodyId: currentBody.id,
-                                      velocity: { ...currentBody.velocity },
-                                      position: {
-                                          x: currentBody.position.x - (dx/dist) * (currentBody.radius + otherBody.radius),
-                                          y: currentBody.position.y - (dy/dist) * (currentBody.radius + otherBody.radius)
-                                      }
-                                  };
-                                  continue; 
-                              }
-                          }
-                      }
-                      
-                      mergedIndices.add(j);
-
-                      const totalMass = currentBody.mass + otherBody.mass;
-                      const vX = (currentBody.velocity.x * currentBody.mass + otherBody.velocity.x * otherBody.mass) / totalMass;
-                      const vY = (currentBody.velocity.y * currentBody.mass + otherBody.velocity.y * otherBody.mass) / totalMass;
-
-                      const newRadius = Math.cbrt(Math.pow(currentBody.radius, 3) + Math.pow(otherBody.radius, 3));
-
-
-                      const lightBody = currentBody.mass > otherBody.mass ? otherBody : currentBody;
-                      const heavyBody = currentBody.mass > otherBody.mass ? currentBody : otherBody;
-
-                      const pX = (currentBody.position.x * currentBody.mass + otherBody.position.x * otherBody.mass) / totalMass;
-                      const pY = (currentBody.position.y * currentBody.mass + otherBody.position.y * otherBody.mass) / totalMass;
-
-                      //collision point is at the intersection of the two circles
-                      const collisionPointX = currentBody.position.x + (otherBody.position.x - currentBody.position.x) * (currentBody.radius / (currentBody.radius + otherBody.radius));
-                      const collisionPointY = currentBody.position.y + (otherBody.position.y - currentBody.position.y) * (currentBody.radius / (currentBody.radius + otherBody.radius)); 
-
-
-                      // Calculate intensity on the collision based on masses and speeds
-                      const intensity = Math.sqrt(lightBody.mass) + Math.sqrt(heavyBody.mass) + Math.sqrt(lightBody.velocity.x*lightBody.velocity.x + lightBody.velocity.y*lightBody.velocity.y) + Math.sqrt(heavyBody.velocity.x*heavyBody.velocity.x + heavyBody.velocity.y*heavyBody.velocity.y);
-
-                      // Create explosion particles
-                      // For rockets, use minimum intensity to ensure visible explosion
-                      const isRocketCollision = isRocketA || isRocketB;
-                      let explosionIntensity = intensity;
-                      if (isRocketCollision) {
-                          explosionIntensity = Math.max(explosionIntensity, 1000); // Minimum intensity of 1000 for rockets (10,000 particles)
-                      }
-                      allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity,dt));
-
-
-                      
-                      currentBody = {
-                          ...currentBody,
-                          mass: totalMass,
-                          radius: newRadius,
-                          position: { x: pX, y: pY },
-                          velocity: { x: vX, y: vY },
-                          name: currentBody.mass > otherBody.mass ? currentBody.name : otherBody.name, 
-                          description: `${currentBody.name} merged with ${otherBody.name}`,
-                          trail: currentBody.mass > otherBody.mass ? currentBody.trail : otherBody.trail,
-                          landedOnBodyId: undefined 
-                          
-                      };
-                  }
-              }
-              survivedBodies.push(currentBody);
-          }
-          currentBodies = survivedBodies;
-      }
-  }
-
-  return { bodies: currentBodies, newParticles: allNewParticles, systemEvents };
+    return { bodies: currentBodies, newParticles: allNewParticles, systemEvents };
 };
 
 export const predictSystemTrajectories = (
@@ -1063,12 +1066,12 @@ export const predictSystemTrajectories = (
     steps: number,
     dt: number,
     gConst: number,
-    bodyIds?: string[] 
+    bodyIds?: string[]
 ): { id: string, color: string, points: Vector2D[] }[] => {
     let simBodies = bodies.map(b => ({ ...b }));
-    
-    const paths = (bodyIds && bodyIds.length > 0 
-        ? simBodies.filter(b => bodyIds.includes(b.id)) 
+
+    const paths = (bodyIds && bodyIds.length > 0
+        ? simBodies.filter(b => bodyIds.includes(b.id))
         : simBodies
     ).map(b => ({
         id: b.id,
@@ -1080,7 +1083,7 @@ export const predictSystemTrajectories = (
     const MAX_POINTS = 10000;
     const stride = Math.max(1, Math.ceil(steps / MAX_POINTS));
 
-    for(let k=0; k<steps; k++) {
+    for (let k = 0; k < steps; k++) {
         const forces = calculateForces(simBodies, gConst);
 
         // Apply Maneuver Node Delta-V for Prediction
@@ -1091,10 +1094,10 @@ export const predictSystemTrajectories = (
                     if (m.type === 'manual_node' && m.timeFromNow !== undefined) {
                         // Apply at the specific time step
                         if (simTime >= m.timeFromNow && simTime < m.timeFromNow + dt) {
-                            const vMag = Math.sqrt(b.velocity.x*b.velocity.x + b.velocity.y*b.velocity.y);
+                            const vMag = Math.sqrt(b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y);
                             if (vMag > 0.0001) {
                                 // Prograde (Normalized Velocity)
-                                const prograde = { x: b.velocity.x/vMag, y: b.velocity.y/vMag };
+                                const prograde = { x: b.velocity.x / vMag, y: b.velocity.y / vMag };
                                 // Radial Out (Perpendicular, 90 deg clockwise? No, usually Away from focus)
                                 // In 2D without focus info, "Radial Out" relative to velocity is usually just Normal 2D (Standard Normal).
                                 // Let's define Radial Out as: Rotate Prograde by -90 degrees (Right hand rule z-up)?
@@ -1102,11 +1105,11 @@ export const predictSystemTrajectories = (
                                 // If we don't know the body, we use the Velocity Perpendicular.
                                 // Let's use Velocity Normal (Perpendicular).
                                 // (x, y) -> (-y, x) is +90 deg.
-                                const radial = { x: -prograde.y, y: prograde.x }; 
-                                
+                                const radial = { x: -prograde.y, y: prograde.x };
+
                                 const dvP = m.deltaVPrograde || 0;
                                 const dvR = m.deltaVRadial || 0;
-                                
+
                                 b.velocity.x += prograde.x * dvP + radial.x * dvR;
                                 b.velocity.y += prograde.y * dvP + radial.y * dvR;
                             }
@@ -1123,7 +1126,7 @@ export const predictSystemTrajectories = (
             const newVy = b.velocity.y + ay * dt;
             const newX = b.position.x + newVx * dt;
             const newY = b.position.y + newVy * dt;
-            
+
             return {
                 ...b,
                 velocity: { x: newVx, y: newVy },
@@ -1186,7 +1189,7 @@ export const calculateOrbitalPoints = (
     const a = -mu / (2 * epsilon);
 
     const rPe = a * (1 - eccentricity);
-    
+
     const rAp = a * (1 + eccentricity);
 
     let eNormX = 0, eNormY = 0;
@@ -1266,16 +1269,16 @@ export const calculateEllipsePoints = (
     const points: Vector2D[] = [];
     for (let i = 0; i <= numPoints; i++) {
         const theta = (i / numPoints) * 2 * Math.PI;
-        
+
         // Point on ellipse in local coordinates (centered at origin)
         // theta = 0 corresponds to periapsis direction
         const localX = a * Math.cos(theta);
         const localY = b * Math.sin(theta);
-        
+
         // Rotate by eccentricity angle (periapsis direction)
         const rotatedX = localX * Math.cos(eAngle) - localY * Math.sin(eAngle);
         const rotatedY = localX * Math.sin(eAngle) + localY * Math.cos(eAngle);
-        
+
         // Translate to world coordinates
         points.push({
             x: centerX + rotatedX,
@@ -1299,22 +1302,22 @@ export const solveLambert = (
 ): { v1: Vector2D, v2: Vector2D } | null => {
     const r1Mag = Math.sqrt(r1.x * r1.x + r1.y * r1.y);
     const r2Mag = Math.sqrt(r2.x * r2.x + r2.y * r2.y);
-    
+
     if (dt <= 0 || mu <= 0 || r1Mag === 0 || r2Mag === 0) return null;
 
     // 1. Calculate Transfer Angle (dNu)
     const cross = r1.x * r2.y - r1.y * r2.x;
     const dot = r1.x * r2.x + r1.y * r2.y;
-    
+
     let dNu = Math.atan2(Math.abs(cross), dot);
-    
+
     // Determine transfer direction
     if (cw) {
         if (cross > 0) dNu = 2 * Math.PI - dNu;
     } else {
         if (cross < 0) dNu = 2 * Math.PI - dNu;
     }
-    
+
     const A = Math.sin(dNu) * Math.sqrt(r1Mag * r2Mag / (1 - Math.cos(dNu)));
 
     // Stumpff functions
@@ -1323,7 +1326,7 @@ export const solveLambert = (
         if (z < 0) return (Math.cosh(Math.sqrt(-z)) - 1) / (-z);
         return 0.5;
     };
-    
+
     const stumpffS = (z: number) => {
         if (z > 0) return (Math.sqrt(z) - Math.sin(Math.sqrt(z))) / (z * Math.sqrt(z));
         if (z < 0) return (Math.sinh(Math.sqrt(-z)) - Math.sqrt(-z)) / ((-z) * Math.sqrt(-z));
@@ -1333,7 +1336,7 @@ export const solveLambert = (
     let z = 0;
     let iter = 0;
     const MAX_ITER = 60;
-    
+
     // Secant Method State
     let z_prev = 0;
     let t_prev = -1; // Flag to indicate first pass
@@ -1342,36 +1345,36 @@ export const solveLambert = (
     while (iter < MAX_ITER) {
         const C = stumpffC(z);
         const S = stumpffS(z);
-        
+
         const y = r1Mag + r2Mag + A * (z * S - 1) / Math.sqrt(C);
-        
+
         // If y becomes negative, we are out of physical bounds (complex x).
         // This often happens if z is too negative (hyperbola too fast) or A is large.
         if (isNaN(y) || y < 0) {
-             // Retreat towards z=0 or previous safe value
-             if (initialized) {
-                 z = z_prev + (0 - z_prev) * 0.5; // Try to recover
-                 z_prev = 0; // Reset
-                 t_prev = -1;
-                 initialized = false;
-             } else {
-                 z += 0.1; // Just bump it
-             }
-             iter++;
-             continue;
+            // Retreat towards z=0 or previous safe value
+            if (initialized) {
+                z = z_prev + (0 - z_prev) * 0.5; // Try to recover
+                z_prev = 0; // Reset
+                t_prev = -1;
+                initialized = false;
+            } else {
+                z += 0.1; // Just bump it
+            }
+            iter++;
+            continue;
         }
 
         const x = Math.sqrt(y / C);
         const t = (Math.pow(x, 3) * S + A * Math.sqrt(y)) / Math.sqrt(mu);
-        
+
         if (Math.abs(t - dt) < 1e-5) break;
-        
+
         if (!initialized) {
             // First iteration: we have result for z=0 (or initial z)
             // Need a second point to start Secant
             z_prev = z;
             t_prev = t;
-            
+
             // Heuristic slope
             if (t < dt) {
                 // Actual time is too short. We need longer path? No.
@@ -1399,7 +1402,7 @@ export const solveLambert = (
                 z = next_z;
             }
         }
-        
+
         iter++;
     }
 
@@ -1408,16 +1411,16 @@ export const solveLambert = (
     const C = stumpffC(z);
     const S = stumpffS(z);
     const y = r1Mag + r2Mag + A * (z * S - 1) / Math.sqrt(C);
-    
+
     const f = 1 - y / r1Mag;
     const g = A * Math.sqrt(y / mu);
     const gDot = 1 - y / r2Mag;
-    
+
     const v1 = {
         x: (r2.x - f * r1.x) / g,
         y: (r2.y - f * r1.y) / g
     };
-    
+
     const v2 = {
         x: (gDot * r2.x - r1.x) / g,
         y: (gDot * r2.y - r1.y) / g
@@ -1430,7 +1433,7 @@ export const reverseTime = (bodies: Body[]): Body[] => {
     return bodies.map(body => ({
         ...body,
         velocity: { x: -body.velocity.x, y: -body.velocity.y },
-        trail: [], 
-        thrust: body.thrust ? { x: -body.thrust.x, y: -body.thrust.y } : undefined 
+        trail: [],
+        thrust: body.thrust ? { x: -body.thrust.x, y: -body.thrust.y } : undefined
     }));
 };

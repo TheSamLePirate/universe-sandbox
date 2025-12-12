@@ -42,6 +42,7 @@ export const useFlightComputerLogic = (
     nextImage?: () => void,
     prevImage?: () => void,
     handleJumpToImage?: (imageId: string) => void,
+    setShowCameraViewer?: (show: boolean) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -196,7 +197,7 @@ export const useFlightComputerLogic = (
                     function map01ToPI(v) { return (v * 2 * Math.PI) - Math.PI; }
 
                     async function getApiValue({
-                        baseUrl = "http://localhost:3009",
+                        baseUrl = "http://MacBook-Pro-de-olivier.local:3009",
                         valueName = "value",
                         sleepTime = "sleepTime",
                     } = {}) {
@@ -209,7 +210,7 @@ export const useFlightComputerLogic = (
                     }
 
                     async function getApiValueAndReset({
-                        baseUrl = "http://localhost:3009",
+                        baseUrl = "http://MacBook-Pro-de-olivier.local:3009",
                         valueName = "value",
                         sleepTime = "sleepTime",
                     } = {}) {
@@ -221,7 +222,7 @@ export const useFlightComputerLogic = (
                         return data?.[valueName];
                     }
 
-                    async function postApiValue({ baseUrl = "http://localhost:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
+                    async function postApiValue({ baseUrl = "http://MacBook-Pro-de-olivier.local:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
                         await sleep(sleepTime);
                         const res = await fetch(`${baseUrl}/api/${valueName}`, {
                             method: 'POST',
@@ -272,7 +273,8 @@ export const useFlightComputerLogic = (
                             getApiValueAndReset: getApiValueAndReset,
                             postApiValue: postApiValue,
                             sleep: sleep,
-                            map01ToPI: map01ToPI
+                            map01ToPI: map01ToPI,
+                            setShowCameraViewer: setShowCameraViewer,
                         },
                         helpers: {
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),
@@ -712,8 +714,148 @@ export const useFlightComputerLogic = (
                     });
                 }
             }
+
+            // Wait Module Logic
+            if (module.type === 'wait' && isModuleActive(module)) {
+                const startInput = module.inputs?.start;
+                const timeInput = module.inputs?.time;
+
+                const startSignal = resolveBooleanInput(startInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) ?? false;
+
+                // Resolve Duration (ms) - try input first, fallback to configured
+                let durationMs = module.waitDuration;
+                if (durationMs === undefined || isNaN(durationMs)) durationMs = 1000;
+
+                if (timeInput) {
+                    const resolvedDuration = resolveScalarInput(timeInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                    if (resolvedDuration !== null && resolvedDuration >= 0) {
+                        durationMs = resolvedDuration;
+                    }
+                }
+
+                const lastStart = module.waitLastStartSignal ?? false;
+                const isRisingEdge = startSignal && !lastStart;
+                const now = simulationTime; // Use simulation time for consistency with game speed
+                const isRealtime = module.waitMode === 'realtime';
+
+                let updates: Partial<FlightComputerModule> = {};
+                let changed = false;
+
+                // Update Edge Detection State
+                if (startSignal !== lastStart) {
+                    updates.waitLastStartSignal = startSignal;
+                    changed = true;
+                }
+
+                // Handle Start
+                if (isRisingEdge) {
+                    updates.waitStartTime = isRealtime ? performance.now() : now;
+                    updates.waitActive = true;
+                    updates.waitTriggered = false; // Reset output
+                    updates.waitRemainingTime = durationMs;
+                    changed = true;
+                }
+                // Handle Active Wait
+                else if (module.waitActive) {
+                    if (!isRealtime) {
+                        const startTime = module.waitStartTime ?? now;
+                        const elapsedSec = now - startTime;
+                        const durationSec = durationMs / 1000;
+
+                        const remainingMs = Math.max(0, durationMs - (elapsedSec * 1000));
+                        updates.waitRemainingTime = remainingMs;
+                        changed = true;
+
+                        if (elapsedSec >= durationSec) {
+                            updates.waitActive = false;
+                            updates.waitTriggered = true;
+                            updates.waitRemainingTime = 0;
+                            changed = true;
+                        }
+                    }
+                } else {
+                    // Not active and not triggered (maybe reset or initial)
+                    // If triggered, remaining is 0. If not triggered and not active, likely idle/reset, so show full duration?
+                    // User request: "output remaining time". If idle, remaining is full duration or 0? 
+                    // Let's say 0 if finished (triggered), and full duration if reset/idle.
+                    if (module.waitTriggered) {
+                        if (module.waitRemainingTime !== 0) {
+                            updates.waitRemainingTime = 0;
+                            changed = true;
+                        }
+                    } else {
+                        // Idling / Reset state
+                        if (module.waitRemainingTime !== durationMs) {
+                            updates.waitRemainingTime = durationMs;
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (changed) {
+                    onUpdateModule(module.id, updates);
+                }
+            }
         });
     }, [modules, bodies, physicsConfig, rendezvousSolutionMap, musicPlaybackState, musicVolumeValue, musicPrompts, musicPlay, musicPause, setMusicVolume, updateMusicPrompt, onUpdateModule]);
+
+    // Dedicated Realtime Wait Logic Loop
+    useEffect(() => {
+        let animationFrameId: number;
+
+        const tick = () => {
+            const now = performance.now();
+            let updatesMade = false;
+
+            modules.forEach(module => {
+                if (module.type === 'wait' && module.waitMode === 'realtime' && module.waitActive) {
+                    const startTime = module.waitStartTime ?? now;
+
+                    const timeInput = module.inputs?.time;
+                    let durationMs = module.waitDuration ?? 1000;
+
+                    if (timeInput) {
+                        const resolvedDuration = resolveScalarInput(timeInput, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                        if (resolvedDuration !== null && resolvedDuration >= 0) {
+                            durationMs = resolvedDuration;
+                        }
+                    }
+                    if (durationMs === undefined || isNaN(durationMs)) durationMs = 1000;
+
+                    const elapsedMs = now - startTime;
+                    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+                    // Update if significant change or done
+                    if (elapsedMs >= durationMs) {
+                        onUpdateModule(module.id, {
+                            waitActive: false,
+                            waitTriggered: true,
+                            waitRemainingTime: 0
+                        });
+                        updatesMade = true;
+                    } else {
+                        if (Math.abs((module.waitRemainingTime ?? 0) - remainingMs) > 100) { // Throttle visual updates slightly
+                            onUpdateModule(module.id, {
+                                waitRemainingTime: remainingMs
+                            });
+                            updatesMade = true;
+                        }
+                    }
+                }
+            });
+
+            animationFrameId = requestAnimationFrame(tick);
+        };
+
+        // Only start loop if there are active realtime modules
+        if (modules.some(m => m.type === 'wait' && m.waitMode === 'realtime' && m.waitActive)) {
+            animationFrameId = requestAnimationFrame(tick);
+        }
+
+        return () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        };
+    }, [modules, bodies, physicsConfig, rendezvousSolutionMap, onUpdateModule]);
 
     return {
         rendezvousSolutionMap,

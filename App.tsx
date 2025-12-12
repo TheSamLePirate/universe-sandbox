@@ -32,6 +32,8 @@ import { Image, ArrowLeft, ArrowRight, PlayCircle } from 'lucide-react';
 import { PLACEHOLDER_IMAGES } from './data/userImages';
 import { FullPageSlideshow } from './components/FullPageSlideshow';
 
+import CameraViewer from './components/CameraViewer';
+
 
 
 
@@ -76,6 +78,10 @@ const App: React.FC = () => {
     const isMobile = useIsMobile();
     const [showUI, setShowUI] = useState(false);
     const defaultPreset = PRESETS.find(p => p.id === 'blank') || PRESETS[0];
+
+    const [showCameraViewer, setShowCameraViewer] = useState(false);
+
+
 
     const [nbColumns, setNbColumns] = useState(4);
     const [nbRows, setNbRows] = useState(12);
@@ -2265,6 +2271,7 @@ const App: React.FC = () => {
         const bodyid = `manual_${Date.now()}`;
         const newBody = createBody(bodyid, name, mass, radius, color, position.x, position.y, description);
         newBody.velocity = velocity;
+        newBody.position = { x: position.x, y: position.y };
         setBodies(prev => [...prev, newBody]);
         bodiesRef.current = [...bodiesRef.current, newBody];
     };
@@ -2958,6 +2965,7 @@ const App: React.FC = () => {
                 nextImage={handleNext}
                 prevImage={handlePrev}
                 handleJumpToImage={handleJumpToImage}
+                setShowCameraViewer={setShowCameraViewer}
             />
 
 
@@ -3266,6 +3274,10 @@ const App: React.FC = () => {
                         />
                     </div>
                 </div>
+            </Activity>
+
+            <Activity mode={showCameraViewer ? 'visible' : 'hidden'}>
+                <CameraViewer />
             </Activity>
         </div>
     );
