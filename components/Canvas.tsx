@@ -565,110 +565,7 @@ const Canvas: React.FC<CanvasProps> = ({
             const starsList = bodies.filter(b => b.isStar);
             const primaryStar = starsList[0];
 
-            // --- ECLIPSES (Volumetric Shadows) ---
-            if (visualConfig.showEclipses && primaryStar) {
-                const starX = cx + primaryStar.position.x * scale;
-                const starY = cy + primaryStar.position.y * scale;
-                const starRad = Math.max(3, primaryStar.radius * scale);
 
-                bodies.forEach(body => {
-                    if (body.isStar || body.isRocket) return;
-
-                    const bodyX = cx + body.position.x * scale;
-                    const bodyY = cy + body.position.y * scale;
-                    const bodyRad = Math.max(3, body.radius * scale);
-
-                    // Calculate vector from Star to Body
-                    const dx = bodyX - starX;
-                    const dy = bodyY - starY;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < bodyRad + starRad) return; // Too close/inside
-
-                    const angle = Math.atan2(dy, dx);
-                    const shadowRenderLength = 10000; // Draw off-screen
-
-                    // --- PENUMBRA (Partial Shadow) ---
-                    // Region where Earth blocks PART of the Sun. Diverges.
-                    // Vertex is between Star and Body.
-                    const penumbraVertexDist = (dist * bodyRad) / (starRad + bodyRad);
-                    const penumbraHalfAngle = Math.asin((starRad + bodyRad) / dist);
-
-                    // Tangent points on Body (Start of Penumbra)
-                    const penP1X = bodyX + Math.cos(angle + Math.PI / 2 - penumbraHalfAngle) * bodyRad;
-                    const penP1Y = bodyY + Math.sin(angle + Math.PI / 2 - penumbraHalfAngle) * bodyRad;
-                    const penP2X = bodyX + Math.cos(angle - Math.PI / 2 + penumbraHalfAngle) * bodyRad;
-                    const penP2Y = bodyY + Math.sin(angle - Math.PI / 2 + penumbraHalfAngle) * bodyRad;
-
-                    // Project outwards from the crossover vertex
-                    // Vertex coords relative to body center: -angle direction
-                    const penVertexX = bodyX - Math.cos(angle) * penumbraVertexDist;
-                    const penVertexY = bodyY - Math.sin(angle) * penumbraVertexDist;
-
-                    // End points (far away)
-                    const penEnd1X = penVertexX + Math.cos(angle + penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
-                    const penEnd1Y = penVertexY + Math.sin(angle + penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
-                    const penEnd2X = penVertexX + Math.cos(angle - penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
-                    const penEnd2Y = penVertexY + Math.sin(angle - penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
-
-                    ctx.beginPath();
-                    ctx.moveTo(penP1X, penP1Y);
-                    ctx.lineTo(penEnd1X, penEnd1Y);
-                    ctx.lineTo(penEnd2X, penEnd2Y);
-                    ctx.lineTo(penP2X, penP2Y);
-                    ctx.closePath();
-
-                    // Gradient for soft penumbra
-                    const pGrad = ctx.createLinearGradient(bodyX, bodyY, bodyX + Math.cos(angle) * 200, bodyY + Math.sin(angle) * 200);
-                    pGrad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
-                    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
-                    ctx.fillStyle = pGrad;
-                    ctx.fill();
-
-
-                    // --- UMBRA (Full Shadow) ---
-                    // Region where Earth blocks ALL of the Sun. Converges.
-
-                    const umbraVertexDist = (dist * bodyRad) / (starRad - bodyRad);
-                    // If star < planet (unlikely), dist is negative (diverges). Logic handles sign.
-
-                    const umbraHalfAngle = Math.asin((starRad - bodyRad) / dist);
-
-                    // Tangent points on Body
-                    // Radius vector angle is (angle +/- (PI/2 + halfAngle)) because it narrows
-                    const umbP1X = bodyX + Math.cos(angle + Math.PI / 2 + umbraHalfAngle) * bodyRad;
-                    const umbP1Y = bodyY + Math.sin(angle + Math.PI / 2 + umbraHalfAngle) * bodyRad;
-                    const umbP2X = bodyX + Math.cos(angle - Math.PI / 2 - umbraHalfAngle) * bodyRad;
-                    const umbP2Y = bodyY + Math.sin(angle - Math.PI / 2 - umbraHalfAngle) * bodyRad;
-
-                    // Tip of Umbra (or projected far if diverging)
-                    let umbTipX, umbTipY;
-
-                    if (starRad > bodyRad) {
-                        // Converging Cone
-                        umbTipX = bodyX + Math.cos(angle) * umbraVertexDist;
-                        umbTipY = bodyY + Math.sin(angle) * umbraVertexDist;
-                    } else {
-                        // Diverging (Antumbra logic effectively) - unlikely in this sim but safe fallback
-                        umbTipX = bodyX + Math.cos(angle) * shadowRenderLength;
-                        umbTipY = bodyY + Math.sin(angle) * shadowRenderLength;
-                    }
-
-                    ctx.beginPath();
-                    ctx.moveTo(umbP1X, umbP1Y);
-                    ctx.lineTo(umbTipX, umbTipY);
-                    ctx.lineTo(umbP2X, umbP2Y);
-                    ctx.closePath();
-
-                    // Soften edges
-                    const uGrad = ctx.createLinearGradient(bodyX, bodyY, umbTipX, umbTipY);
-                    uGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
-                    uGrad.addColorStop(1, 'rgba(0,0,0,0.85)'); // Keep dark until tip
-
-                    ctx.fillStyle = uGrad;
-                    ctx.fill();
-                });
-            }
 
             // Helper for body drawing
             const drawBody = (body: Body, isGhost = false) => {
@@ -1774,6 +1671,111 @@ const Canvas: React.FC<CanvasProps> = ({
                 }
             }
 
+            // --- ECLIPSES (Volumetric Shadows) ---
+            if (visualConfig.showEclipses && primaryStar) {
+                const starX = cx + primaryStar.position.x * scale;
+                const starY = cy + primaryStar.position.y * scale;
+                const starRad = Math.max(3, primaryStar.radius * scale);
+
+                bodies.forEach(body => {
+                    if (body.isStar || body.isRocket) return;
+
+                    const bodyX = cx + body.position.x * scale;
+                    const bodyY = cy + body.position.y * scale;
+                    const bodyRad = Math.max(3, body.radius * scale);
+
+                    // Calculate vector from Star to Body
+                    const dx = bodyX - starX;
+                    const dy = bodyY - starY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < bodyRad + starRad) return; // Too close/inside
+
+                    const angle = Math.atan2(dy, dx);
+                    const shadowRenderLength = 10000; // Draw off-screen
+
+                    // --- PENUMBRA (Partial Shadow) ---
+                    // Region where Earth blocks PART of the Sun. Diverges.
+                    // Vertex is between Star and Body.
+                    const penumbraVertexDist = (dist * bodyRad) / (starRad + bodyRad);
+                    const penumbraHalfAngle = Math.asin((starRad + bodyRad) / dist);
+
+                    // Tangent points on Body (Start of Penumbra)
+                    const penP1X = bodyX + Math.cos(angle + Math.PI / 2 - penumbraHalfAngle) * bodyRad;
+                    const penP1Y = bodyY + Math.sin(angle + Math.PI / 2 - penumbraHalfAngle) * bodyRad;
+                    const penP2X = bodyX + Math.cos(angle - Math.PI / 2 + penumbraHalfAngle) * bodyRad;
+                    const penP2Y = bodyY + Math.sin(angle - Math.PI / 2 + penumbraHalfAngle) * bodyRad;
+
+                    // Project outwards from the crossover vertex
+                    // Vertex coords relative to body center: -angle direction
+                    const penVertexX = bodyX - Math.cos(angle) * penumbraVertexDist;
+                    const penVertexY = bodyY - Math.sin(angle) * penumbraVertexDist;
+
+                    // End points (far away)
+                    const penEnd1X = penVertexX + Math.cos(angle + penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
+                    const penEnd1Y = penVertexY + Math.sin(angle + penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
+                    const penEnd2X = penVertexX + Math.cos(angle - penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
+                    const penEnd2Y = penVertexY + Math.sin(angle - penumbraHalfAngle) * (shadowRenderLength + penumbraVertexDist);
+
+                    ctx.beginPath();
+                    ctx.moveTo(penP1X, penP1Y);
+                    ctx.lineTo(penEnd1X, penEnd1Y);
+                    ctx.lineTo(penEnd2X, penEnd2Y);
+                    ctx.lineTo(penP2X, penP2Y);
+                    ctx.closePath();
+
+                    // Gradient for soft penumbra
+                    const pGrad = ctx.createLinearGradient(bodyX, bodyY, bodyX + Math.cos(angle) * 200, bodyY + Math.sin(angle) * 200);
+                    pGrad.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+                    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+                    ctx.fillStyle = pGrad;
+                    ctx.fill();
+
+
+                    // --- UMBRA (Full Shadow) ---
+                    // Region where Earth blocks ALL of the Sun. Converges.
+
+                    const umbraVertexDist = (dist * bodyRad) / (starRad - bodyRad);
+                    // If star < planet (unlikely), dist is negative (diverges). Logic handles sign.
+
+                    const umbraHalfAngle = Math.asin((starRad - bodyRad) / dist);
+
+                    // Tangent points on Body
+                    // Radius vector angle is (angle +/- (PI/2 + halfAngle)) because it narrows
+                    const umbP1X = bodyX + Math.cos(angle + Math.PI / 2 + umbraHalfAngle) * bodyRad;
+                    const umbP1Y = bodyY + Math.sin(angle + Math.PI / 2 + umbraHalfAngle) * bodyRad;
+                    const umbP2X = bodyX + Math.cos(angle - Math.PI / 2 - umbraHalfAngle) * bodyRad;
+                    const umbP2Y = bodyY + Math.sin(angle - Math.PI / 2 - umbraHalfAngle) * bodyRad;
+
+                    // Tip of Umbra (or projected far if diverging)
+                    let umbTipX, umbTipY;
+
+                    if (starRad > bodyRad) {
+                        // Converging Cone
+                        umbTipX = bodyX + Math.cos(angle) * umbraVertexDist;
+                        umbTipY = bodyY + Math.sin(angle) * umbraVertexDist;
+                    } else {
+                        // Diverging (Antumbra logic effectively) - unlikely in this sim but safe fallback
+                        umbTipX = bodyX + Math.cos(angle) * shadowRenderLength;
+                        umbTipY = bodyY + Math.sin(angle) * shadowRenderLength;
+                    }
+
+                    ctx.beginPath();
+                    ctx.moveTo(umbP1X, umbP1Y);
+                    ctx.lineTo(umbTipX, umbTipY);
+                    ctx.lineTo(umbP2X, umbP2Y);
+                    ctx.closePath();
+
+                    // Soften edges
+                    const uGrad = ctx.createLinearGradient(bodyX, bodyY, umbTipX, umbTipY);
+                    uGrad.addColorStop(0, 'rgba(0,0,0,0.85)');
+                    uGrad.addColorStop(1, 'rgba(0,0,0,0.85)'); // Keep dark until tip
+
+                    ctx.fillStyle = uGrad;
+                    ctx.fill();
+                });
+            }
+
             // --- FLIGHT COMPUTER MODULES VISUALIZATION ---
             flightComputerModules.forEach(module => {
                 // Check if module is enabled and active (respects activate input)
@@ -1785,7 +1787,19 @@ const Canvas: React.FC<CanvasProps> = ({
                 const target = module.targetBodyId ? bodies.find(b => b.id === module.targetBodyId) : null;
 
                 if (module.type === 'orbit_info') {
-                    if (!primary || !reference) return;
+                    // Resolve inputs dynamically to support module chaining (e.g. State Vector -> Orbit Info)
+                    const primaryInput = module.inputs?.primary;
+                    const referenceInput = module.inputs?.reference;
+
+                    let primary = resolveInput(primaryInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) as Body;
+                    let reference = resolveInput(referenceInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap) as Body;
+
+                    // Fallback to legacy IDs if inputs are not defined
+                    if (!primary && module.primaryBodyId) primary = bodies.find(b => b.id === module.primaryBodyId) as Body;
+                    if (!reference && module.referenceBodyId) reference = bodies.find(b => b.id === module.referenceBodyId) as Body;
+
+                    if (!primary || !reference || !reference.mass) return;
+
                     // Calculate and draw theoretical orbit
                     const ellipsePoints = calculateEllipsePoints(primary, reference, physicsConfig.gravitationalConstant);
                     const orbitalPoints = calculateOrbitalPoints(primary, reference, physicsConfig.gravitationalConstant);

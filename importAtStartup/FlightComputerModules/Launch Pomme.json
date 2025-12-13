@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "exportDate": "2025-12-11T15:18:09.988Z",
+  "exportDate": "2025-12-12T20:43:25.545Z",
   "rootGroup": {
-    "id": "fc_group_1765466243370",
+    "id": "fc_group_1765572026773_0_169461",
     "name": "LaunchPomme",
     "color": "#10b981",
     "isCollapsed": true,
@@ -10,7 +10,7 @@
   },
   "groups": [
     {
-      "id": "fc_group_1765466243370",
+      "id": "fc_group_1765572026773_0_169461",
       "name": "LaunchPomme",
       "color": "#10b981",
       "isCollapsed": true,
@@ -19,7 +19,7 @@
   ],
   "modules": [
     {
-      "id": "fc_mod_1765461815505",
+      "id": "fc_module_1765572026773_0_64460",
       "type": "body_info",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -32,11 +32,11 @@
           "label": "Pomme"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "targetBodyId": "manual_1765461787038"
     },
     {
-      "id": "fc_mod_1765461837038",
+      "id": "fc_module_1765572026773_1_222348",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -45,21 +45,21 @@
       "inputs": {
         "trigger": {
           "type": "module_output",
-          "value": "fc_mod_1765462607147:triggered",
+          "value": "fc_module_1765572026773_6_403773:triggered",
           "label": "LaunchPomme - triggered"
         },
         "input_0": {
           "type": "module_output",
-          "value": "fc_mod_1765462482386:result",
+          "value": "fc_module_1765572026773_5_964398:result",
           "label": "GetPomme - result"
         },
         "input_1": {
           "type": "module_output",
-          "value": "fc_mod_1765462831279:result",
+          "value": "fc_module_1765572026773_7_628491:result",
           "label": "GetVelocity - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "customScriptCode": "if (input[0]===false){return;}\nconst pommeName=\"Pomme_\"+new Date();\ngame.actions.createAndSpawnBody(pommeName,1.015,0.03,\"#ff0000\",{x:-47.10,y:18.23},input[1],\"La Pomme\");\nreturn pommeName;",
       "customScriptManualTrigger": 1765463963675,
       "name": "CreatePomme",
@@ -68,7 +68,7 @@
       "customScriptAsyncState": true
     },
     {
-      "id": "fc_mod_1765462084754",
+      "id": "fc_module_1765572026773_2_66245",
       "type": "body_info",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -77,15 +77,15 @@
       "inputs": {
         "target": {
           "type": "module_output",
-          "value": "fc_mod_1765463863193:body",
+          "value": "fc_module_1765572026773_10_674661:body",
           "label": "PommeId - body"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "targetBodyId": "manual_1765463545812"
     },
     {
-      "id": "fc_mod_1765462323269",
+      "id": "fc_module_1765572026773_3_767863",
       "type": "marker",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -94,11 +94,11 @@
       "inputs": {
         "primary": {
           "type": "module_output",
-          "value": "fc_mod_1765462343986:result",
+          "value": "fc_module_1765572026773_4_919531:result",
           "label": "Module - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "markerShape": "triangle",
       "markerTitle": "Pommier",
       "markerDescription": "",
@@ -107,14 +107,14 @@
       "markerPulse": false
     },
     {
-      "id": "fc_mod_1765462343986",
+      "id": "fc_module_1765572026773_4_919531",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
       "referenceBodyId": "manual_1765461747271",
       "color": "#aadd3c",
       "inputs": {},
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "customScriptCode": "return {x:-47.10,y:18.23};",
       "customScriptOutputType": "vector",
       "customScriptManualTrigger": 1765462374346,
@@ -126,14 +126,14 @@
       "customScriptAsyncState": true
     },
     {
-      "id": "fc_mod_1765462482386",
+      "id": "fc_module_1765572026773_5_964398",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
       "referenceBodyId": "manual_1765461747271",
       "color": "#3cdd4c",
       "inputs": {},
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "customScriptCode": "//async\nconst payload={valueName:\"Pomme\",sleepTime:500}\nconst result=await game.actions.getApiValueAndReset(payload);\nreturn result==1?true:false;",
       "customScriptManualTrigger": 1765462599097,
       "customScriptLogs": [],
@@ -145,7 +145,7 @@
       "customScriptOutputType": "boolean"
     },
     {
-      "id": "fc_mod_1765462607147",
+      "id": "fc_module_1765572026773_6_403773",
       "type": "change_detector",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -154,24 +154,24 @@
       "inputs": {
         "value": {
           "type": "module_output",
-          "value": "fc_mod_1765462482386:result",
+          "value": "fc_module_1765572026773_5_964398:result",
           "label": "GetPomme - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "changeLastValue": false,
       "changeTriggered": false,
       "name": "LaunchPomme"
     },
     {
-      "id": "fc_mod_1765462831279",
+      "id": "fc_module_1765572026773_7_628491",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
       "referenceBodyId": "manual_1765461747271",
       "color": "#3c71dd",
       "inputs": {},
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "name": "GetVelocity",
       "customScriptCode": "//async\nconst payload={valueName:\"VelocityX\",sleepTime:500}\nconst resultX=await game.actions.getApiValue(payload);\nconst payloadY={valueName:\"VelocityY\",sleepTime:200}\nconst resultY=await game.actions.getApiValue(payloadY);\nreturn {x:resultX,y:resultY};",
       "customScriptOutputType": "vector",
@@ -181,23 +181,23 @@
       "customScriptMode": "async",
       "customScriptLastResult": {
         "x": 4,
-        "y": 0.00026061260373300144
+        "y": -0.03324646246542251
       },
       "customScriptContinuousRun": true
     },
     {
-      "id": "fc_mod_1765463743193",
+      "id": "fc_module_1765572026773_8_531659",
       "type": "selector",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
       "referenceBodyId": "manual_1765461747271",
       "color": "#843cdd",
       "inputs": {},
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "selectorBodyId": "manual_1765463545812"
     },
     {
-      "id": "fc_mod_1765463759909",
+      "id": "fc_module_1765572026773_9_498777",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -206,33 +206,33 @@
       "inputs": {
         "input_0": {
           "type": "module_output",
-          "value": "fc_mod_1765463863193:body",
+          "value": "fc_module_1765572026773_10_674661:body",
           "label": "PommeId - body"
         },
         "input_1": {
           "type": "module_output",
-          "value": "fc_mod_1765463743193:body",
+          "value": "fc_module_1765572026773_8_531659:body",
           "label": "Module - body"
         },
         "trigger": {
           "type": "module_output",
-          "value": "fc_mod_1765464902537:triggered",
+          "value": "fc_module_1765572026773_13_743763:triggered",
           "label": "Module - triggered"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "name": "Folow Pomme",
       "customScriptCode": "console.log(new Date());\nif(input[0]==null){return \"none\";}\nconsole.log(input[0].id)\ngame.actions.setFollowingBody(input[0].id);\nreturn input[0].id;",
       "customScriptManualTrigger": 1765464400253,
       "customScriptLastResult": "none",
       "customScriptLogs": [
-        "Thu Dec 11 2025 16:17:00 GMT+0100 (heure normale d’Europe centrale)"
+        "Fri Dec 12 2025 21:43:08 GMT+0100 (heure normale d’Europe centrale)"
       ],
       "customScriptAsyncState": true,
       "customScriptContinuousRun": false
     },
     {
-      "id": "fc_mod_1765463863193",
+      "id": "fc_module_1765572026773_10_674661",
       "type": "body_by",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -241,16 +241,16 @@
       "inputs": {
         "value": {
           "type": "module_output",
-          "value": "fc_mod_1765464027931:result",
+          "value": "fc_module_1765572026773_11_196082:result",
           "label": "PommeName - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "bodyByMode": "name",
       "name": "PommeId"
     },
     {
-      "id": "fc_mod_1765464027931",
+      "id": "fc_module_1765572026773_11_196082",
       "type": "custom_script",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -259,11 +259,11 @@
       "inputs": {
         "input_0": {
           "type": "module_output",
-          "value": "fc_mod_1765461837038:result",
+          "value": "fc_module_1765572026773_1_222348:result",
           "label": "CreatePomme - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "customScriptCode": "console.log(input[0]);\nif(input[0]!=undefined){\nreturn input[0];\n}else{\n return \"\"\n}",
       "customScriptManualTrigger": 1765464299938,
       "customScriptLastResult": "",
@@ -276,7 +276,7 @@
       "name": "PommeName"
     },
     {
-      "id": "fc_mod_1765464309089",
+      "id": "fc_module_1765572026773_12_656693",
       "type": "body_info",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -285,14 +285,14 @@
       "inputs": {
         "target": {
           "type": "module_output",
-          "value": "fc_mod_1765463863193:body",
+          "value": "fc_module_1765572026773_10_674661:body",
           "label": "PommeId - body"
         }
       },
-      "groupId": "fc_group_1765466243370"
+      "groupId": "fc_group_1765572026773_0_169461"
     },
     {
-      "id": "fc_mod_1765464902537",
+      "id": "fc_module_1765572026773_13_743763",
       "type": "change_detector",
       "isEnabled": true,
       "primaryBodyId": "manual_1765461747271",
@@ -301,13 +301,107 @@
       "inputs": {
         "value": {
           "type": "module_output",
-          "value": "fc_mod_1765464027931:result",
+          "value": "fc_module_1765572026773_11_196082:result",
           "label": "PommeName - result"
         }
       },
-      "groupId": "fc_group_1765466243370",
+      "groupId": "fc_group_1765572026773_0_169461",
       "changeLastValue": "",
       "changeTriggered": false
+    },
+    {
+      "id": "fc_module_1765572026774_0_895147",
+      "type": "custom_script",
+      "isEnabled": true,
+      "primaryBodyId": "manual_1765461747271",
+      "referenceBodyId": "manual_1765461747271",
+      "color": "#3cc4dd",
+      "inputs": {
+        "trigger": {
+          "type": "module_output",
+          "value": "fc_module_1765572026773_13_743763:triggered",
+          "label": "Module - triggered"
+        },
+        "input_0": {
+          "type": "module_output",
+          "value": "fc_module_1765572026773_10_674661:body",
+          "label": "PommeId - body"
+        }
+      },
+      "groupId": "fc_group_1765572026773_0_169461",
+      "name": "SavePomme",
+      "customScriptCode": "//async\nconsole.log(new Date());\nif(input[0]===null || input[0]==undefined){return \"no\"}\nconsole.log(input[0].id);\nif(input[0].id==0){return \"0\"}\nconst payload={valueName:\"Pomme\",sleepTime:500,value:input[0].id}\nconst result=await game.actions.postApiValue(payload);\nconsole.log(\"post\"+input[0].id)\nreturn result;",
+      "customScriptMode": "async",
+      "customScriptAsyncState": true,
+      "customScriptLastResult": "manual_1765572187766",
+      "customScriptLogs": [
+        "Fri Dec 12 2025 21:43:07 GMT+0100 (heure normale d’Europe centrale)",
+        "manual_1765572187766",
+        "postmanual_1765572187766"
+      ],
+      "customScriptManualTrigger": 1765569680323
+    },
+    {
+      "id": "fc_module_1765572026774_1_648605",
+      "type": "custom_script",
+      "isEnabled": true,
+      "primaryBodyId": "manual_1765461747271",
+      "referenceBodyId": "manual_1765461747271",
+      "color": "#3c47dd",
+      "inputs": {
+        "trigger": {
+          "type": "module_output",
+          "value": "fc_module_1765572026773_13_743763:triggered",
+          "label": "Module - triggered"
+        }
+      },
+      "groupId": "fc_group_1765572026773_0_169461",
+      "name": "GetPomme",
+      "customScriptCode": "//async\nconst payload={valueName:\"Pomme\",sleepTime:200}\nconst result=await game.actions.getApiValue(payload);\nreturn result;",
+      "customScriptOutputType": "string",
+      "customScriptContinuousRun": false,
+      "customScriptLogs": [],
+      "customScriptAsyncState": true,
+      "customScriptMode": "async",
+      "customScriptLastResult": "manual_1765572187766"
+    },
+    {
+      "id": "fc_module_1765572026774_2_815399",
+      "type": "body_by",
+      "isEnabled": true,
+      "primaryBodyId": "manual_1765461747271",
+      "referenceBodyId": "manual_1765461747271",
+      "color": "#af3cdd",
+      "inputs": {
+        "value": {
+          "type": "module_output",
+          "value": "fc_module_1765572026774_1_648605:result",
+          "label": "GetPomme - result"
+        }
+      },
+      "groupId": "fc_group_1765572026773_0_169461",
+      "name": "PommeBody"
+    },
+    {
+      "id": "fc_module_1765572026774_3_537534",
+      "type": "orbit_info",
+      "isEnabled": true,
+      "primaryBodyId": "manual_1764400494074",
+      "referenceBodyId": "manual_1765461747271",
+      "color": "#ffffff",
+      "inputs": {
+        "primary": {
+          "type": "module_output",
+          "value": "fc_module_1765572026774_2_815399:body",
+          "label": "PommeBody - body"
+        },
+        "reference": {
+          "type": "body",
+          "value": "manual_1765461747271",
+          "label": "FakeTerre"
+        }
+      },
+      "groupId": "fc_group_1765572026773_0_169461"
     }
   ]
 }

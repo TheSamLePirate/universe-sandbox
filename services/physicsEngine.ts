@@ -16,7 +16,7 @@ const MAX_ROCKET_THRUST = 0.01;
 
 const nameExcludedFromGravity = ['FakeSun', 'FakeStar', 'FakePlanet'];
 const attractButDontMove = ['FakeTerre', 'FakeTerre'];
-const dontAttractButMove = ['Pomme'];
+const dontAttractButMove = ['Pomme_'];
 
 export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
     const forces: Vector2D[] = bodies.map(() => ({ x: 0, y: 0 }));
@@ -44,15 +44,17 @@ export const calculateForces = (bodies: Body[], gConst: number): Vector2D[] => {
             //if A dontAttractButMove
             //apply force on A but not on B
 
-            if (dontAttractButMove.includes(bodyA.name)) {
+            if (bodyA.name.includes("Pomme_")) {
                 forces[i].x += fx;
                 forces[i].y += fy;
+                //skip the other body go to next loop
                 continue;
             }
 
-            if (dontAttractButMove.includes(bodyB.name)) {
+            if (bodyB.name.includes("Pomme_")) {
                 forces[j].x -= fx;
                 forces[j].y -= fy;
+                //skip the other body go to next loop
                 continue;
             }
 
