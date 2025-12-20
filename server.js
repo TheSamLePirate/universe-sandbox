@@ -121,7 +121,7 @@ app.post("/api/:dataName", (req, res) => {
   }
 
   sharedValues.set(dataName, value);
-  //console.log(dataName + " = " + value);
+  console.log(dataName + " = " + value);
   return res.json({ [dataName]: sharedValues.get(dataName) });
 });
 

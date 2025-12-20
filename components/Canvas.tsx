@@ -595,7 +595,7 @@ const Canvas: React.FC<CanvasProps> = ({
                     const backRightY = screenY + Math.sin(angle - 2.5) * size;
 
                     // dummy SaS / ship variables : user will plug ship system to that
-                    const sasMode = "off"; // "prograde" | "retrograde" | "radial-out" | "none"
+                    //const sasMode = "off"; // "prograde" | "retrograde" | "radial-out" | "none"
                     const landed = true;
                     const landing = false;
                     const fuel = 50; // 0..100
@@ -995,9 +995,9 @@ const Canvas: React.FC<CanvasProps> = ({
                         ctx.globalAlpha = prevGA;
                     };
 
-                    if (sasMode === "prograde") drawChevrons(0, "rgba(160,255,190,0.95)");
-                    if (sasMode === "retrograde") drawChevrons(Math.PI, "rgba(255,140,140,0.95)");
-                    if (sasMode === "radial-out") drawChevrons(Math.PI / 2, "rgba(140,220,255,0.95)");
+                    //if (sasMode === "prograde") drawChevrons(0, "rgba(160,255,190,0.95)");
+                    //if (sasMode === "retrograde") drawChevrons(Math.PI, "rgba(255,140,140,0.95)");
+                    //if (sasMode === "radial-out") drawChevrons(Math.PI / 2, "rgba(140,220,255,0.95)");
 
                     // =========================
                     // NAV LIGHTS (blink)
@@ -1678,7 +1678,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 const starRad = Math.max(3, primaryStar.radius * scale);
 
                 bodies.forEach(body => {
-                    if (body.isStar || body.isRocket) return;
+                    if (body.isStar || body.isRocket || body.name.includes("Pomme_")) return;
 
                     const bodyX = cx + body.position.x * scale;
                     const bodyY = cy + body.position.y * scale;

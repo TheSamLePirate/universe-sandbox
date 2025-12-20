@@ -185,6 +185,8 @@ export interface Preset {
   followBodyId?: string;
   followCenterOfMass?: boolean;
   speed?: number;
+  visualConfig?: VisualConfig;
+  physicsConfig?: PhysicsConfig;
 }
 
 export interface SystemEvent {
@@ -498,4 +500,24 @@ export interface WebcamState {
   error: string | null;
   isLoading: boolean;
   permissionDenied: boolean;
+}
+
+export enum Month {
+  January = 'JANUARY',
+  July = 'JULY',
+}
+
+export interface SimulationState {
+  orbitRadius: number; // in meters (simulated AU)
+  starDistance: number; // in meters
+  currentMonth: Month;
+  isMeasuring: boolean;
+  showMath: boolean;
+}
+
+export interface StarPosition {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
 }

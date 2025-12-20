@@ -53,7 +53,7 @@ const Slide = ({ image, isPreloaded }: { image: SlideImage; isPreloaded: boolean
       />
 
       {/* Caption Overlay - Only visible when loaded */}
-      {isLoaded && (image.title || image.description) && (
+      {isLoaded && (image.title || image.description) && false && (
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-8 md:p-12 text-white pointer-events-none">
           <motion.h2
             initial={{ y: 20, opacity: 0 }}
@@ -187,7 +187,7 @@ export const FullPageSlideshow = forwardRef<SlideshowRef, SlideshowProps>(({
       </AnimatePresence>
 
       {/* Progress Indicator */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-center space-x-2 z-10 pointer-events-none">
+      {/* <div className="absolute top-0 left-0 w-full p-6 flex justify-center space-x-2 z-10 pointer-events-none">
         {images.map((img, idx) => (
           <div
             key={img.id}
@@ -195,7 +195,7 @@ export const FullPageSlideshow = forwardRef<SlideshowRef, SlideshowProps>(({
               }`}
           />
         ))}
-      </div>
+      </div> */}
     </div>
   );
 });

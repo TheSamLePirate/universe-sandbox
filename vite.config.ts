@@ -1,7 +1,8 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite'
+import tailwindcss from '@tailwindcss/vite';
+import mkcert from "vite-plugin-mkcert";
 
 
 export default defineConfig(({ mode }) => {
@@ -14,9 +15,15 @@ export default defineConfig(({ mode }) => {
     },
     preview: {
       allowedHosts: ['macbook-pro-de-olivier.local'],
-      port: 4173,
+      port: 443,
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      mkcert({
+        hosts: ["macbook-pro-de-olivier.local"], // important: le hostname doit être dans le cert
+      }),
+    ],
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)

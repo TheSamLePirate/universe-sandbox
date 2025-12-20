@@ -43,6 +43,7 @@ export const useFlightComputerLogic = (
     prevImage?: () => void,
     handleJumpToImage?: (imageId: string) => void,
     setShowCameraViewer?: (show: boolean) => void,
+    setShowParralaxe?: (show: boolean) => void,
 ) => {
     const rendezvousSolutionMap = useMemo<Record<string, RendezvousSolution>>(() => {
         const map: Record<string, RendezvousSolution> = {};
@@ -275,6 +276,7 @@ export const useFlightComputerLogic = (
                             sleep: sleep,
                             map01ToPI: map01ToPI,
                             setShowCameraViewer: setShowCameraViewer,
+                            setShowParralaxe: setShowParralaxe,
                         },
                         helpers: {
                             resolveInput: (input: FlightComputerInput) => resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap),

@@ -291,7 +291,7 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
     };
 
     return (
-        <div className="absolute inset-0 z-[50] pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 z-[150] pointer-events-none overflow-hidden">
             {/* Edit Mode Toggle - Always visible and interactive */}
             {showUI && (
                 <div className="absolute top-4 left-4 pointer-events-auto z-[60]">

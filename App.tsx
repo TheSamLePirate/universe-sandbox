@@ -34,6 +34,8 @@ import { FullPageSlideshow } from './components/FullPageSlideshow';
 
 import CameraViewer from './components/CameraViewer';
 
+import Parralaxe from './components/Parralaxe';
+
 
 
 
@@ -212,6 +214,7 @@ const App: React.FC = () => {
 
     const slideshowRef = useRef<SlideshowRef>(null);
     const [showImageSlideShow, setShowImageSlideShow] = useState(false);
+    const [showParralaxe, setShowParralaxe] = useState(false);
 
     // Example handlers calling the exposed component API
     const handleNext = () => slideshowRef.current?.next();
@@ -1962,7 +1965,9 @@ const App: React.FC = () => {
             camera: data.camera || { scale: 1.0, offset: { x: 0, y: 0 } },
             followBodyId: data.followBodyId || null,
             followCenterOfMass: data.followCenterOfMass || false,
-            speed: data.speed || 1.0
+            speed: data.speed || 1.0,
+            visualConfig: data.visualConfig || DEFAULT_VISUAL_CONFIG,
+            physicsConfig: data.physicsConfig || DEFAULT_PHYSICS_CONFIG
         };
         availablePresets.push(preset);
         //setCurrentPresetId(preset.id);
@@ -2037,6 +2042,7 @@ const App: React.FC = () => {
                 setFlightComputerModules(data.flightComputerModules || []);
                 setModuleGroups(data.moduleGroups || []);
 
+
                 setTimeout(() => setIsRunning(true), 100);
                 //alert("Simulation loaded successfully!");
             } catch (err) {
@@ -2074,6 +2080,8 @@ const App: React.FC = () => {
             setFlightComputerModules(mergedModules);
             setModuleGroups(mergedModuleGroups);
             setSpeed(preset.speed || 1.0);
+            setVisualConfig(preset.visualConfig || DEFAULT_VISUAL_CONFIG);
+            setPhysicsConfig(preset.physicsConfig || DEFAULT_PHYSICS_CONFIG);
             simulationTimeRef.current = 0; // Reset clock for preset
             if (id !== 'imported_save') {
                 setPhysicsConfig({ gravitationalConstant: 0.5, collisions: true, timeStep: 0.008, timeReverseDuration: 4.0 });
@@ -2980,6 +2988,7 @@ const App: React.FC = () => {
                 prevImage={handlePrev}
                 handleJumpToImage={handleJumpToImage}
                 setShowCameraViewer={setShowCameraViewer}
+                setShowParralaxe={setShowParralaxe}
             />
 
 
@@ -3292,6 +3301,10 @@ const App: React.FC = () => {
 
             <Activity mode={showCameraViewer ? 'visible' : 'hidden'}>
                 <CameraViewer />
+            </Activity>
+
+            <Activity mode={showParralaxe ? 'visible' : 'hidden'}>
+                <Parralaxe />
             </Activity>
         </div>
     );
