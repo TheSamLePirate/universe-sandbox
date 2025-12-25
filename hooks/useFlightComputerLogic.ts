@@ -198,7 +198,7 @@ export const useFlightComputerLogic = (
                     function map01ToPI(v) { return (v * 2 * Math.PI) - Math.PI; }
 
                     async function getApiValue({
-                        baseUrl = "https://MacBook-Pro-de-olivier.local:3009",
+                        baseUrl = "http://MacBook-Pro-de-olivier.local:3009",
                         valueName = "value",
                         sleepTime = "sleepTime",
                     } = {}) {
@@ -211,7 +211,7 @@ export const useFlightComputerLogic = (
                     }
 
                     async function getApiValueAndReset({
-                        baseUrl = "https://MacBook-Pro-de-olivier.local:3009",
+                        baseUrl = "http://MacBook-Pro-de-olivier.local:3009",
                         valueName = "value",
                         sleepTime = "sleepTime",
                     } = {}) {
@@ -223,7 +223,7 @@ export const useFlightComputerLogic = (
                         return data?.[valueName];
                     }
 
-                    async function postApiValue({ baseUrl = "https://MacBook-Pro-de-olivier.local:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
+                    async function postApiValue({ baseUrl = "http://MacBook-Pro-de-olivier.local:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
                         await sleep(sleepTime);
                         const res = await fetch(`${baseUrl}/api/${valueName}`, {
                             method: 'POST',

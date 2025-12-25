@@ -14,7 +14,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const GOVEE_API_URL = "http://localhost:3008";
+const GOVEE_API_URL = "https://localhost:3008";
 
 // Helper to forward requests to Govee API
 const proxyToGovee = async (req, res, path, method = "GET") => {
@@ -242,4 +242,4 @@ app.post("/api/:dataName", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3009;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`https://localhost:${PORT}`));

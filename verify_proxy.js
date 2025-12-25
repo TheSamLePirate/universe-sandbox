@@ -40,7 +40,7 @@ async function testEndpoint(endpoint, method = "GET", body = null) {
             options.body = JSON.stringify(body);
         }
 
-        const res = await fetch(`http://localhost:${PORT}/api/${endpoint}`, options);
+        const res = await fetch(`https://localhost:${PORT}/api/${endpoint}`, options);
         console.log(`Status: ${res.status}`);
         const text = await res.text();
         console.log(`Response: ${text.substring(0, 200)}...`); // truncate
