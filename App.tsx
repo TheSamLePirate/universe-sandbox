@@ -242,9 +242,9 @@ const App: React.FC = () => {
     //tapi in 192.168.1.100:3009/api/presets that return [{name:<filename sans .json>, preset:<content of the file>}]
     useEffect(() => {
         const fetchFiles = async () => {
-            const presets = await fetch('http://192.168.1.109:3009/api/presets').then(res => res.json());
+            const presets = await fetch('https://192.168.1.109:3009/api/presets').then(res => res.json());
             setPresetsToImport(JSON.parse(presets) as importedPreset[]);
-            const computerModules = await fetch('http://192.168.1.109:3009/api/flightComputerModules').then(res => res.json());
+            const computerModules = await fetch('https://192.168.1.109:3009/api/flightComputerModules').then(res => res.json());
             setComputerModulesToImport(JSON.parse(computerModules) as importedComputerModule[]);
         };
         fetchFiles();

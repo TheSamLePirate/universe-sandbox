@@ -3,6 +3,14 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import https from "node:https";
+
+
+
+
+// adjust paths to wherever vite-plugin-mkcert wrote them:
+const key = fs.readFileSync(process.env.SSL_KEY ?? "/Users/olivierveinand/.vite-plugin-mkcert/dev.pem");
+const cert = fs.readFileSync(process.env.SSL_CERT ?? "/Users/olivierveinand/.vite-plugin-mkcert/cert.pem");
 
 const app = express();
 
@@ -102,9 +110,9 @@ const normalizeValue = (v) => {
 //no require, use fs
 app.get("/api/presets", (req, res) => {
 
-  const presets = fs.readdirSync(path.join(".", "importAtStartup", "Presets"));
+  const presets = fs.readdirSync(path.join("..", "importAtStartup", "Presets"));
   const presetsToReturn = presets.map(preset => {
-    const presetPath = path.join(".", "importAtStartup", "Presets", preset);
+    const presetPath = path.join("..", "importAtStartup", "Presets", preset);
     const presetContent = fs.readFileSync(presetPath, "utf-8");
     return { name: preset.replace(".json", ""), preset: JSON.parse(presetContent) };
   });
@@ -113,9 +121,9 @@ app.get("/api/presets", (req, res) => {
 
 //the same for FlightComputerModules
 app.get("/api/flightComputerModules", (req, res) => {
-  const modules = fs.readdirSync(path.join(".", "importAtStartup", "FlightComputerModules"));
+  const modules = fs.readdirSync(path.join("..", "importAtStartup", "FlightComputerModules"));
   const modulesToReturn = modules.map(module => {
-    const modulePath = path.join(".", "importAtStartup", "FlightComputerModules", module);
+    const modulePath = path.join("..", "importAtStartup", "FlightComputerModules", module);
     const moduleContent = fs.readFileSync(modulePath, "utf-8");
     return { name: module.replace(".json", ""), module: JSON.parse(moduleContent) };
   });
@@ -124,7 +132,7 @@ app.get("/api/flightComputerModules", (req, res) => {
 
 //the same for GameData
 app.get("/api/gameData", (req, res) => {
-  const gameData = fs.readFileSync(path.join(".", "importAtStartup", "GameData", "gamedata.json"), "utf-8");
+  const gameData = fs.readFileSync(path.join("..", "importAtStartup", "GameData", "gamedata.json"), "utf-8");
   return res.json(JSON.parse(gameData));
 });
 
@@ -242,4 +250,11 @@ app.post("/api/:dataName", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3009;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+
+
+https.createServer({ key, cert }, app).listen(PORT, "0.0.0.0", () => {
+  console.log(`https://localhost:${PORT}`);
+});
+
+
+//app.listen(PORT, () => console.log(`http://localhost:${PORT}`));

@@ -1,4 +1,23 @@
-import { CelestialBody, RenderOptions } from '../types';
+//import { CelestialBody, RenderOptions } from "../types";
+
+
+import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
+
+
+interface RenderOptions {
+  primaryStar?: Body;
+  visualConfig?: any;
+  isGhost?: boolean;
+  time?: number;
+  forcedType?: string;
+  dpr?: number;
+}
+
+
+//CelestialBody is Body plus planetType
+interface CelestialBody extends Body {
+  planetType?: string;
+}
 
 // ---------- CONSTANTS & PRESETS ----------
 
@@ -132,7 +151,7 @@ const __cloudTexCache = new Map<string, HTMLCanvasElement>();
  */
 export function drawBeautifullPlanetGemini(
   ctx: CanvasRenderingContext2D,
-  body: CelestialBody,
+  body: Body,
   screenX: number,
   screenY: number,
   visualRadius: number,
@@ -153,18 +172,18 @@ export function drawBeautifullPlanetGemini(
   const rng = mulberry32(hashString(seed));
 
   // --- Lighting Calculations ---
-  let sunAngle = -Math.PI / 4; 
+  let sunAngle = -Math.PI / 4;
   if (primaryStar && primaryStar.position && body.position) {
     const dx = body.position.x - primaryStar.position.x;
     const dy = body.position.y - primaryStar.position.y;
     sunAngle = Math.atan2(dy, dx);
   }
-  
-  const lx = Math.cos(sunAngle+Math.PI); // Light Vector X (pointing TO sun)
-  const ly = Math.sin(sunAngle+Math.PI); // Light Vector Y
+
+  const lx = Math.cos(sunAngle + Math.PI); // Light Vector X (pointing TO sun)
+  const ly = Math.sin(sunAngle + Math.PI); // Light Vector Y
 
   // --- Procedural Variation ---
-  const hueShift = (rng() - 0.5) * 15; 
+  const hueShift = (rng() - 0.5) * 15;
   const satShift = (rng() - 0.5) * 0.1;
   const baseColor = body.color || tweakHsl(preset.base || body.color || "#888", hueShift, satShift, 0);
   const accentColor = tweakHsl(preset.accent || "#040404ff", hueShift, satShift, 0);
@@ -174,19 +193,19 @@ export function drawBeautifullPlanetGemini(
   const spinSpeed = 0.05 + rng() * 0.05;
 
   const rotation = ((rng() * Math.PI * 2) + time * (0.045 + rng() * 0.11)) % (Math.PI * 2);
-  const tilt = (rng() - 0.5) * 0.4; 
+  const tilt = (rng() - 0.5) * 0.4;
 
   // --- 1. Big Atmosphere Halo (Back) ---
   if (visualConfig?.showGlow && !isGhost) {
     // significantly larger glow for "big atmosphere" look
-    const glowScale = preset.atmosphere ? 0.35 : 0.1; 
+    const glowScale = preset.atmosphere ? 0.35 : 0.1;
     const glowRadius = visualRadius * (1.3 + glowScale * visualConfig.glowIntensity!);
-    
+
     const glow = ctx.createRadialGradient(screenX, screenY, visualRadius * 0.85, screenX, screenY, glowRadius);
     glow.addColorStop(0, atmColor);
     glow.addColorStop(0.4, rgba(atmColor, 0.5));
     glow.addColorStop(1, "rgba(0,0,0,0)");
-    
+
     ctx.globalCompositeOperation = "screen";
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = glow;
@@ -233,10 +252,10 @@ export function drawBeautifullPlanetGemini(
   // --- 4. Volumetric Clouds (Two-Pass + Shadow) ---
   if (preset.clouds > 0) {
     const cloudTex = getCloudTexture(seed, preset, texSize, time);
-    
+
     // Pass 0: Shadows (Offset by light direction)
     // Offset creates height illusion.
-    const shadowDist = visualRadius * 0.04; 
+    const shadowDist = visualRadius * 0.04;
     const shaX = -lx * shadowDist;
     const shaY = -ly * shadowDist;
 
@@ -263,11 +282,11 @@ export function drawBeautifullPlanetGemini(
     ctx.save();
     ctx.translate(screenX, screenY);
     // Rotate faster or with phase shift
-    ctx.rotate(rotation * 1.35 + tilt + 1.0); 
+    ctx.rotate(rotation * 1.35 + tilt + 1.0);
     // Scale up to look "above"
-    ctx.scale(1.03, 1.03); 
-    ctx.globalCompositeOperation = "screen"; 
-    ctx.globalAlpha = isGhost ? 0.1 : (preset.clouds * 0.4); 
+    ctx.scale(1.03, 1.03);
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = isGhost ? 0.1 : (preset.clouds * 0.4);
     ctx.drawImage(cloudTex, -visualRadius, -visualRadius, visualRadius * 2, visualRadius * 2);
     ctx.restore();
   }
@@ -286,7 +305,7 @@ export function drawBeautifullPlanetGemini(
   }
 
   // --- 5. Shading & Terminator (The "3D" Look) ---
-  
+
   // A. Atmospheric Rim (stronger inside now)
   ctx.globalCompositeOperation = "screen";
   const rimSize = visualRadius * 0.25; // Bigger inner rim
@@ -301,51 +320,51 @@ export function drawBeautifullPlanetGemini(
   // B. Terminator (Mid-Planet Shift)
   ctx.globalCompositeOperation = "multiply";
   ctx.globalAlpha = isGhost ? 0.5 : 1.0;
-  
+
   // To get the terminator closer to the middle, we tighten the gradient transition.
   // We position the "light center" closer to the surface (or just outside) 
   // and make the gradient radius smaller so the falloff happens faster.
-  
+
   // Shift light source further away to flatten the curve slightly, but adjust stops to bring darkness in.
-  const lightDistFactor = Math.PI/3; // Distance of light center from planet center (in radii)
+  const lightDistFactor = Math.PI / 3; // Distance of light center from planet center (in radii)
   const lightX = screenX + lx * visualRadius * lightDistFactor;
   const lightY = screenY + ly * visualRadius * lightDistFactor;
-  
+
   // The gradient moves from Light (Transparent/White) -> Dark (Black)
   // If we start the darkness earlier, we get a larger night side.
   // Radius of gradient:
-  const gradStart = visualRadius * 0.3; 
+  const gradStart = visualRadius * 0.3;
   const gradEnd = visualRadius * 2.1; // Reduced from 3.5 to make shadow encroach more
 
   const shadowGrad = ctx.createRadialGradient(lightX, lightY, gradStart, lightX, lightY, gradEnd);
-  
+
   shadowGrad.addColorStop(0.0, "rgba(255,255,255,1)"); // Fully lit
   shadowGrad.addColorStop(0.40, "rgba(220,220,220,1)"); // Start falloff
-  
+
   if (preset.atmosphere) {
-     shadowGrad.addColorStop(0.48, "#ffbba0"); // Sunset
-     shadowGrad.addColorStop(0.53, "#2a1a40"); // Twilight
+    shadowGrad.addColorStop(0.48, "#ffbba0"); // Sunset
+    shadowGrad.addColorStop(0.53, "#2a1a40"); // Twilight
   } else {
-     shadowGrad.addColorStop(0.5, "#555");
+    shadowGrad.addColorStop(0.5, "#555");
   }
-  
+
   shadowGrad.addColorStop(0.85, "black"); // Full Night
 
   ctx.fillStyle = shadowGrad;
   ctx.fillRect(screenX - visualRadius * 2, screenY - visualRadius * 2, visualRadius * 4, visualRadius * 4);
 
-  
+
 
   // D. City Lights (Night Side)
   if (preset.cityLights && !isGhost) {
-     const lightsTex = getCityLightsTexture(seed, texSize);
-     ctx.save();
-     ctx.translate(screenX, screenY);
-     ctx.rotate(rotation + tilt);
-     ctx.globalCompositeOperation = "color-dodge"; // Brighter lights
-     ctx.globalAlpha = 0.9; 
-     ctx.drawImage(lightsTex, -visualRadius, -visualRadius, visualRadius * 2, visualRadius * 2);
-     ctx.restore();
+    const lightsTex = getCityLightsTexture(seed, texSize);
+    ctx.save();
+    ctx.translate(screenX, screenY);
+    ctx.rotate(rotation + tilt);
+    ctx.globalCompositeOperation = "color-dodge"; // Brighter lights
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(lightsTex, -visualRadius, -visualRadius, visualRadius * 2, visualRadius * 2);
+    ctx.restore();
   }
 
   ctx.restore(); // End Planet Clip
@@ -372,19 +391,19 @@ function inferPlanetType(body: CelestialBody): string {
   const r = mulberry32(hashString(seed));
   const m = body.mass || 0;
 
-  if (body.name.includes("Earth") || body.name.includes("Terre") ) return PlanetTypes.EARTHLIKE;
-  if (body.name.includes("Jupiter") || body.name.includes("Jupiter") ) return PlanetTypes.GAS_GIANT
+  if (body.name.includes("Earth") || body.name.includes("Terre")) return PlanetTypes.EARTHLIKE;
+  if (body.name.includes("Jupiter") || body.name.includes("Jupiter")) return PlanetTypes.GAS_GIANT
 
   if (m > 300) return r() > 0.5 ? PlanetTypes.GAS_GIANT : PlanetTypes.RINGED_GAS;
   if (m > 100) return r() > 0.5 ? PlanetTypes.ICE_GIANT : PlanetTypes.RINGED_ICE;
-  
+
   const roll = r();
   if (roll < 0.1) return PlanetTypes.LAVA;
   if (roll < 0.3) return PlanetTypes.DESERT;
   if (roll < 0.5) return PlanetTypes.ICE;
   if (roll < 0.7) return PlanetTypes.OCEAN;
   if (roll < 0.85) return PlanetTypes.EARTHLIKE;
-  
+
   return PlanetTypes.BARREN;
 }
 
@@ -432,47 +451,47 @@ function getCloudTexture(seed: string, preset: any, size: number, time: number) 
   const rng = mulberry32(hashString(seed + "clouds"));
 
   const noiseFn = createNoise2D(rng);
-  
+
   const imageData = ctx.createImageData(size, size);
   const data = imageData.data;
-  
+
   const scale = 3.5;
   const cutoff = 0.35; // Lower cutoff for more clouds
-  
+
 
   //move the noise with time
-  const t = time*10;
+  const t = time * 10;
 
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-       const nx = (x - size/2) / (size/2);
-       const ny = (y - size/2) / (size/2);
-       const d = Math.sqrt(nx*nx + ny*ny);
-       
-       if (d >= 1) continue; 
-       
-       // Simple UV mapping with distortion
-       const u = nx * scale;
-       const v = ny * scale;
+      const nx = (x - size / 2) / (size / 2);
+      const ny = (y - size / 2) / (size / 2);
+      const d = Math.sqrt(nx * nx + ny * ny);
 
-       let n = fbm(u + t, v + t, 5, noiseFn); 
-       n = (n + 1) / 2; 
+      if (d >= 1) continue;
 
-       if (n > cutoff) {
-           // Smooth fade alpha
-           const alpha = Math.min(1, (n - cutoff) / (1 - cutoff) * 1.5);
-           const idx = (y * size + x) * 4;
-           data[idx] = 255;
-           data[idx + 1] = 255;
-           data[idx + 2] = 255;
-           data[idx + 3] = Math.floor(alpha * 255);
-       }
+      // Simple UV mapping with distortion
+      const u = nx * scale;
+      const v = ny * scale;
+
+      let n = fbm(u + t, v + t, 5, noiseFn);
+      n = (n + 1) / 2;
+
+      if (n > cutoff) {
+        // Smooth fade alpha
+        const alpha = Math.min(1, (n - cutoff) / (1 - cutoff) * 1.5);
+        const idx = (y * size + x) * 4;
+        data[idx] = 255;
+        data[idx + 1] = 255;
+        data[idx + 2] = 255;
+        data[idx + 3] = Math.floor(alpha * 255);
+      }
     }
   }
-  
+
   ctx.putImageData(imageData, 0, 0);
-  
+
   ctx.globalCompositeOperation = "destination-in";
   ctx.beginPath();
   ctx.arc(0, 0, R, 0, Math.PI * 2);
@@ -490,232 +509,232 @@ function getCityLightsTexture(seed: string, size: number) {
   const R = size / 2;
   ctx.translate(R, R);
   const rng = mulberry32(hashString(seed + "lights"));
-  
-  for(let i=0; i<500; i++) {
-      const angle = rng() * Math.PI * 2;
-      const dist = rng() * R * 0.95;
-      const cx = Math.cos(angle) * dist;
-      const cy = Math.sin(angle) * dist;
-      const r = rng() * (size * 0.1);
-      
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, "rgba(255, 230, 180, 1)");
-      grad.addColorStop(1, "rgba(255, 230, 180, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI*2);
-      ctx.fill();
+
+  for (let i = 0; i < 500; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * R * 0.95;
+    const cx = Math.cos(angle) * dist;
+    const cy = Math.sin(angle) * dist;
+    const r = rng() * (size * 0.1);
+
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, "rgba(255, 230, 180, 1)");
+    grad.addColorStop(1, "rgba(255, 230, 180, 0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
   }
-  
+
   ctx.globalCompositeOperation = "destination-in";
   ctx.beginPath();
   ctx.arc(0, 0, R, 0, Math.PI * 2);
   ctx.fill();
-  
+
   return canvas;
 }
 
 // --- GENERATION IMPLS ---
 
 function generateTerrestrialSurface(ctx: CanvasRenderingContext2D, R: number, type: string, preset: any, base: string, accent: string, rng: () => number) {
-    const size = R * 2;
-    const noiseFn = createNoise2D(rng);
-    const scale = preset.noiseScale || 2.0;
-    
-    const imgData = ctx.createImageData(size, size);
-    const d = imgData.data;
-    
-    const cBase = parseToRgb(base);
-    const cAccent = parseToRgb(accent);
-    const cAccent2 = preset.accent2 ? parseToRgb(preset.accent2) : cAccent;
-    const isLava = type === PlanetTypes.LAVA;
+  const size = R * 2;
+  const noiseFn = createNoise2D(rng);
+  const scale = preset.noiseScale || 2.0;
 
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const nx = (x - size/2) / R;
-            const ny = (y - size/2) / R;
-            const distSq = nx*nx + ny*ny;
-            if (distSq >= 1) continue;
+  const imgData = ctx.createImageData(size, size);
+  const d = imgData.data;
 
-            let n = fbm(nx * scale, ny * scale, 5, noiseFn); 
+  const cBase = parseToRgb(base);
+  const cAccent = parseToRgb(accent);
+  const cAccent2 = preset.accent2 ? parseToRgb(preset.accent2) : cAccent;
+  const isLava = type === PlanetTypes.LAVA;
 
-            if (preset.roughness > 0.8) {
-                n = Math.abs(n);
-            }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = (x - size / 2) / R;
+      const ny = (y - size / 2) / R;
+      const distSq = nx * nx + ny * ny;
+      if (distSq >= 1) continue;
 
-            const idx = (y * size + x) * 4;
-            let r, g, b;
-            
-            if (n < -0.1 && type === PlanetTypes.EARTHLIKE) {
-                const depth = Math.abs(n);
-                r = lerp(cBase.r, 10, depth);
-                g = lerp(cBase.g, 10, depth);
-                b = lerp(cBase.b, 50, depth);
-            } else if (n < 0.05 && type === PlanetTypes.EARTHLIKE) {
-                r = 194; g = 178; b = 128; // Sand
-            } else {
-                let mix = (n + 1) / 2;
-                if (isLava && n > 0.6) {
-                    r = 255; g = 200; b = 50; 
-                } else {
-                    if (type === PlanetTypes.EARTHLIKE && n > 0.6) {
-                        const snow = (n - 0.6) * 3;
-                        r = lerp(cAccent2.r, 255, snow);
-                        g = lerp(cAccent2.g, 255, snow);
-                        b = lerp(cAccent2.b, 255, snow);
-                    } else {
-                        r = lerp(cBase.r, cAccent.r, mix);
-                        g = lerp(cBase.g, cAccent.g, mix);
-                        b = lerp(cBase.b, cAccent.b, mix);
-                    }
-                }
-            }
+      let n = fbm(nx * scale, ny * scale, 5, noiseFn);
 
-            if (preset.iceCaps) {
-                const polarDist = Math.abs(ny);
-                const iceThreshold = 0.95 - preset.iceCaps * 0.4;
-                if (polarDist + n * 0.1 > iceThreshold) {
-                    r = 240; g = 245; b = 255;
-                }
-            }
-            
-            const relief = 0.9 + 0.2 * n;
-            
-            d[idx] = r * relief;
-            d[idx+1] = g * relief;
-            d[idx+2] = b * relief;
-            d[idx+3] = 255;
+      if (preset.roughness > 0.8) {
+        n = Math.abs(n);
+      }
+
+      const idx = (y * size + x) * 4;
+      let r, g, b;
+
+      if (n < -0.1 && type === PlanetTypes.EARTHLIKE) {
+        const depth = Math.abs(n);
+        r = lerp(cBase.r, 10, depth);
+        g = lerp(cBase.g, 10, depth);
+        b = lerp(cBase.b, 50, depth);
+      } else if (n < 0.05 && type === PlanetTypes.EARTHLIKE) {
+        r = 194; g = 178; b = 128; // Sand
+      } else {
+        let mix = (n + 1) / 2;
+        if (isLava && n > 0.6) {
+          r = 255; g = 200; b = 50;
+        } else {
+          if (type === PlanetTypes.EARTHLIKE && n > 0.6) {
+            const snow = (n - 0.6) * 3;
+            r = lerp(cAccent2.r, 255, snow);
+            g = lerp(cAccent2.g, 255, snow);
+            b = lerp(cAccent2.b, 255, snow);
+          } else {
+            r = lerp(cBase.r, cAccent.r, mix);
+            g = lerp(cBase.g, cAccent.g, mix);
+            b = lerp(cBase.b, cAccent.b, mix);
+          }
         }
+      }
+
+      if (preset.iceCaps) {
+        const polarDist = Math.abs(ny);
+        const iceThreshold = 0.95 - preset.iceCaps * 0.4;
+        if (polarDist + n * 0.1 > iceThreshold) {
+          r = 240; g = 245; b = 255;
+        }
+      }
+
+      const relief = 0.9 + 0.2 * n;
+
+      d[idx] = r * relief;
+      d[idx + 1] = g * relief;
+      d[idx + 2] = b * relief;
+      d[idx + 3] = 255;
     }
-    
-    ctx.putImageData(imgData, 0, 0);
+  }
+
+  ctx.putImageData(imgData, 0, 0);
 }
 
 function generateGasBands(ctx: CanvasRenderingContext2D, R: number, preset: any, base: string, accent: string, rng: () => number) {
-    const size = R * 2;
-    const numBands = preset.bands || 10;
-    const bands = [];
-    
-    for(let i=0; i<numBands; i++) {
-        bands.push({
-            color: rng() > 0.5 ? base : accent,
-            width: 1/numBands,
-            turbulence: rng()
-        });
-    }
-    
-    const cBase = parseToRgb(base);
-    const cAccent = parseToRgb(accent);
-    
-    const imgData = ctx.createImageData(size, size);
-    const d = imgData.data;
-    const noiseFn = createNoise2D(rng);
-    
-    for (let y = 0; y < size; y++) {
-        const ny = (y - size/2) / R; 
-        
-        // Turbulence
-        const bandNoise = noiseFn(0, ny * 5);
-        const yPerturbed = ny + bandNoise * 0.05;
-        const u = (yPerturbed + 1) / 2;
-        
-        // Color mixing
-        const t = (Math.sin(ny * 25 + bandNoise * 7) + 1) / 2;
-        
-        for (let x = 0; x < size; x++) {
-             const nx = (x - size/2) / R;
-             if (nx*nx + ny*ny >= 1) continue;
-             
-             // Swirl noise
-             const detail = fbm(nx * 4, ny * 12 + bandNoise, 3, noiseFn);
-             
-             const col = lerpColor(cBase, cAccent, t + detail * 0.25);
-             
-             const idx = (y*size + x)*4;
-             d[idx] = col.r;
-             d[idx+1] = col.g;
-             d[idx+2] = col.b;
-             d[idx+3] = 255;
-        }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    
-    // Multiple Storms
-    const stormProb = preset.storms || 0;
-    if (stormProb > 0) {
-        // Draw 1 to 3 storms if high probability
-        const numStorms = Math.max(1, Math.floor(rng() * 3));
-        
-        for (let i = 0; i < numStorms; i++) {
-            if (rng() > stormProb && i > 0) continue; // Always at least one if prob high?
+  const size = R * 2;
+  const numBands = preset.bands || 10;
+  const bands = [];
 
-            const sx = (rng() - 0.5) * R * 1.2;
-            const sy = (rng() - 0.5) * R * 0.6;
-            const sr = R * (0.15 + rng() * 0.2);
-            
-            ctx.save();
-            ctx.globalCompositeOperation = "overlay";
-            ctx.translate(size/2 + sx, size/2 + sy);
-            // Rotate swirl
-            ctx.rotate(rng() * Math.PI);
-            ctx.scale(1.5, 0.9);
-            
-            const stormGrad = ctx.createRadialGradient(0,0, 0, 0,0, sr);
-            stormGrad.addColorStop(0, tweakHsl(accent, 15, 0.2, -0.1));
-            stormGrad.addColorStop(0.6, tweakHsl(base, 0, 0.1, -0.05));
-            stormGrad.addColorStop(1, "rgba(0,0,0,0)");
-            
-            ctx.fillStyle = stormGrad;
-            ctx.beginPath();
-            ctx.arc(0,0, sr, 0, Math.PI*2);
-            ctx.fill();
-            
-            // Swirl lines
-            ctx.strokeStyle = "rgba(255,255,255,0.1)";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(0,0, sr * 0.7, 0, Math.PI * 1.5);
-            ctx.stroke();
+  for (let i = 0; i < numBands; i++) {
+    bands.push({
+      color: rng() > 0.5 ? base : accent,
+      width: 1 / numBands,
+      turbulence: rng()
+    });
+  }
 
-            ctx.restore();
-        }
+  const cBase = parseToRgb(base);
+  const cAccent = parseToRgb(accent);
+
+  const imgData = ctx.createImageData(size, size);
+  const d = imgData.data;
+  const noiseFn = createNoise2D(rng);
+
+  for (let y = 0; y < size; y++) {
+    const ny = (y - size / 2) / R;
+
+    // Turbulence
+    const bandNoise = noiseFn(0, ny * 5);
+    const yPerturbed = ny + bandNoise * 0.05;
+    const u = (yPerturbed + 1) / 2;
+
+    // Color mixing
+    const t = (Math.sin(ny * 25 + bandNoise * 7) + 1) / 2;
+
+    for (let x = 0; x < size; x++) {
+      const nx = (x - size / 2) / R;
+      if (nx * nx + ny * ny >= 1) continue;
+
+      // Swirl noise
+      const detail = fbm(nx * 4, ny * 12 + bandNoise, 3, noiseFn);
+
+      const col = lerpColor(cBase, cAccent, t + detail * 0.25);
+
+      const idx = (y * size + x) * 4;
+      d[idx] = col.r;
+      d[idx + 1] = col.g;
+      d[idx + 2] = col.b;
+      d[idx + 3] = 255;
     }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // Multiple Storms
+  const stormProb = preset.storms || 0;
+  if (stormProb > 0) {
+    // Draw 1 to 3 storms if high probability
+    const numStorms = Math.max(1, Math.floor(rng() * 3));
+
+    for (let i = 0; i < numStorms; i++) {
+      if (rng() > stormProb && i > 0) continue; // Always at least one if prob high?
+
+      const sx = (rng() - 0.5) * R * 1.2;
+      const sy = (rng() - 0.5) * R * 0.6;
+      const sr = R * (0.15 + rng() * 0.2);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      ctx.translate(size / 2 + sx, size / 2 + sy);
+      // Rotate swirl
+      ctx.rotate(rng() * Math.PI);
+      ctx.scale(1.5, 0.9);
+
+      const stormGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
+      stormGrad.addColorStop(0, tweakHsl(accent, 15, 0.2, -0.1));
+      stormGrad.addColorStop(0.6, tweakHsl(base, 0, 0.1, -0.05));
+      stormGrad.addColorStop(1, "rgba(0,0,0,0)");
+
+      ctx.fillStyle = stormGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, sr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Swirl lines
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * 0.7, 0, Math.PI * 1.5);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
 }
 
 function drawRings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, { tilt, rotation, phase, colorA, colorB, opacity }: any, rng: () => number) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(tilt + Math.PI/12);
-    ctx.scale(1, 0.3); 
-    
-    const innerR = r * 1.4;
-    const outerR = r * 2.5;
-    
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tilt + Math.PI / 12);
+  ctx.scale(1, 0.3);
+
+  const innerR = r * 1.4;
+  const outerR = r * 2.5;
+
+  ctx.beginPath();
+  if (phase === "back") {
+    ctx.rect(-outerR, -outerR, outerR * 2, outerR);
+  } else {
+    ctx.rect(-outerR, 0, outerR * 2, outerR);
+  }
+  ctx.clip();
+
+  const numRings = 40;
+  ctx.globalAlpha = opacity;
+
+  for (let i = 0; i < numRings; i++) {
+    const t = i / numRings;
+    const curR = innerR + (outerR - innerR) * t;
+    const color = i % 2 === 0 ? colorA : colorB;
+
     ctx.beginPath();
-    if (phase === "back") {
-        ctx.rect(-outerR, -outerR, outerR*2, outerR); 
-    } else {
-        ctx.rect(-outerR, 0, outerR*2, outerR); 
-    }
-    ctx.clip();
-    
-    const numRings = 40;
-    ctx.globalAlpha = opacity;
-    
-    for(let i=0; i<numRings; i++) {
-        const t = i/numRings;
-        const curR = innerR + (outerR - innerR) * t;
-        const color = i % 2 === 0 ? colorA : colorB;
-        
-        ctx.beginPath();
-        ctx.arc(0, 0, curR, 0, Math.PI * 2);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = (outerR - innerR) / numRings * 1.5;
-        ctx.globalAlpha = opacity * (0.5 + 0.5 * Math.sin(t * 10)); 
-        ctx.stroke();
-    }
-    
-    ctx.restore();
+    ctx.arc(0, 0, curR, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = (outerR - innerR) / numRings * 1.5;
+    ctx.globalAlpha = opacity * (0.5 + 0.5 * Math.sin(t * 10));
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 // ---------- NOISE & MATH ----------
@@ -730,7 +749,7 @@ function createNoise2D(rng: () => number) {
   }
   for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
 
-  return function(x: number, y: number) {
+  return function (x: number, y: number) {
     const X = Math.floor(x) & 255;
     const Y = Math.floor(y) & 255;
     x -= Math.floor(x);
@@ -755,15 +774,15 @@ function grad(hash: number, x: number, y: number) {
 }
 
 function fbm(x: number, y: number, octaves: number, noiseFn: (x: number, y: number) => number) {
-    let val = 0;
-    let amp = 0.5;
-    let freq = 1;
-    for(let i=0; i<octaves; i++) {
-        val += noiseFn(x*freq, y*freq) * amp;
-        freq *= 2;
-        amp *= 0.5;
-    }
-    return val;
+  let val = 0;
+  let amp = 0.5;
+  let freq = 1;
+  for (let i = 0; i < octaves; i++) {
+    val += noiseFn(x * freq, y * freq) * amp;
+    freq *= 2;
+    amp *= 0.5;
+  }
+  return val;
 }
 
 function hashString(str: string) {
@@ -785,32 +804,32 @@ function mulberry32(a: number) {
 }
 
 function tweakHsl(color: string, dh: number, ds: number, dl: number) {
-   const {r,g,b} = parseToRgb(color);
-   return `rgb(${Math.max(0, Math.min(255, r+dl*50))}, ${Math.max(0, Math.min(255, g+dl*50))}, ${Math.max(0, Math.min(255, b+dl*50))})`;
+  const { r, g, b } = parseToRgb(color);
+  return `rgb(${Math.max(0, Math.min(255, r + dl * 50))}, ${Math.max(0, Math.min(255, g + dl * 50))}, ${Math.max(0, Math.min(255, b + dl * 50))})`;
 }
 
 function rgba(color: string, alpha: number) {
-    const {r,g,b} = parseToRgb(color);
-    return `rgba(${r},${g},${b},${alpha})`;
+  const { r, g, b } = parseToRgb(color);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function parseToRgb(color: string) {
   if (color.startsWith("#")) {
     const hex = color.slice(1);
-    const n = parseInt(hex.length === 3 ? hex.split("").map(c=>c+c).join("") : hex, 16);
+    const n = parseInt(hex.length === 3 ? hex.split("").map(c => c + c).join("") : hex, 16);
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
   }
   if (color.startsWith("rgb")) {
-      const parts = color.match(/\d+/g)?.map(Number) || [0,0,0];
-      return { r: parts[0], g: parts[1], b: parts[2] };
+    const parts = color.match(/\d+/g)?.map(Number) || [0, 0, 0];
+    return { r: parts[0], g: parts[1], b: parts[2] };
   }
   return { r: 128, g: 128, b: 128 };
 }
 
-function lerpColor(c1: {r:number,g:number,b:number}, c2: {r:number,g:number,b:number}, t: number) {
-    return {
-        r: lerp(c1.r, c2.r, t),
-        g: lerp(c1.g, c2.g, t),
-        b: lerp(c1.b, c2.b, t)
-    }
+function lerpColor(c1: { r: number, g: number, b: number }, c2: { r: number, g: number, b: number }, t: number) {
+  return {
+    r: lerp(c1.r, c2.r, t),
+    g: lerp(c1.g, c2.g, t),
+    b: lerp(c1.b, c2.b, t)
+  }
 }
