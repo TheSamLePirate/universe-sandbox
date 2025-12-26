@@ -587,18 +587,56 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     1. 'input': Array of resolved values from module inputs (e.g., input[0], input[1]).
     2. 'console': Use console.log() for debugging (visible in module logs).
     3. 'game': The OMNIPOTENT access object.
-       - game.bodies: Array of all Body objects.
-       - game.modules: Array of all FlightComputerModule objects.
-       - game.physicsConfig: { gravitationalConstant, ... }
-       - game.actions:
-         .spawnRocket(parentName)
-         .setSpeed(val)
-         .handleStageRocket(rocketId)  <-- USE THIS FOR AUTO-STAGING
-         .updateModule(id, partialUpdate)
-         .createAndSpawnBody(candidate)
-       - game.helpers:
-         .resolveScalar(input)
-         .formatTime(seconds)
+       const game = {
+                               bodies,
+                               modules,
+                               physicsConfig,
+                               rendezvousPoints,
+                               actions: {
+                                   updateModule
+                                   addModule,
+                                   removeModule,
+                                   toggleModule,
+                                   setFollowingBody,
+                                   updateRocket,
+                                   handlePresetChange,
+                                   setSpeed,
+                                   setIsRunning,
+                                   onReset,
+                                   onTimeReverse
+                                   onZoom,
+                                   setNbColumns,
+                                   setNbRows,
+                                   setGap,
+                                   handleUpdateCandidate,
+                                   handleSpawnManual,
+                                   setCreationCandidate,
+                                   createAndSpawnBody,
+                                   setShowImageSlideShow,
+                                   nextImage,
+                                   prevImage,
+                                   handleJumpToImage,
+                                   getApiValue,
+                                   getApiValueAndReset,
+                                   postApiValue,
+                                   sleep,
+                                   map01ToPI
+                                   setShowCameraViewer
+                                   setShowParralaxe,
+                                   handleStageRocket
+                               },
+                               helpers: {
+                                   formatTime: (totalSeconds: number) => formatTime(totalSeconds)
+                               },
+                               fps,
+                               simulationTime,
+                               scale,
+                               isRunning,
+                               speed,
+                               nbColumns,
+                               nbRows,
+                               gap,
+                           };
 
     EXAMPLE: AUTO-STAGING SCRIPT
     // Checks if fuel is empty and stages the rocket
