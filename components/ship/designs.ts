@@ -100,15 +100,40 @@ export function drawMultiStageRocket(
             // drawEngine expects to be at the tail. Adjust position.
             // It fits neatly if we translate to the left edge of this stage
             ctx.save();
-            ctx.translate(-stageLength / 2 + size, 0);
-            // Note: drawEngine draws at roughly -size. We want it at the back.
-            // Let's rely on drawEngine's default position but scaled?
-            // Actually, drawEngine draws the nozzle between -0.9*size and -1.1*size.
-            // If we are at -stageLength/2 (tail of stage), we want engine attached there.
-            // So translate so that -size approx equals -stageLength/2?
-            // Or just position manually.
-            // Let's reset the drawEngine specific translation
-            ctx.translate(-size, 0); // Shift back 
+            // The stage is drawn centered at (0,0) in local space
+            // Tail is at -stageLength/2
+            // drawEngine draws at roughly -size (approx tail) by default
+            // But we have scaled up stageLength = size * 1.8. Half is 0.9 * size.
+            // drawEngine draws nozzle around -size. So it's close.
+            // Let's refine:
+            // Translate to the tail of the current stage
+            ctx.translate(-stageLength / 2 + size, 0); 
+            // Why +size? Because drawEngine draws at -size*1.1. 
+            // If we move to -0.9*size, then drawEngine at -1.1*size puts it at -2.0*size. Too far?
+            // Actually, drawEngine assumes center is at (0,0) and draws nozzle to left.
+            // We want nozzle attached to -stageLength/2.
+            // So we translate so that (0,0) for drawEngine is shifted right such that its "nozzle point" aligns with our tail.
+            // Nozzle starts at -size*0.9.
+            // We want -size*0.9 to align with -stageLength/2.
+            // So shift = (-stageLength/2) - (-size*0.9) = -0.9*size + 0.9*size = 0.
+            // Wait, stageLength = 1.8*size. Half is 0.9*size.
+            // So tail is at -0.9*size.
+            // Engine starts at -0.9*size.
+            // Perfect match?
+            // Let's try drawing without extra translation first, or minimal.
+            // The previous code had `ctx.translate(-stageLength / 2 + size, 0); ctx.translate(-size, 0);` which effectively meant translate(-stageLength/2).
+            // Let's just translate to align perfectly.
+            // We are at center of stage.
+            // We want engine to appear attached to left side (-stageLength/2).
+            // drawEngine draws starting at x = -0.9 * size.
+            // So we need coordinate -0.9*size to match -stageLength/2.
+            // delta = -stageLength/2 - (-0.9*size)
+            //       = -0.9*size + 0.9*size = 0.
+            // So it should just work if we render it here?
+            // Let's force it to be exactly at the tail.
+            // We will translate to the tail, then un-translate by where drawEngine starts drawing.
+            ctx.translate(-stageLength / 2 + (size * 0.9), 0);
+            
             drawEngine(ctx, size, thrust, time);
             ctx.restore();
         } else {
