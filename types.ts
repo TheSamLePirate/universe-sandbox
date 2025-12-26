@@ -298,7 +298,8 @@ export type FlightComputerModuleType =
   | 'change_detector'
   | 'wait'
   | 'line_drawer'
-  | 'circle_drawer';
+  | 'circle_drawer'
+  | 'system_monitor';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -326,6 +327,18 @@ export interface FlightComputerModule {
   primaryBodyId?: string;
   referenceBodyId?: string;
   targetBodyId?: string;
+
+  // System Monitor Stats
+  systemMonitorStats?: {
+    globalTotalMs: number;
+    modules: {
+      id: string;
+      name: string;
+      type: string;
+      lastMs: number;
+      averageMs: number;
+    }[];
+  };
 
   color: string;
   name?: string;

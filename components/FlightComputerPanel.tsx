@@ -87,6 +87,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'change_detector', label: 'Change Detector', category: 'Logic' },
     { value: 'custom_script', label: 'Custom Script', category: 'Advanced' },
     { value: 'wait', label: 'Wait / Timer', category: 'Logic' },
+    { value: 'system_monitor', label: 'System Monitor', category: 'Advanced' },
 ];
 
 const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({

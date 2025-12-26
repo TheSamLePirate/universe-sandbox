@@ -77,6 +77,8 @@ export const useFlightComputerLogic = (
     const scriptLogsRef = useRef<Map<string, string[]>>(new Map());
     const asyncScriptRunningRef = useRef<Map<string, boolean>>(new Map());
     const manualTriggerStateRef = useRef<Map<string, number>>(new Map());
+    const moduleStatsRef = useRef<Map<string, { lastMs: number, avgMs: number, count: number }>>(new Map());
+    const lastMonitorUpdateRef = useRef<number>(0);
 
     // --- Follow Module & Button Reset Logic & Custom Script ---
     useEffect(() => {
@@ -98,6 +100,7 @@ export const useFlightComputerLogic = (
         // Note: Script logs are kept in ref to avoid re-renders, but we might want to clean up if module removed
 
         modules.forEach(module => {
+            const startPerf = performance.now();
             // Follow Module
             if (module.type === 'follow' && onSetFollowingBody) {
                 const shouldFollow = isModuleActive(module);
@@ -410,6 +413,53 @@ export const useFlightComputerLogic = (
                     }
                 }
             }
+
+
+            // --- Performance Measurement & System Monitor ---
+            const endPerf = performance.now();
+            const duration = endPerf - startPerf;
+
+            const stats = moduleStatsRef.current.get(module.id) || { lastMs: 0, avgMs: 0, count: 0 };
+            stats.lastMs = duration;
+            // Simple exponential moving average (alpha = 0.05 for smoothness)
+            if (stats.count === 0) stats.avgMs = duration;
+            else stats.avgMs = (stats.avgMs * 0.95) + (duration * 0.05);
+            stats.count++;
+            moduleStatsRef.current.set(module.id, stats);
+
+            if (module.type === 'system_monitor') {
+                const now = performance.now();
+                if (now - lastMonitorUpdateRef.current > 500) { // Update every 500ms
+                    lastMonitorUpdateRef.current = now;
+
+                    // Aggregate stats
+                    let globalTotal = 0;
+                    const moduleList = modules.map(m => {
+                        const s = moduleStatsRef.current.get(m.id);
+                        const avg = s ? s.avgMs : 0;
+                        const last = s ? s.lastMs : 0;
+                        globalTotal += avg;
+                        return {
+                            id: m.id,
+                            name: m.name || m.type,
+                            type: m.type,
+                            lastMs: last,
+                            averageMs: avg
+                        };
+                    });
+
+                    // Sort by load (descending)
+                    moduleList.sort((a, b) => b.averageMs - a.averageMs);
+
+                    onUpdateModule(module.id, {
+                        systemMonitorStats: {
+                            globalTotalMs: globalTotal,
+                            modules: moduleList
+                        }
+                    });
+                }
+            }
+
         });
     }, [modules, bodies, physicsConfig, onSetFollowingBody, rendezvousSolutionMap, onUpdateModule]);
 
