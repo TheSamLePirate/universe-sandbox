@@ -116,9 +116,12 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
         const val = resolveScalarInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
         if (typeof val === 'number') return val.toFixed(2);
 
-        // Try body
+        // Try body or vector
         const result = resolveInput(input, bodies, modules, physicsConfig.gravitationalConstant, rendezvousSolutionMap.current);
-        if (result && 'name' in result) return result.name;
+        if (result) {
+            if ('name' in result) return result.name;
+            if ('x' in result && 'y' in result) return `(${result.x.toFixed(1)}, ${result.y.toFixed(1)})`;
+        }
 
         return '—';
     };
@@ -142,6 +145,10 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                     onClick={(e) => {
                         if (isEditMode) return;
                         e.stopPropagation();
+                        // Toggle logic is handled in hook normally via input, but for dashboard click we might want to force state?
+                        // Actually FlightComputerModule structure uses inputs. But if we want to "Click" it, we update state directly?
+                        // The hook's button logic (lines 126-138) handles Reset input.
+                        // Clicking here updates 'buttonState'. The hook mostly READS buttonState.
                         onUpdateModule(module.id, { buttonState: !module.buttonState });
                     }}
                     style={{ pointerEvents: isEditMode ? 'none' : 'auto' }}
@@ -173,9 +180,6 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
         }
 
         if (module.type === 'selector') {
-            // Selector implementation
-            // We need to know what it's selecting. Usually bodies.
-            // For now, simple dropdown if it's a body selector
             return (
                 <div className="h-full flex items-center justify-center" style={{ pointerEvents: isEditMode ? 'none' : 'auto' }}>
                     <select
@@ -272,6 +276,9 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
             else if (module.type === 'body_by') {
                 displayValue = getModuleOutputValue(module, 'body');
                 displayLabel = '';
+            } else if (module.type === 'rendezvous_tracker') {
+                displayValue = getModuleOutputValue(module, 'time');
+                displayLabel = 'Time to Rvz';
             }
             else {
                 // Fallback
@@ -474,27 +481,116 @@ const FlightComputerDashboard: React.FC<FlightComputerDashboardProps> = ({
                                     { key: 'period', label: 'Period' },
                                     { key: 'apoapsis', label: 'Apoapsis' },
                                     { key: 'periapsis', label: 'Periapsis' },
-                                    { key: 'eccentricity', label: 'Eccentricity' }
+                                    { key: 'eccentricity', label: 'Eccentricity' },
+                                    { key: 'pe_point', label: 'Periapsis Point' },
+                                    { key: 'pa_point', label: 'Apoapsis Point' },
+                                    { key: 'primary_body', label: 'Primary Body' },
+                                    { key: 'reference_body', label: 'Reference Body' }
                                 );
                             } else if (m.type === 'transfer_window') {
                                 outputs.push(
-                                    { key: 'phase_angle', label: 'Phase Angle' },
+                                    { key: 'current_phase', label: 'Current Phase' },
+                                    { key: 'required_phase', label: 'Required Phase' },
+                                    { key: 'error_angle', label: 'Error Angle' },
                                     { key: 'wait_time', label: 'Wait Time' },
-                                    { key: 'ready', label: 'Ready Status' }
+                                    { key: 'transfer_time', label: 'Transfer Time' },
+                                    { key: 'arrival_time', label: 'Arrival Time' },
+                                    { key: 'ready', label: 'Ready Status' },
+                                    { key: 'error', label: 'Error (Deg)' },
+                                    { key: 'insertion_point', label: 'Insertion Point' },
+                                    { key: 'intercept_point', label: 'Intercept Point' }
                                 );
                             } else if (m.type === 'track_velocity') {
-                                outputs.push({ key: 'velocity', label: 'Velocity' });
+                                outputs.push(
+                                    { key: 'speed', label: 'Speed' },
+                                    { key: 'primary_body', label: 'Primary Body' },
+                                    { key: 'target_body', label: 'Target Body' }
+                                );
+                            } else if (m.type === 'track_distance') {
+                                outputs.push(
+                                    { key: 'distance', label: 'Distance' },
+                                    { key: 'primary_body', label: 'Primary Body' },
+                                    { key: 'target_body', label: 'Target Body' }
+                                );
                             } else if (m.type === 'logic_gate' || m.type === 'maths') {
                                 outputs.push({ key: 'result', label: 'Result' });
                             } else if (m.type === 'custom_script') {
-                                outputs.push({ key: 'result', label: 'Result' });
+                                outputs.push(
+                                    { key: 'result', label: 'Result' },
+                                    { key: 'state', label: 'Async State' }
+                                );
                             } else if (m.type === 'body_info') {
-                                outputs.push({ key: 'name', label: 'Name' });
-                                outputs.push({ key: 'mass', label: 'Mass' });
-                                outputs.push({ key: 'radius', label: 'Radius' });
-                                outputs.push({ key: 'fuel', label: 'Fuel' });
-                                outputs.push({ key: 'landedOnBodyId', label: 'Landed On' });
-                                outputs.push({ key: 'sasMode', label: 'SAS Mode' });
+                                outputs.push(
+                                    { key: 'name', label: 'Name' },
+                                    { key: 'mass', label: 'Mass' },
+                                    { key: 'radius', label: 'Radius' },
+                                    { key: 'fuel', label: 'Fuel' },
+                                    { key: 'max_fuel', label: 'Max Fuel' },
+                                    { key: 'dry_mass', label: 'Dry Mass' },
+                                    { key: 'landed_on', label: 'Landed On' },
+                                    { key: 'sas_mode', label: 'SAS Mode' },
+                                    { key: 'pos_x', label: 'Pos X' },
+                                    { key: 'pos_y', label: 'Pos Y' },
+                                    { key: 'vel_x', label: 'Vel X' },
+                                    { key: 'vel_y', label: 'Vel Y' },
+                                    { key: 'angle', label: 'Angle' },
+                                    { key: 'thrust_x', label: 'Thrust X' },
+                                    { key: 'thrust_y', label: 'Thrust Y' }
+                                );
+                            } else if (m.type === 'rendezvous_tracker') {
+                                outputs.push(
+                                    { key: 'time', label: 'Time to Rvz' },
+                                    { key: 'distance', label: 'Distance' },
+                                    { key: 'delta_v_total', label: 'Delta V Total' },
+                                    { key: 'delta_v_prograde', label: 'Delta V Prograde' },
+                                    { key: 'delta_v_radial', label: 'Delta V Radial' },
+                                    { key: 'position', label: 'Rendezvous Point' }
+                                );
+                            } else if (m.type === 'line_drawer') {
+                                outputs.push(
+                                    { key: 'length', label: 'Length' },
+                                    { key: 'distance', label: 'Distance' },
+                                    { key: 'hit', label: 'Hit' },
+                                    { key: 'vector', label: 'Vector (B-A)' },
+                                    { key: 'hit_position', label: 'Hit Position' }
+                                );
+                            } else if (m.type === 'circle_drawer') {
+                                outputs.push(
+                                    { key: 'foundObject', label: 'Found Object' },
+                                    { key: 'objectId', label: 'Object ID' },
+                                    { key: 'closestPoint', label: 'Closest Point' }
+                                );
+                            } else if (m.type === 'selector' || m.type === 'body_by') {
+                                outputs.push({ key: 'body', label: 'Selected Body' });
+                            } else if (m.type === 'slider') {
+                                outputs.push({ key: 'value', label: 'Value' });
+                            } else if (m.type === 'button') {
+                                outputs.push({ key: 'state', label: 'State' });
+                            } else if (m.type === 'music_controller') {
+                                outputs.push(
+                                    { key: 'volume', label: 'Volume' },
+                                    { key: 'state', label: 'Playing' }
+                                );
+                            } else if (m.type === 'edge_detector' || m.type === 'change_detector' || m.type === 'wait' || m.type === 'notify') {
+                                outputs.push({ key: 'triggered', label: 'Triggered' });
+                            } else if (m.type === 'maneuver_executor') {
+                                outputs.push({ key: 'progress', label: 'Progress (%)' });
+                            } else if (m.type === 'keyboard') {
+                                outputs.push(
+                                    { key: 'state', label: 'Is Pressed' },
+                                    { key: 'key', label: 'Key Char' }
+                                );
+                            } else if (m.type === 'marker') {
+                                outputs.push(
+                                    { key: 'visible', label: 'Visible' },
+                                    { key: 'title', label: 'Title' },
+                                    { key: 'description', label: 'Description' },
+                                    { key: 'color', label: 'Color' },
+                                    { key: 'position', label: 'Position' },
+                                    { key: 'pulse', label: 'Pulse' }
+                                );
+                            } else if (m.type === 'thrust_burst') {
+                                outputs.push({ key: 'done', label: 'Done' });
                             }
 
                             // Add more as needed
