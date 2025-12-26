@@ -2484,31 +2484,23 @@ const Canvas: React.FC<CanvasProps> = ({
                         const radInput = resolveScalarInput(module.inputs?.radius, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
                         if (radInput !== null) radius = radInput;
 
-                        // Resolve Color
-                        let color = module.circleColor || '#4ade80';
+                        // Resolve Base Color
+                        let baseColor = module.circleColor || '#4ade80';
                         const colorInput = module.inputs?.color;
                         if (colorInput) {
                             const resolvedColor = resolveStringInput(colorInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
-                            if (resolvedColor) color = resolvedColor;
+                            if (resolvedColor) baseColor = resolvedColor;
                         }
 
-                        // Draw Circle
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(cxPos, cyPos, radius * scale, 0, Math.PI * 2);
-                        ctx.strokeStyle = color;
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
+                        // Resolve Detected Color
+                        let detectedColor = module.circleDetectedColor || '#ef4444';
+                        const detColorInput = module.inputs?.detected_color;
+                        if (detColorInput) {
+                            const resolvedDetColor = resolveStringInput(detColorInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (resolvedDetColor) detectedColor = resolvedDetColor;
+                        }
 
-                        // Fill slightly
-                        ctx.fillStyle = color; // use hexToRgba if available, or just globalAlpha
-                        ctx.globalAlpha = 0.1;
-                        ctx.fill();
-                        ctx.restore();
-
-                        // Debug Sensing Visualization (Optional)
-                        // If sensing is enabled, we could re-run sensing here to draw the closest point?
-                        // Or just trust the outputs. Let's draw the closest point if sensing is active, for better UX.
+                        // Resolve Sensing Enable
                         let isSensing = module.circleDistanceSensing ?? false;
                         const sensInput = module.inputs?.distance_sensing;
                         if (sensInput) {
@@ -2516,13 +2508,41 @@ const Canvas: React.FC<CanvasProps> = ({
                             if (val !== null) isSensing = val > 0.5;
                         }
 
+                        // Perform Sensing EARLY to determine color
+                        let sensingResult = { found: false, body: null as Body | null, closestPoint: null as any };
+                        if (isSensing) {
+                            let excludeId: string | undefined;
+                            if (posInput && 'id' in posInput) {
+                                excludeId = (posInput as Body).id;
+                            }
+                            sensingResult = performCircleSensing(pos, radius, bodies, excludeId);
+                        }
+
+                        // Determine Final Color
+                        // If object detected, switch entire radar to detectedColor
+                        const finalColor = (sensingResult.found) ? detectedColor : baseColor;
+
+                        // Draw Circle
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(cxPos, cyPos, radius * scale, 0, Math.PI * 2);
+                        ctx.strokeStyle = finalColor;
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+
+                        // Fill slightly
+                        ctx.fillStyle = finalColor;
+                        ctx.globalAlpha = 0.1;
+                        ctx.fill();
+                        ctx.restore();
+
                         if (isSensing) {
                             // --- RADAR VISUALS ---
                             ctx.save();
 
                             // 1. Glow Effect for the whole radar
                             ctx.shadowBlur = 10;
-                            ctx.shadowColor = color;
+                            ctx.shadowColor = finalColor;
 
                             // 2. Grid Rings (Dashed or Solid but faint)
                             ctx.beginPath();
@@ -2532,7 +2552,7 @@ const Canvas: React.FC<CanvasProps> = ({
                             ctx.arc(cxPos, cyPos, radius * scale * 0.66, 0, Math.PI * 2);
                             ctx.moveTo(cxPos + radius * scale, cyPos);
                             ctx.arc(cxPos, cyPos, radius * scale, 0, Math.PI * 2); // Outer ring
-                            ctx.strokeStyle = color;
+                            ctx.strokeStyle = finalColor;
                             ctx.globalAlpha = 0.2;
                             ctx.lineWidth = 1;
                             ctx.stroke();
@@ -2545,11 +2565,11 @@ const Canvas: React.FC<CanvasProps> = ({
                             ctx.moveTo(cxPos, cyPos - radius * scale);
                             ctx.lineTo(cxPos, cyPos + radius * scale);
                             ctx.globalAlpha = 0.15;
+                            ctx.strokeStyle = finalColor; // Explicitly set color here too
                             ctx.stroke();
 
                             // 4. Rotating Sweep with Gradient Trail
-                            // time is available in renderLoop scope
-                            const sweepAngle = (time * 3.0) % (Math.PI * 2); // Slightly faster
+                            const sweepAngle = (time * 3.0) % (Math.PI * 2);
                             const sweepX = cxPos + Math.cos(sweepAngle) * radius * scale;
                             const sweepY = cyPos + Math.sin(sweepAngle) * radius * scale;
 
@@ -2557,15 +2577,12 @@ const Canvas: React.FC<CanvasProps> = ({
                             ctx.beginPath();
                             ctx.moveTo(cxPos, cyPos);
                             ctx.lineTo(sweepX, sweepY);
-                            ctx.strokeStyle = color;
+                            ctx.strokeStyle = finalColor;
                             ctx.globalAlpha = 0.8;
                             ctx.lineWidth = 2;
                             ctx.stroke();
 
                             // Draw the gradient trail (sector)
-                            // We construct a gradient that fades from the color to transparent around the arc
-                            // Let's fallback to multiple arc segments for a guaranteed "trail" look without complex gradients.
-
                             const trailLength = 0.5; // radians
                             for (let i = 0; i < 20; i++) {
                                 const angle = sweepAngle - (i / 20) * trailLength;
@@ -2573,32 +2590,22 @@ const Canvas: React.FC<CanvasProps> = ({
                                 ctx.beginPath();
                                 ctx.moveTo(cxPos, cyPos);
                                 ctx.arc(cxPos, cyPos, radius * scale, angle, nextAngle, true);
-                                ctx.fillStyle = color;
+                                ctx.fillStyle = finalColor;
                                 ctx.globalAlpha = 0.4 * (1 - i / 20); // Fade out
                                 ctx.fill();
                             }
 
                             ctx.restore();
 
-                            // --- SENSING LOGIC ---
-                            let excludeId: string | undefined;
-                            if (posInput && 'id' in posInput) {
-                                excludeId = (posInput as Body).id;
-                            }
-                            const result = performCircleSensing(pos, radius, bodies, excludeId);
-
-                            if (result.found && result.closestPoint) {
+                            // --- HIT MARKER ---
+                            if (sensingResult.found && sensingResult.closestPoint) {
                                 // Calculate hit position relative to the circle center (cxPos, cyPos)
-                                // This ensures we use the same coordinate transform as the circle itself
-                                const dx = result.closestPoint.x - pos.x;
-                                const dy = result.closestPoint.y - pos.y;
-
-                                // Apply scale and flip Y axis if the canvas uses Y-up (space typically does)
-                                // However, usually canvas Y is down. In space sims, usually render with Y-up or Y-down?
-                                // let's use the standard transform logic derived above:
                                 // cyPos = cy + pos.y * scale
                                 // hitY should be cy + result.closestPoint.y * scale
                                 // Therefore: hitY = cyPos + (result.closestPoint.y - pos.y) * scale = cyPos + dy * scale.
+                                const dx = sensingResult.closestPoint.x - pos.x;
+                                const dy = sensingResult.closestPoint.y - pos.y;
+
                                 const hitX = cxPos + dx * scale;
                                 const hitY = cyPos + dy * scale;
 
@@ -2607,7 +2614,7 @@ const Canvas: React.FC<CanvasProps> = ({
                                 ctx.beginPath();
                                 ctx.moveTo(cxPos, cyPos);
                                 ctx.lineTo(hitX, hitY);
-                                ctx.strokeStyle = result.body?.color || '#ffffff';
+                                ctx.strokeStyle = detectedColor; // Always use detected color for the hit line
                                 ctx.lineWidth = 1 + pulse * 2; // Pulse thickness
                                 ctx.globalAlpha = 0.6 + pulse * 0.4;
                                 ctx.stroke();
@@ -2615,13 +2622,13 @@ const Canvas: React.FC<CanvasProps> = ({
                                 // Draw Hit Marker
                                 ctx.beginPath();
                                 ctx.arc(hitX, hitY, 5 + pulse * 3, 0, Math.PI * 2);
-                                ctx.fillStyle = result.body?.color || '#ffffff';
+                                ctx.fillStyle = detectedColor;
                                 ctx.fill();
 
                                 // Text Label
                                 ctx.fillStyle = '#ffffff';
                                 ctx.font = '10px monospace';
-                                ctx.fillText((result.body?.name || 'Unknown').toUpperCase(), hitX + 10, hitY);
+                                ctx.fillText((sensingResult.body?.name || 'Unknown').toUpperCase(), hitX + 10, hitY);
                             }
                         }
                     }

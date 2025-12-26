@@ -468,6 +468,7 @@ export interface FlightComputerModule {
   circleColor?: string;
   circleDistanceSensing?: boolean;
   circleActivate?: boolean;
+  circleDetectedColor?: string;
 
   // Dashboard Configuration
   dashboardConfig?: {

@@ -134,6 +134,25 @@ const CircleDrawerModule: React.FC<ModuleProps> = ({ module, bodies, modules, on
                     currentModuleId={module.id}
                     allowedTypes={['module_output']}
                 />
+
+                <div className="pt-2">
+                    <label className="text-[9px] text-slate-500 uppercase">Detected Color</label>
+                    <InputSelector
+                        label=""
+                        value={getInput(module, 'detected_color')}
+                        onChange={(input) => updateInput(module.id, 'detected_color', input)}
+                        bodies={bodies}
+                        modules={modules}
+                        currentModuleId={module.id}
+                        allowedTypes={['module_output']}
+                    />
+                    <input
+                        type="color"
+                        value={module.circleDetectedColor || '#ef4444'}
+                        onChange={(e) => onUpdateModule(module.id, { circleDetectedColor: e.target.value })}
+                        className="w-full h-6 bg-transparent cursor-pointer rounded overflow-hidden mt-1"
+                    />
+                </div>
             </div>
 
             {/* Outputs Info */}
