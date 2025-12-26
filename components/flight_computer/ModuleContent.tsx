@@ -26,6 +26,8 @@ import HorizontalBarModule from './modules/HorizontalBarModule';
 import EdgeDetectorModule from './modules/EdgeDetectorModule';
 import ChangeDetectorModule from './modules/ChangeDetectorModule';
 import WaitModule from './modules/WaitModule';
+import LineDrawerModule from './modules/LineDrawerModule';
+
 
 interface ModuleContentProps {
     module: FlightComputerModule;
@@ -67,6 +69,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'edge_detector': return <EdgeDetectorModule {...props} />;
         case 'change_detector': return <ChangeDetectorModule {...props} />;
         case 'wait': return <WaitModule {...props} />;
+        case 'line_drawer': return <LineDrawerModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

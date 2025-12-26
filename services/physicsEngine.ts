@@ -1033,6 +1033,7 @@ export const updatePhysics = (
 
                             const maxVel = isApple ? 100 : LANDING_MAX_VELOCITY;
 
+                            // TODO : if 2 rockets are colliding, they should both explode
                             if (relVel < maxVel) {
                                 if (isRocketA) {
                                     currentBody.landedOnBodyId = planet.id;

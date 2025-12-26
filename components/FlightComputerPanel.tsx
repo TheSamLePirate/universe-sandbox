@@ -68,6 +68,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'body_info', label: 'Body Info', category: 'Info' },
     { value: 'body_by', label: 'Body By', category: 'Info' },
     { value: 'marker', label: 'Marker', category: 'Visual' },
+    { value: 'line_drawer', label: 'Line Drawer', category: 'Visual' },
     { value: 'horizontal_bar', label: 'Horizontal Bar', category: 'Visual' },
     { value: 'logic_gate', label: 'Logic Gate', category: 'Logic' },
     { value: 'maths', label: 'Math Operation', category: 'Logic' },

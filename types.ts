@@ -296,7 +296,8 @@ export type FlightComputerModuleType =
   | 'horizontal_bar'
   | 'edge_detector'
   | 'change_detector'
-  | 'wait';
+  | 'wait'
+  | 'line_drawer';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -453,6 +454,10 @@ export interface FlightComputerModule {
   waitRemainingTime?: number; // ms
   waitLastStartSignal?: boolean; // Edge detection for start signal
   waitMode?: 'simulation' | 'realtime';
+
+  // Line Drawer Module Config
+  lineColor?: string;
+  lineThickness?: number;
 
   // Dashboard Configuration
   dashboardConfig?: {

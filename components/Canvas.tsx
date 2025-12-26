@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
-import { resolveInput, resolveStringInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
+import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
 import { isModuleActive } from './flight_computer/utils';
 import { drawShip } from './ship';
 import { drawBeautifullPlanetGemini } from './PlanetsGemini';
@@ -2351,6 +2351,60 @@ const Canvas: React.FC<CanvasProps> = ({
                     }
                 });
             }
+
+
+            // --- FLIGHT COMPUTER: LINE DRAWER ---
+            flightComputerModules.forEach(module => {
+                if (module.type !== 'line_drawer' || !module.isEnabled) return;
+                if (!isModuleActive(module, bodies, flightComputerModules, physicsConfig, {})) return;
+
+                const inputA = module.inputs?.point_a;
+                const inputB = module.inputs?.point_b;
+
+                // If inputs are missing, logic typically fails gracefully
+                if (!inputA || !inputB) return;
+
+                const pA = resolveInput(inputA, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const pB = resolveInput(inputB, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+
+                if (pA && pB) {
+                    const posA = 'position' in pA ? pA.position : pA;
+                    const posB = 'position' in pB ? pB.position : pB;
+
+                    const sxA = cx + posA.x * scale;
+                    const syA = cy + posA.y * scale;
+                    const sxB = cx + posB.x * scale;
+                    const syB = cy + posB.y * scale;
+
+                    if (Number.isFinite(sxA) && Number.isFinite(syA) && Number.isFinite(sxB) && Number.isFinite(syB)) {
+                        // Color resolution
+                        let color = module.lineColor || '#00ff00';
+                        const colorInput = module.inputs?.color;
+                        if (colorInput) {
+                            const resolvedColor = resolveStringInput(colorInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (resolvedColor) color = resolvedColor;
+                        }
+
+                        // Thickness resolution
+                        let thickness = module.lineThickness || 1;
+                        const thicknessInput = module.inputs?.thickness;
+                        if (thicknessInput) {
+                            const resolvedThickness = resolveScalarInput(thicknessInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (resolvedThickness !== null) thickness = resolvedThickness;
+                        }
+
+                        ctx.beginPath();
+                        ctx.moveTo(sxA, syA);
+                        ctx.lineTo(sxB, syB);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = Math.max(0.5, thickness); // Prevent invisible lines
+                        ctx.lineCap = 'round';
+                        ctx.stroke();
+                    }
+                }
+            });
+
+
 
             animationFrameRef.current = requestAnimationFrame(renderLoop);
         };

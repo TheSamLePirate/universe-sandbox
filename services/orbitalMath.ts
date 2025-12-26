@@ -231,6 +231,15 @@ export const resolveInput = (
                 return res as Vector2D | Body;
             }
             return null;
+        } else if (module.type === 'line_drawer') {
+            const pA = resolveInput(module.inputs?.point_a, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pB = resolveInput(module.inputs?.point_b, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
+            if (pA && pB && outputKey === 'vector') {
+                const posA = 'position' in pA ? pA.position : pA;
+                const posB = 'position' in pB ? pB.position : pB;
+                return { x: posB.x - posA.x, y: posB.y - posA.y };
+            }
         }
     }
 
@@ -545,6 +554,14 @@ export const resolveScalarInput = (
             return module.sliderValue ?? module.sliderMin ?? 0;
         } else if (module.type === 'music_controller' && outputKey === 'volume') {
             return module.musicVolume ?? 0;
+        } else if (module.type === 'line_drawer' && (outputKey === 'length' || outputKey === 'distance')) {
+            const pA = resolveInput(module.inputs?.point_a, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pB = resolveInput(module.inputs?.point_b, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
+            if (pA && pB) {
+                return calculateDistance(pA, pB);
+            }
+            return 0;
         }
     }
 

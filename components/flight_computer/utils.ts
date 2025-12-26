@@ -1,6 +1,6 @@
 import { FlightComputerModule, FlightComputerInput, Maneuver, MarkerShape, Body, PhysicsConfig, RendezvousSolution, FlightComputerModuleType } from '../../types';
 import { resolveBooleanInput } from '../../services/orbitalMath';
-import { Activity, ArrowRightLeft, Calculator, Crosshair, Eye, Info, MapPin, MousePointer2, Move, Play, Radar, Radio, Rocket, Ruler, Speaker, Terminal, Zap, Keyboard, Sliders, Music, CreditCard, Timer } from 'lucide-react';
+import { Activity, ArrowRightLeft, Calculator, Crosshair, Eye, Info, MapPin, MousePointer2, Move, Play, Radar, Radio, Rocket, Ruler, Speaker, Terminal, Zap, Keyboard, Sliders, Music, CreditCard, Timer, Pencil } from 'lucide-react';
 
 export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> = {
     orbit_info: Info,
@@ -29,7 +29,8 @@ export const MODULE_ICONS: Record<FlightComputerModuleType, React.ElementType> =
     horizontal_bar: CreditCard,
     edge_detector: Activity,
     change_detector: ArrowRightLeft,
-    wait: Timer
+    wait: Timer,
+    line_drawer: Pencil
 };
 
 export const MANEUVER_TYPE_OPTIONS: { value: Maneuver['type']; label: string }[] = [
