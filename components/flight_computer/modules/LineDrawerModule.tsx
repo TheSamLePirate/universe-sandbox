@@ -22,10 +22,12 @@ const LineDrawerModule: React.FC<ModuleProps> = ({ module, bodies, modules, onUp
     const pointBInput = getInput(module, 'point_b');
     const colorInput = getInput(module, 'color');
     const thicknessInput = getInput(module, 'thickness');
+    // const colorInput = getInput(module, 'color'); // Removed as per instruction
+    // const thicknessInput = getInput(module, 'thickness'); // Removed as per instruction
 
-    // Defaults
-    const lineColor = module.lineColor || '#00ff00';
-    const lineThickness = module.lineThickness || 1;
+    // Defaults (these are now mostly handled by the new inputs directly on module.property)
+    // const lineColor = module.lineColor || '#00ff00'; // Removed as per instruction
+    // const lineThickness = module.lineThickness || 1; // Removed as per instruction
 
     return (
         <div className="space-y-3 mt-2">
@@ -56,70 +58,58 @@ const LineDrawerModule: React.FC<ModuleProps> = ({ module, bodies, modules, onUp
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
+            {/* Color & Thickness */}
+            <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
                     <label className="text-[9px] text-slate-500 uppercase">Color</label>
-                    {colorInput ? (
-                        <div className="flex gap-1">
-                            <InputSelector
-                                label=""
-                                value={colorInput}
-                                onChange={(input) => updateInput(module.id, 'color', input)}
-                                bodies={bodies}
-                                modules={modules}
-                                currentModuleId={module.id}
-                                allowedTypes={['string', 'module_output']}
-                            />
-                            <button onClick={() => updateInput(module.id, 'color', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="color"
-                                value={lineColor}
-                                onChange={(e) => onUpdateModule(module.id, { lineColor: e.target.value })}
-                                className="w-10 h-8 rounded border border-slate-700/50 bg-slate-900/50"
-                            />
-                            <button onClick={() => updateInput(module.id, 'color', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
-                        </div>
-                    )}
+                    <input
+                        type="color"
+                        value={module.color || '#4ade80'}
+                        onChange={(e) => onUpdateModule(module.id, { color: e.target.value })}
+                        className="w-full h-6 bg-transparent cursor-pointer rounded overflow-hidden"
+                    />
                 </div>
-                <div className="space-y-1">
+                <div className="flex-1 space-y-1">
                     <label className="text-[9px] text-slate-500 uppercase">Thickness</label>
-                    {thicknessInput ? (
-                        <div className="flex gap-1">
-                            <InputSelector
-                                label=""
-                                value={thicknessInput}
-                                onChange={(input) => updateInput(module.id, 'thickness', input)}
-                                bodies={bodies}
-                                modules={modules}
-                                currentModuleId={module.id}
-                                allowedTypes={['number', 'module_output']}
-                            />
-                            <button onClick={() => updateInput(module.id, 'thickness', undefined)} className="px-2 bg-red-600/20 border border-red-500/50 rounded text-xs text-red-400 hover:bg-red-600/30">✕</button>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="number"
-                                value={lineThickness}
-                                min={0.5}
-                                max={20}
-                                step={0.5}
-                                onChange={(e) => onUpdateModule(module.id, { lineThickness: parseFloat(e.target.value) })}
-                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:border-purple-500 outline-none"
-                            />
-                            <button onClick={() => updateInput(module.id, 'thickness', { type: 'module_output', value: '' })} className="px-2 bg-purple-600/20 border border-purple-500/50 rounded text-xs text-purple-400 hover:bg-purple-600/30">🔗</button>
-                        </div>
-                    )}
+                    <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={module.lineThickness || 2}
+                        onChange={(e) => onUpdateModule(module.id, { lineThickness: parseFloat(e.target.value) })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-slate-300 focus:border-purple-500 outline-none"
+                    />
+                </div>
+            </div>
+
+            {/* Hit Color & Behavior */}
+            <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
+                    <label className="text-[9px] text-slate-500 uppercase">Hit Color</label>
+                    <input
+                        type="color"
+                        value={module.lineHitColor || '#ef4444'} // Default red
+                        onChange={(e) => onUpdateModule(module.id, { lineHitColor: e.target.value })}
+                        className="w-full h-6 bg-transparent cursor-pointer rounded overflow-hidden"
+                    />
+                </div>
+                <div className="flex-1 flex items-center gap-2 pt-4">
+                    <input
+                        type="checkbox"
+                        id={`showAfterHit-${module.id}`}
+                        checked={module.lineShowAfterHit ?? true}
+                        onChange={(e) => onUpdateModule(module.id, { lineShowAfterHit: e.target.checked })}
+                    />
+                    <label htmlFor={`showAfterHit-${module.id}`} className="text-[10px] text-slate-400 select-none cursor-pointer">
+                        Show After Hit
+                    </label>
                 </div>
             </div>
 
             <div className="text-[9px] text-slate-500 italic">
                 Draws a line between two points (bodies, vectors, or coordinates). Useful for visualizing distances, directions, or alignment.
             </div>
-        </div>
+        </div >
     );
 };
 

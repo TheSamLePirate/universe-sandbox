@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
-import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from '@/services/orbitalMath';
+import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo, performRaycast } from '@/services/orbitalMath';
 import { isModuleActive } from './flight_computer/utils';
 import { drawShip } from './ship';
 import { drawBeautifullPlanetGemini } from './PlanetsGemini';
@@ -2378,7 +2378,7 @@ const Canvas: React.FC<CanvasProps> = ({
 
                     if (Number.isFinite(sxA) && Number.isFinite(syA) && Number.isFinite(sxB) && Number.isFinite(syB)) {
                         // Color resolution
-                        let color = module.lineColor || '#00ff00';
+                        let color = module.lineColor || module.color || '#00ff00';
                         const colorInput = module.inputs?.color;
                         if (colorInput) {
                             const resolvedColor = resolveStringInput(colorInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
@@ -2393,13 +2393,47 @@ const Canvas: React.FC<CanvasProps> = ({
                             if (resolvedThickness !== null) thickness = resolvedThickness;
                         }
 
-                        ctx.beginPath();
-                        ctx.moveTo(sxA, syA);
-                        ctx.lineTo(sxB, syB);
-                        ctx.strokeStyle = color;
-                        ctx.lineWidth = Math.max(0.5, thickness); // Prevent invisible lines
-                        ctx.lineCap = 'round';
-                        ctx.stroke();
+                        ctx.save();
+
+                        // Perform Raycast
+                        const hitResult = performRaycast(posA, posB, bodies);
+
+                        if (hitResult.hit && hitResult.position) {
+                            // Hit!
+                            const hitX = cx + hitResult.position.x * scale;
+                            const hitY = cy + hitResult.position.y * scale;
+
+                            // Draw segment A -> Hit
+                            ctx.beginPath();
+                            ctx.moveTo(sxA, syA);
+                            ctx.lineTo(hitX, hitY);
+                            ctx.strokeStyle = color;
+                            ctx.lineWidth = Math.max(0.5, thickness);
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+
+                            // Draw segment Hit -> B (if enabled)
+                            if (module.lineShowAfterHit !== false) { // Default to true
+                                ctx.beginPath();
+                                ctx.moveTo(hitX, hitY);
+                                ctx.lineTo(sxB, syB);
+                                ctx.strokeStyle = module.lineHitColor || '#ef4444'; // Default hit color
+                                ctx.lineWidth = Math.max(0.5, thickness);
+                                ctx.lineCap = 'round';
+                                ctx.stroke();
+                            }
+                        } else {
+                            // No Hit, draw full line
+                            ctx.beginPath();
+                            ctx.moveTo(sxA, syA);
+                            ctx.lineTo(sxB, syB);
+                            ctx.strokeStyle = color;
+                            ctx.lineWidth = Math.max(0.5, thickness);
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+                        }
+
+                        ctx.restore();
                     }
                 }
             });

@@ -89,6 +89,88 @@ export const calculateOrbitInfo = (
     return { altitude, periapsis, apoapsis, period, isBound: E < 0, pePoint, paPoint, eccentricity };
 };
 
+// --- RAYCAST LOGIC ---
+export const performRaycast = (
+    start: Vector2D,
+    end: Vector2D,
+    bodies: Body[]
+): { hit: boolean; position: Vector2D | null; body: Body | null } => {
+    let closestHit: { position: Vector2D; body: Body; distSq: number } | null = null;
+
+    // Vector from start to end
+    const dirX = end.x - start.x;
+    const dirY = end.y - start.y;
+    const lenSq = dirX * dirX + dirY * dirY;
+
+    if (lenSq < 0.000001) return { hit: false, position: null, body: null }; // Zero length line
+
+    // Identify if start point is inside a body (to ignore it)
+    let startBodyId: string | null = null;
+    for (const body of bodies) {
+        const dx = start.x - body.position.x;
+        const dy = start.y - body.position.y;
+        if (dx * dx + dy * dy < (body.radius * body.radius * 0.99)) { // Check if strictly inside (with small epsilon to avoid edge cases)
+            startBodyId = body.id;
+            break;
+        }
+    }
+
+    for (const body of bodies) {
+        if (body.id === startBodyId) continue;
+
+        // Line Segment - Circle Intersection
+        // Vector from Start to Center (f)
+        const fX = start.x - body.position.x;
+        const fY = start.y - body.position.y;
+
+        const a = lenSq;
+        const b = 2 * (fX * dirX + fY * dirY);
+        const c = (fX * fX + fY * fY) - body.radius * body.radius;
+
+        let discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) continue; // No intersection
+
+        discriminant = Math.sqrt(discriminant);
+
+        // t1, t2 are scalar values along the line segment (0 to 1)
+        const t1 = (-b - discriminant) / (2 * a);
+        const t2 = (-b + discriminant) / (2 * a);
+
+        let tHit = -1;
+
+        if (t1 >= 0 && t1 <= 1) {
+            tHit = t1;
+        } else if (t2 >= 0 && t2 <= 1) {
+            tHit = t2;
+        }
+
+        if (tHit !== -1) {
+            const hitX = start.x + tHit * dirX;
+            const hitY = start.y + tHit * dirY;
+
+            // Distance from start to hit
+            const dx = hitX - start.x;
+            const dy = hitY - start.y;
+            const distSq = dx * dx + dy * dy;
+
+            if (!closestHit || distSq < closestHit.distSq) {
+                closestHit = {
+                    position: { x: hitX, y: hitY },
+                    body: body,
+                    distSq: distSq
+                };
+            }
+        }
+    }
+
+    if (closestHit) {
+        return { hit: true, position: closestHit.position, body: closestHit.body };
+    }
+
+    return { hit: false, position: null, body: null };
+};
+
 export const resolveInput = (
     input: FlightComputerInput | undefined,
     bodies: Body[],
@@ -239,6 +321,12 @@ export const resolveInput = (
                 const posA = 'position' in pA ? pA.position : pA;
                 const posB = 'position' in pB ? pB.position : pB;
                 return { x: posB.x - posA.x, y: posB.y - posA.y };
+            }
+            if (pA && pB && outputKey === 'hit_position') {
+                const posA = 'position' in pA ? pA.position : pA;
+                const posB = 'position' in pB ? pB.position : pB;
+                const hitResult = performRaycast(posA, posB, bodies);
+                return hitResult.position; // Can be null
             }
         }
     }
@@ -676,6 +764,17 @@ export const resolveBooleanInput = (
             return module.changeTriggered ?? false;
         } else if (module.type === 'wait' && outputKey === 'triggered') {
             return module.waitTriggered ?? false;
+        } else if (module.type === 'line_drawer' && outputKey === 'hit') {
+            const pA = resolveInput(module.inputs?.point_a, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pB = resolveInput(module.inputs?.point_b, bodies, modules, gravitationalConstant, rendezvousSolutions);
+
+            if (pA && pB) {
+                const posA = 'position' in pA ? pA.position : pA;
+                const posB = 'position' in pB ? pB.position : pB;
+                const hitResult = performRaycast(posA, posB, bodies);
+                return hitResult.hit;
+            }
+            return false;
         }
     }
     return null;

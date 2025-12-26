@@ -148,6 +148,7 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             }
                             if (m.type === 'line_drawer') {
                                 options.push(<option key={`${m.id}:vector`} value={`${m.id}:vector`}>{m.name || 'Line'} - Vector (A to B)</option>);
+                                options.push(<option key={`${m.id}:hit_position`} value={`${m.id}:hit_position`}>{m.name || 'Line'} - Hit Position</option>);
                             }
                         }
 
@@ -259,6 +260,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             }
                             if (m.type === 'wait') {
                                 options.push(<option key={`${m.id}:triggered`} value={`${m.id}:triggered`}>{m.name || 'Wait'} - Triggered</option>);
+                            }
+                            if (m.type === 'line_drawer') {
+                                options.push(<option key={`${m.id}:hit`} value={`${m.id}:hit`}>{m.name || 'Line'} - Hit (Intersect)</option>);
                             }
                         }
 

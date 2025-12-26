@@ -458,6 +458,8 @@ export interface FlightComputerModule {
   // Line Drawer Module Config
   lineColor?: string;
   lineThickness?: number;
+  lineHitColor?: string;
+  lineShowAfterHit?: boolean;
 
   // Dashboard Configuration
   dashboardConfig?: {
