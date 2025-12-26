@@ -2519,48 +2519,64 @@ const Canvas: React.FC<CanvasProps> = ({
                         if (isSensing) {
                             // --- RADAR VISUALS ---
                             ctx.save();
-                            // Grid Rings
+
+                            // 1. Glow Effect for the whole radar
+                            ctx.shadowBlur = 10;
+                            ctx.shadowColor = color;
+
+                            // 2. Grid Rings (Dashed or Solid but faint)
                             ctx.beginPath();
+                            ctx.setLineDash([5, 5]); // Dashed rings for sci-fi look
                             ctx.arc(cxPos, cyPos, radius * scale * 0.33, 0, Math.PI * 2);
-                            ctx.moveTo(cxPos + radius * scale * 0.66, cyPos); // Move to avoid connecting lines
+                            ctx.moveTo(cxPos + radius * scale * 0.66, cyPos);
                             ctx.arc(cxPos, cyPos, radius * scale * 0.66, 0, Math.PI * 2);
+                            ctx.moveTo(cxPos + radius * scale, cyPos);
+                            ctx.arc(cxPos, cyPos, radius * scale, 0, Math.PI * 2); // Outer ring
                             ctx.strokeStyle = color;
-                            ctx.globalAlpha = 0.3;
+                            ctx.globalAlpha = 0.2;
                             ctx.lineWidth = 1;
                             ctx.stroke();
+                            ctx.setLineDash([]); // Reset dash
 
-                            // Crosshairs
+                            // 3. Crosshairs
                             ctx.beginPath();
                             ctx.moveTo(cxPos - radius * scale, cyPos);
                             ctx.lineTo(cxPos + radius * scale, cyPos);
                             ctx.moveTo(cxPos, cyPos - radius * scale);
                             ctx.lineTo(cxPos, cyPos + radius * scale);
-                            ctx.globalAlpha = 0.2;
+                            ctx.globalAlpha = 0.15;
                             ctx.stroke();
 
-                            // Rotating Sweep
+                            // 4. Rotating Sweep with Gradient Trail
                             // time is available in renderLoop scope
-                            const sweepAngle = (time * 2.5) % (Math.PI * 2);
+                            const sweepAngle = (time * 3.0) % (Math.PI * 2); // Slightly faster
                             const sweepX = cxPos + Math.cos(sweepAngle) * radius * scale;
                             const sweepY = cyPos + Math.sin(sweepAngle) * radius * scale;
 
+                            // Draw the solid leading edge
                             ctx.beginPath();
                             ctx.moveTo(cxPos, cyPos);
                             ctx.lineTo(sweepX, sweepY);
                             ctx.strokeStyle = color;
-                            ctx.globalAlpha = 0.7;
+                            ctx.globalAlpha = 0.8;
                             ctx.lineWidth = 2;
                             ctx.stroke();
 
-                            // Sweep Gradient (optional fancy touch: faint sector)
-                            /*
-                            ctx.beginPath();
-                            ctx.moveTo(cxPos, cyPos);
-                            ctx.arc(cxPos, cyPos, radius * scale, sweepAngle - 0.2, sweepAngle);
-                            ctx.fillStyle = color;
-                            ctx.globalAlpha = 0.1;
-                            ctx.fill();
-                            */
+                            // Draw the gradient trail (sector)
+                            // We construct a gradient that fades from the color to transparent around the arc
+                            // Let's fallback to multiple arc segments for a guaranteed "trail" look without complex gradients.
+
+                            const trailLength = 0.5; // radians
+                            for (let i = 0; i < 20; i++) {
+                                const angle = sweepAngle - (i / 20) * trailLength;
+                                const nextAngle = sweepAngle - ((i + 1) / 20) * trailLength;
+                                ctx.beginPath();
+                                ctx.moveTo(cxPos, cyPos);
+                                ctx.arc(cxPos, cyPos, radius * scale, angle, nextAngle, true);
+                                ctx.fillStyle = color;
+                                ctx.globalAlpha = 0.4 * (1 - i / 20); // Fade out
+                                ctx.fill();
+                            }
 
                             ctx.restore();
 
@@ -2570,23 +2586,42 @@ const Canvas: React.FC<CanvasProps> = ({
                                 excludeId = (posInput as Body).id;
                             }
                             const result = performCircleSensing(pos, radius, bodies, excludeId);
-                            if (result.found && result.closestPoint) {
-                                const hitX = cx + result.closestPoint.x * scale;
-                                const hitY = cy + result.closestPoint.y * scale;
 
-                                ctx.beginPath();
-                                ctx.arc(hitX, hitY, 4, 0, Math.PI * 2);
-                                ctx.fillStyle = '#ef4444'; // Red dot for hit
-                                ctx.fill();
-                                // Optional: Draw line to center
+                            if (result.found && result.closestPoint) {
+                                // Calculate hit position relative to the circle center (cxPos, cyPos)
+                                // This ensures we use the same coordinate transform as the circle itself
+                                const dx = result.closestPoint.x - pos.x;
+                                const dy = result.closestPoint.y - pos.y;
+
+                                // Apply scale and flip Y axis if the canvas uses Y-up (space typically does)
+                                // However, usually canvas Y is down. In space sims, usually render with Y-up or Y-down?
+                                // let's use the standard transform logic derived above:
+                                // cyPos = cy + pos.y * scale
+                                // hitY should be cy + result.closestPoint.y * scale
+                                // Therefore: hitY = cyPos + (result.closestPoint.y - pos.y) * scale = cyPos + dy * scale.
+                                const hitX = cxPos + dx * scale;
+                                const hitY = cyPos + dy * scale;
+
+                                // Draw line to target (Pulsing)
+                                const pulse = (Math.sin(time * 10) + 1) / 2; // 0 to 1
                                 ctx.beginPath();
                                 ctx.moveTo(cxPos, cyPos);
                                 ctx.lineTo(hitX, hitY);
-                                ctx.strokeStyle = '#ef4444';
-                                ctx.lineWidth = 1;
-                                ctx.setLineDash([2, 2]);
+                                ctx.strokeStyle = result.body?.color || '#ffffff';
+                                ctx.lineWidth = 1 + pulse * 2; // Pulse thickness
+                                ctx.globalAlpha = 0.6 + pulse * 0.4;
                                 ctx.stroke();
-                                ctx.setLineDash([]);
+
+                                // Draw Hit Marker
+                                ctx.beginPath();
+                                ctx.arc(hitX, hitY, 5 + pulse * 3, 0, Math.PI * 2);
+                                ctx.fillStyle = result.body?.color || '#ffffff';
+                                ctx.fill();
+
+                                // Text Label
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = '10px monospace';
+                                ctx.fillText((result.body?.name || 'Unknown').toUpperCase(), hitX + 10, hitY);
                             }
                         }
                     }
