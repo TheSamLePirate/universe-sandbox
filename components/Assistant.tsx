@@ -12,6 +12,20 @@ interface AssistantProps {
     bodies: Body[]; // For context awareness
 }
 
+// Add helper for blob to base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result as string;
+            // Remove data url prefix (e.g. "data:audio/webm;base64,")
+            resolve(base64String.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
 const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([
         { role: 'model', text: "I am Cosmos. I can control the simulation. Ask me to create planets, change speed, toggle effects, or explain gravity!" }
@@ -30,9 +44,9 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameRef = useRef<number | null>(null);
 
-    // Speech Recognition
-    const recognitionRef = useRef<any>(null);
-    const retryCount = useRef(0);
+    // Audio Recording (Speech to Gemini)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
 
     // Keep chat session persistent
     const chatSession = useRef<Chat | null>(null);
@@ -149,60 +163,59 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
         }
     };
 
-    // --- SPEECH RECOGNITION ---
-    const startListening = () => {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            alert("Browser does not support speech recognition.");
-            return;
-        }
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
-        recognitionRef.current.lang = 'en-US';
-
-        recognitionRef.current.onstart = () => {
-            setIsListening(true);
-            retryCount.current = 0;
-        };
-
-        recognitionRef.current.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript;
-            setInput(transcript);
-            handleSend(transcript);
-        };
-
-        recognitionRef.current.onerror = (event: any) => {
-            console.error("Speech Error:", event.error);
-            if (event.error === 'network' && retryCount.current < 3) {
-                retryCount.current += 1;
-                console.log(`Retrying speech recognition (${retryCount.current}/3)...`);
-                setTimeout(() => {
-                    try { recognitionRef.current.start(); } catch (e) { }
-                }, 500);
-                return;
-            }
-            setIsListening(false);
-        };
-
-        recognitionRef.current.onend = () => {
-            setIsListening(false);
-        };
-
+    // --- SPEECH RECORDING (Gemini Multimodal) ---
+    const startListening = async () => {
         try {
-            recognitionRef.current.start();
-        } catch (e) {
-            console.error("Failed to start recognition", e);
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); // Chrome default
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const base64Audio = await blobToBase64(audioBlob);
+                handleSend(undefined, base64Audio); // Send audio
+
+                // Stop all tracks to release mic
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsListening(true);
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("Could not access microphone. Please allow permissions.");
+            setIsListening(false);
+        }
+    };
+
+    const stopListening = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+            setIsListening(false);
         }
     };
 
     // --- SEND MESSAGE ---
-    const handleSend = async (manualText?: string) => {
+    const handleSend = async (manualText?: string, audioBase64?: string) => {
         const textToSend = manualText || input;
-        if (!textToSend.trim() || isTyping || !chatSession.current) return;
 
-        const userMsg: ChatMessage = { role: 'user', text: textToSend };
-        setMessages(prev => [...prev, userMsg]);
+        // If we have neither text nor audio, do nothing
+        if ((!textToSend.trim() && !audioBase64) || isTyping || !chatSession.current) return;
+
+        // Visual feedback
+        if (audioBase64) {
+            setMessages(prev => [...prev, { role: 'user', text: "🎤 [Audio Message Sent]" }]);
+        } else {
+            setMessages(prev => [...prev, { role: 'user', text: textToSend }]);
+        }
+
         setInput('');
         setIsTyping(true);
 
@@ -213,14 +226,33 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
         }
 
         try {
-            // 1. Send User Message
+            // 1. Prepare Context
             const bodyNames = bodies.map(b => b.name).join(', ');
-            // provide also bodies ids
-            const bodyIds = bodies.map(b => b.id).join(', ');
             const bodiesDescription = bodies.map(b => `Name: ${b.name}, ID: ${b.id}`).join(', ');
-            const contextMsg = `${textToSend} \n[System Context: Current bodies are: ${bodiesDescription}. Selected: ${selectedBodyName || 'None'}]`;
+            const contextMsg = `[System Context: Current bodies are: ${bodiesDescription}. Selected: ${selectedBodyName || 'None'}]`;
 
-            let response: GenerateContentResponse = await chatSession.current.sendMessage({ message: contextMsg });
+            let messageParts: any[] = [];
+
+            // Add text part (either manual text or empty context wrapper if strictly audio)
+            // If strictly audio, we still append context.
+            if (textToSend.trim()) {
+                messageParts.push({ text: textToSend + "\n" + contextMsg });
+            } else {
+                messageParts.push({ text: "Please process this audio command.\n" + contextMsg });
+            }
+
+            // Add audio part if available
+            if (audioBase64) {
+                messageParts.push({
+                    inlineData: {
+                        mimeType: "audio/webm",
+                        data: audioBase64
+                    }
+                });
+            }
+
+            // 1. Send User Message
+            let response: GenerateContentResponse = await chatSession.current.sendMessage({ message: messageParts });
 
             // 2. Handle Function Calls
             while (response.functionCalls && response.functionCalls.length > 0) {
@@ -398,12 +430,7 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
         }
     }
 
-    const stopListening = () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-            setIsListening(false);
-        }
-    };
+
 
     return (
         <div
