@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI, Type, FunctionDeclaration, Tool, Modality, ThinkingLevel } from "@google/genai";
 
 // Get API key from localStorage first, then fallback to environment variable
@@ -377,6 +376,26 @@ const removeFlightComputerModuleTool: FunctionDeclaration = {
     },
 };
 
+const updateFlightComputerModuleTool: FunctionDeclaration = {
+    name: "update_flight_computer_module",
+    description: "Update an existing Flight Computer module's configuration, including dashboard layout.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            moduleName: { type: Type.STRING, description: "Name of the module to update." },
+            configuration: {
+                type: Type.STRING,
+                description: "JSON string of properties to update. Merged into the module. \n" +
+                    "Examples:\n" +
+                    "- Dashboard: { dashboardConfig: { x: 0, y: 0, showTitle: true, customLabel: 'Altimeter' } }\n" +
+                    "- Inputs: { inputs: { primary: { type: 'body', value: 'Earth' } } }\n" +
+                    "- Settings: { color: '#ff0000', sliderMax: 50 }\n"
+            }
+        },
+        required: ["moduleName", "configuration"],
+    },
+};
+
 const getFlightComputerDataTool: FunctionDeclaration = {
     name: "get_flight_computer_data",
     description: "Get data from ALL active Flight Computer modules.",
@@ -410,34 +429,6 @@ const getRocketFlightPlanTool: FunctionDeclaration = {
         required: ["rocketName"],
     },
 };
-
-const tools: Tool[] = [{
-    functionDeclarations: [
-        spawnBodyTool,
-        deleteBodyTool,
-        makeStarTool,
-        controlSimulationTool,
-        changePresetTool,
-        selectBodyTool,
-        followBodyTool,
-        followCenterOfMassTool,
-        configureVisualsTool,
-        configurePhysicsTool,
-        setCameraTool,
-        spawnRocketTool,
-        controlRocketTool,
-        programAdvancedFlightPlanTool,
-        executeManeuverPlanTool,
-        getRocketTelemetryTool,
-        addManualNodeTool,
-        getRocketFlightPlanTool,
-        addFlightComputerModuleTool,
-        removeFlightComputerModuleTool,
-        getFlightComputerDataTool,
-        toggleFlightComputerModuleTool,
-        createModuleGroupTool
-    ]
-}];
 
 export const createChatSession = (initialHistory: { role: 'user' | 'model', text: string }[] = []) => {
     const systemInstruction = `You are "Cosmos", an omnipotent AI astronomer and controller of this N-body gravity simulation.
@@ -546,31 +537,30 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     
     FLIGHT COMPUTER:
     The Flight Computer provides real-time calculations and tracking. Use these tools:
+
+    1. ADD MODULE ('add_flight_computer_module'):
+       Add new modules using the 'configuration' JSON for specific settings.
     
-    2. GET DATA ('get_flight_computer_data'):
-       Retrieves all active module calculations.
+    2. UPDATE MODULE ('update_flight_computer_module'):
+       Modify ANY aspect of an existing module using a JSON string.
+       
+       USE CASES:
+       - Move on Dashboard: { dashboardConfig: { x: 2, y: 0 } } (Grid columns: 6, Rows: 4)
+       - Change Settings: { comparisonValue: 500, color: "#ffff00" }
+       - Rewire Inputs: { inputs: { target: { type: 'body', value: 'Moon' } } }
     
-    3. REMOVE MODULE ('remove_flight_computer_module'):
-       Remove a module by its custom name
+    3. GET DATA ('get_flight_computer_data'):
+       Retrieves full state of active modules.
     
-    4. TOGGLE MODULE ('toggle_flight_computer_module'):
-       Enable/disable a module without removing it
-    
-    5. CREATE GROUP ('create_module_group'):
+    4. CREATE GROUP ('create_module_group'):
        Create a named group to organize modules.
        Example: { name: "Launch Systems", color: "#ff0000" }
-
-    6. ADD MODULE WITH CONFIG:
-       You can add ANY type of module. Use the 'configuration' JSON string to set specific properties.
-       Types: 'logic_gate', 'notify', 'beep', 'slider', 'button', 'maths', 'change_detector', 'edge_detector', etc.
-       
-       Example Logic Gate:
-       {
-         moduleType: "logic_gate",
-         rocketName: "Saturn V",
-         configuration: "{\"logicOperator\": \"AND\"}",
-         groupName: "Launch Systems"
-       }
+    
+    5. REMOVE MODULE ('remove_flight_computer_module'):
+       Remove a module by its custom name
+    
+    6. TOGGLE MODULE ('toggle_flight_computer_module'):
+       Enable or disable a module without removing it
 
     CRITICAL: When analyzing data, you will receive body information. This data has been optimized. 
     Do NOT ask for or expect 'trail' or 'prediction' arrays in the Body objects as they are too large. 
@@ -587,7 +577,7 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
          "customScriptCode": "YOUR_JS_CODE_HERE",
          "customScriptOutputType": "scalar" | "boolean" | "vector",
          "customScriptMode": "sync" | "async" (default sync),
-         customScriptContinuousRun": true | false (default false)
+         "customScriptContinuousRun": true | false (default false)
       })
     }
 
@@ -627,6 +617,35 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     
     Be helpful, scientific, and concise. If you execute a tool, strictly confirm what you did in the text response.
     `;
+
+    const tools: Tool[] = [{
+        functionDeclarations: [
+            spawnBodyTool,
+            deleteBodyTool,
+            makeStarTool,
+            controlSimulationTool,
+            changePresetTool,
+            selectBodyTool,
+            followBodyTool,
+            followCenterOfMassTool,
+            configureVisualsTool,
+            configurePhysicsTool,
+            setCameraTool,
+            spawnRocketTool,
+            controlRocketTool,
+            programAdvancedFlightPlanTool,
+            executeManeuverPlanTool,
+            getRocketTelemetryTool,
+            addManualNodeTool,
+            getRocketFlightPlanTool,
+            addFlightComputerModuleTool,
+            updateFlightComputerModuleTool, // NEW
+            removeFlightComputerModuleTool,
+            getFlightComputerDataTool,
+            toggleFlightComputerModuleTool,
+            createModuleGroupTool
+        ]
+    }];
 
     const useGeminiPro = false;
 

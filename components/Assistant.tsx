@@ -332,6 +332,12 @@ const Assistant: React.FC<AssistantProps> = ({ selectedBodyName, actions, bodies
                                     args.parentGroupName as string | undefined
                                 );
                                 break;
+                            case 'update_flight_computer_module':
+                                result = actions.updateFlightComputerModule(
+                                    args.moduleName as string,
+                                    args.configuration as string
+                                );
+                                break;
                             case 'remove_flight_computer_module':
                                 result = actions.removeFlightComputerModule(args.moduleName as string);
                                 break;

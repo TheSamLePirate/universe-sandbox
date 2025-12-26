@@ -3085,6 +3085,39 @@ const App: React.FC = () => {
                 modules: modulesData
             }, null, 2);
         },
+        updateFlightComputerModule: (moduleName, configuration) => {
+            const module = flightComputerModules.find(m => m.name?.toLowerCase().includes(moduleName.toLowerCase()));
+            if (!module) return `Flight Computer module '${moduleName}' not found.`;
+
+            let config: any = {};
+            try {
+                config = JSON.parse(configuration);
+            } catch (e) {
+                return `Failed to parse configuration JSON: ${e}`;
+            }
+
+            setFlightComputerModules(prev => prev.map(m => {
+                if (m.id === module.id) {
+                    // Deep merge for dashboardConfig to avoid wiping out other properties if only one is updated
+                    const newDashboardConfig = config.dashboardConfig ? { ...(m.dashboardConfig || { x: 0, y: 0 }), ...config.dashboardConfig } : m.dashboardConfig;
+                    const newInputs = config.inputs ? { ...(m.inputs || {}), ...config.inputs } : m.inputs;
+
+                    // Remove nested objects from top-level spread to avoid overwriting with incomplete objects if not handled above
+                    // Actually, simple spread ...config will overwrite dashboardConfig if it exists in config.
+                    // So we must manually assign the merged versions AFTER spread.
+
+                    return {
+                        ...m,
+                        ...config,
+                        dashboardConfig: newDashboardConfig,
+                        inputs: newInputs
+                    };
+                }
+                return m;
+            }));
+
+            return `Flight Computer module '${module.name}' updated with new configuration.`;
+        },
         toggleFlightComputerModule: (moduleName, enabled) => {
             const module = flightComputerModules.find(m => m.name?.toLowerCase().includes(moduleName.toLowerCase()));
             if (!module) return `Flight Computer module '${moduleName}' not found.`;

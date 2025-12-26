@@ -253,6 +253,7 @@ export interface AssistantActions {
   removeFlightComputerModule: (moduleName: string) => string;
   getFlightComputerData: () => string;
   toggleFlightComputerModule: (moduleName: string, enabled: boolean) => string;
+  updateFlightComputerModule: (moduleName: string, configuration: string) => string;
   createModuleGroup: (name: string, color?: string, parentGroupName?: string) => string;
 }
 
