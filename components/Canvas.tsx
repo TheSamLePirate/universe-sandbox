@@ -7,6 +7,7 @@ import { drawShip } from './ship';
 import { drawBeautifullPlanetGemini } from './PlanetsGemini';
 import { drawBeautifulPlanetOpenAi } from './PlanetsOpenAI';
 import { drawApple } from './Apple';
+import { moduleDrawTimes } from '../services/performanceRouter';
 
 interface CanvasProps {
     bodiesRef: React.MutableRefObject<Body[]>; // CHANGED: Pass Ref
@@ -1778,6 +1779,7 @@ const Canvas: React.FC<CanvasProps> = ({
 
             // --- FLIGHT COMPUTER MODULES VISUALIZATION ---
             flightComputerModules.forEach(module => {
+                const drawStart = performance.now();
                 // Check if module is enabled and active (respects activate input)
                 if (!module.isEnabled) return;
                 if (!isModuleActive(module, bodies, flightComputerModules, physicsConfig, {})) return;
@@ -2031,6 +2033,9 @@ const Canvas: React.FC<CanvasProps> = ({
                     }
                     ctx.restore();
                 }
+
+                const drawEnd = performance.now();
+                moduleDrawTimes[module.id] = drawEnd - drawStart;
             });
 
 

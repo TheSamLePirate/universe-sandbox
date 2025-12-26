@@ -1,6 +1,8 @@
+
 import { useEffect, useRef, useMemo } from 'react';
 import { Body, FlightComputerModule, FlightComputerInput, PhysicsConfig, RendezvousSolution, FlightComputerModuleType } from '../types';
-import { resolveInput, resolveScalarInput, resolveBooleanInput, resolveStringInput } from '../services/orbitalMath';
+import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo } from '../services/orbitalMath';
+import { moduleDrawTimes } from '../services/performanceRouter';
 import EasySpeech from 'easy-speech';
 import { useMusic } from '../contexts/MusicContext';
 import { formatTime } from '../components/flight_computer/utils';
@@ -77,7 +79,7 @@ export const useFlightComputerLogic = (
     const scriptLogsRef = useRef<Map<string, string[]>>(new Map());
     const asyncScriptRunningRef = useRef<Map<string, boolean>>(new Map());
     const manualTriggerStateRef = useRef<Map<string, number>>(new Map());
-    const moduleStatsRef = useRef<Map<string, { lastMs: number, avgMs: number, count: number }>>(new Map());
+    const moduleStatsRef = useRef<Map<string, { lastMs: number, avgMs: number, count: number, lastDrawMs?: number, avgDrawMs?: number, accLogic: number, accDraw: number }>>(new Map());
     const lastMonitorUpdateRef = useRef<number>(0);
 
     // --- Follow Module & Button Reset Logic & Custom Script ---
@@ -168,7 +170,7 @@ export const useFlightComputerLogic = (
                     const inputs = [];
                     const count = module.customScriptInputsCount ?? 2;
                     for (let i = 0; i < count; i++) {
-                        const key = `input_${i}`;
+                        const key = `input_${i} `;
                         const inputDef = module.inputs?.[key];
 
                         let val: any = null;
@@ -207,10 +209,10 @@ export const useFlightComputerLogic = (
                         sleepTime = "sleepTime",
                     } = {}) {
                         await sleep(sleepTime)
-                        const url = `${baseUrl.replace(/\/+$/, "")}/api/${encodeURIComponent(valueName)}`;
+                        const url = `${baseUrl.replace(/\/+$/, "")} /api/${encodeURIComponent(valueName)} `;
                         const r = await fetch(url, { method: "GET" });
                         const data = await r.json().catch(() => ({}));
-                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status} `);
                         return data?.[valueName];
                     }
 
@@ -220,23 +222,23 @@ export const useFlightComputerLogic = (
                         sleepTime = "sleepTime",
                     } = {}) {
                         await sleep(sleepTime)
-                        const url = `${baseUrl.replace(/\/+$/, "")}/apiR/${encodeURIComponent(valueName)}`
+                        const url = `${baseUrl.replace(/\/+$/, "")} /apiR/${encodeURIComponent(valueName)} `
                         const r = await fetch(url, { method: "GET" });
                         const data = await r.json().catch(() => ({}));
-                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status} `);
                         return data?.[valueName];
                     }
 
                     async function postApiValue({ baseUrl = "http://MacBook-Pro-de-olivier.local:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
                         await sleep(sleepTime);
-                        const res = await fetch(`${baseUrl}/api/${valueName}`, {
+                        const res = await fetch(`${baseUrl} /api/${valueName} `, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                             },
                             body: JSON.stringify({ value }),
                         });
-                        if (!res.ok) throw new Error(`GET /value failed: ${res.status}`);
+                        if (!res.ok) throw new Error(`GET / value failed: ${res.status} `);
                         const data = await res.json();
                         return data[valueName]; // float 0..1
                     }
@@ -342,13 +344,13 @@ export const useFlightComputerLogic = (
 
 
                                 const func = new AsyncFunction('input', 'console', 'game', `
-                                    try {
+try {
                                         ${module.customScriptCode}
-                                    } catch (e) {
-                                        console.error(e.message);
-                                        throw e;
-                                    }
-                                `);
+} catch (e) {
+    console.error(e.message);
+    throw e;
+}
+`);
 
                                 const result = await func(inputs, mockConsole, game);
 
@@ -360,7 +362,7 @@ export const useFlightComputerLogic = (
                                     customScriptAsyncState: true
                                 });
                             } catch (e: any) {
-                                const errorLog = `Async Error: ${e.message}`;
+                                const errorLog = `Async Error: ${e.message} `;
                                 logs.push(errorLog);
                                 scriptLogsRef.current.set(module.id, logs);
                                 onUpdateModule(module.id, {
@@ -378,13 +380,13 @@ export const useFlightComputerLogic = (
                             // Execute Code
                             // Wrap in a function to return result
                             const func = new Function('input', 'console', 'game', `
-                                try {
+try {
                                     ${module.customScriptCode}
-                                } catch (e) {
-                                    console.error(e.message);
-                                    return null;
-                                }
-                            `);
+} catch (e) {
+    console.error(e.message);
+    return null;
+}
+`);
 
                             const result = func(inputs, mockConsole, game);
 
@@ -403,7 +405,7 @@ export const useFlightComputerLogic = (
                                 });
                             }
                         } catch (e: any) {
-                            const errorLog = `Exec Error: ${e.message}`;
+                            const errorLog = `Exec Error: ${e.message} `;
                             const prevLogs = scriptLogsRef.current.get(module.id) || [];
                             if (!prevLogs.includes(errorLog)) {
                                 scriptLogsRef.current.set(module.id, [errorLog]);
@@ -416,44 +418,82 @@ export const useFlightComputerLogic = (
 
 
             // --- Performance Measurement & System Monitor ---
+            // --- Performance Measurement & System Monitor ---
             const endPerf = performance.now();
             const duration = endPerf - startPerf;
+            const drawDuration = moduleDrawTimes[module.id] || 0;
 
-            const stats = moduleStatsRef.current.get(module.id) || { lastMs: 0, avgMs: 0, count: 0 };
+            const stats = moduleStatsRef.current.get(module.id) || { lastMs: 0, avgMs: 0, count: 0, accLogic: 0, accDraw: 0 };
             stats.lastMs = duration;
-            // Simple exponential moving average (alpha = 0.05 for smoothness)
+            // Accumulate for 1s interval
+            stats.accLogic = (stats.accLogic || 0) + duration;
+            stats.accDraw = (stats.accDraw || 0) + drawDuration;
+
+            // Simple exponential moving average (alpha = 0.05 for smoothness) - Keep for instantaneous view if needed
             if (stats.count === 0) stats.avgMs = duration;
             else stats.avgMs = (stats.avgMs * 0.95) + (duration * 0.05);
+
+            stats.lastDrawMs = drawDuration;
+            if (stats.count === 0 || stats.avgDrawMs === undefined) stats.avgDrawMs = drawDuration;
+            else stats.avgDrawMs = (stats.avgDrawMs * 0.95) + (drawDuration * 0.05);
+
             stats.count++;
             moduleStatsRef.current.set(module.id, stats);
 
             if (module.type === 'system_monitor') {
                 const now = performance.now();
-                if (now - lastMonitorUpdateRef.current > 500) { // Update every 500ms
+                if (now - lastMonitorUpdateRef.current > 1000) { // Update every 1000ms
                     lastMonitorUpdateRef.current = now;
 
                     // Aggregate stats
-                    let globalTotal = 0;
+                    let globalTotalCombined = 0;
+
+                    // First pass: Calculate Global Total for the interval
+                    modules.forEach(m => {
+                        const s = moduleStatsRef.current.get(m.id);
+                        if (s) {
+                            globalTotalCombined += (s.accLogic || 0) + (s.accDraw || 0);
+                        }
+                    });
+
                     const moduleList = modules.map(m => {
                         const s = moduleStatsRef.current.get(m.id);
-                        const avg = s ? s.avgMs : 0;
-                        const last = s ? s.lastMs : 0;
-                        globalTotal += avg;
+                        const accLogic = s ? (s.accLogic || 0) : 0;
+                        const accDraw = s ? (s.accDraw || 0) : 0;
+                        const totalMod = accLogic + accDraw;
+                        const percent = globalTotalCombined > 0 ? (totalMod / globalTotalCombined) * 100 : 0;
+
+                        // Reset accumulators
+                        if (s) {
+                            s.accLogic = 0;
+                            s.accDraw = 0;
+                            moduleStatsRef.current.set(m.id, s);
+                        }
+
+                        // We map 'averageMs' to 'accLogic' for the UI to display "ms per second" (Total CPU time)
+                        // This changes the meaning of the field in the UI context, but matches the user request.
+                        // Ideally we should use the new fields.
+
                         return {
                             id: m.id,
                             name: m.name || m.type,
                             type: m.type,
-                            lastMs: last,
-                            averageMs: avg
+                            lastMs: s ? s.lastMs : 0,
+                            averageMs: s ? s.avgMs : 0, // Keep average per frame available
+                            lastDrawMs: s?.lastDrawMs || 0,
+                            averageDrawMs: s?.avgDrawMs || 0,
+                            accumulatedLogicMs: accLogic,
+                            accumulatedDrawMs: accDraw,
+                            percentOfTotal: percent
                         };
                     });
 
-                    // Sort by load (descending)
-                    moduleList.sort((a, b) => b.averageMs - a.averageMs);
+                    // Sort by accumulated total (descending)
+                    moduleList.sort((a, b) => (b.accumulatedLogicMs + b.accumulatedDrawMs) - (a.accumulatedLogicMs + a.accumulatedDrawMs));
 
                     onUpdateModule(module.id, {
                         systemMonitorStats: {
-                            globalTotalMs: globalTotal,
+                            globalTotalMs: globalTotalCombined,
                             modules: moduleList
                         }
                     });
@@ -649,14 +689,14 @@ export const useFlightComputerLogic = (
 
                 // Handle 4 channels
                 [0, 1, 2, 3].forEach(i => {
-                    const tInput = module.inputs?.[`prompt_text_${i}`];
-                    const wInput = module.inputs?.[`prompt_weight_${i}`];
+                    const tInput = module.inputs?.[`prompt_text_${i} `];
+                    const wInput = module.inputs?.[`prompt_weight_${i} `];
                     // Use type assertion or access via index if TS complains about dynamic access on type
                     const m = module as any;
-                    const manualText = m[`musicPromptText${i}`];
-                    const manualWeight = m[`musicPromptWeight${i}`];
+                    const manualText = m[`musicPromptText${i} `];
+                    const manualWeight = m[`musicPromptWeight${i} `];
 
-                    updateMPrompt(`prompt-${i}`, tInput, wInput, manualText, manualWeight);
+                    updateMPrompt(`prompt - ${i} `, tInput, wInput, manualText, manualWeight);
                 });
 
                 // Update Module Outputs (State Feedback)

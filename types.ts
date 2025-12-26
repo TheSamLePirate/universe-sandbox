@@ -337,6 +337,11 @@ export interface FlightComputerModule {
       type: string;
       lastMs: number;
       averageMs: number;
+      lastDrawMs: number;
+      averageDrawMs: number;
+      accumulatedLogicMs: number; // Sum over the interval
+      accumulatedDrawMs: number;  // Sum over the interval
+      percentOfTotal: number;
     }[];
   };
 
