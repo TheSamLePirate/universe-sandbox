@@ -69,6 +69,7 @@ const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: 
     { value: 'body_by', label: 'Body By', category: 'Info' },
     { value: 'marker', label: 'Marker', category: 'Visual' },
     { value: 'line_drawer', label: 'Line Drawer', category: 'Visual' },
+    { value: 'circle_drawer', label: 'Circle Drawer', category: 'Visual' },
     { value: 'horizontal_bar', label: 'Horizontal Bar', category: 'Visual' },
     { value: 'logic_gate', label: 'Logic Gate', category: 'Logic' },
     { value: 'maths', label: 'Math Operation', category: 'Logic' },
@@ -539,6 +540,12 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
                                             outputs.push(
                                                 { key: 'volume', label: `${m.name || 'Music'} - Volume` },
                                                 { key: 'state', label: `${m.name || 'Music'} - Playing` }
+                                            );
+                                        } else if (m.type === 'circle_drawer') {
+                                            outputs.push(
+                                                { key: 'foundObject', label: `${m.name || 'Circle'} - Found Object` },
+                                                { key: 'objectId', label: `${m.name || 'Circle'} - Object ID` },
+                                                { key: 'closestPoint', label: `${m.name || 'Circle'} - Closest Point` }
                                             );
                                         }
 

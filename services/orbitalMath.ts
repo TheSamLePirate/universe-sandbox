@@ -171,6 +171,71 @@ export const performRaycast = (
     return { hit: false, position: null, body: null };
 };
 
+export const performCircleSensing = (
+    center: Vector2D,
+    radius: number,
+    bodies: Body[],
+    excludeBodyId?: string
+): { found: boolean; body: Body | null; closestPoint: Vector2D | null } => {
+    let closestBody: Body | null = null;
+    let minDist = Infinity;
+    let closestPt: Vector2D | null = null; // Point on the surface
+
+    for (const body of bodies) {
+        if (excludeBodyId && body.id === excludeBodyId) continue;
+        // Distance from center to body center
+        const dx = body.position.x - center.x;
+        const dy = body.position.y - center.y;
+        const distCenterToCenter = Math.sqrt(dx * dx + dy * dy);
+
+        // Closest distance to surface
+        const distToSurface = distCenterToCenter - body.radius;
+
+        // Check if within radius
+        // The circle radius defines the sensing area. If distToSurface <= radius, it's "inside".
+        // Wait, "find the closest object in the radius". Usually means if any part of the object is within the radius.
+        // So distToSurface <= radius.
+
+        // However, we want the ABSOLUTE closest object. 
+        if (distToSurface <= radius) {
+            if (distToSurface < minDist) {
+                minDist = distToSurface;
+                closestBody = body;
+
+                // Calculate point on surface
+                // Vector from center to body
+                // Point on surface is body.position - (vec * body.radius) ? 
+                // No, closest point on surface to the circle center.
+                // The vector from circle center to body center is (dx, dy).
+                // The point on surface is center + (dx, dy) normalized * distToSurface?
+                // Or rather body.position - (dx, dy) normalized * body.radius.
+
+                if (distCenterToCenter > 0.00001) {
+                    const nx = dx / distCenterToCenter;
+                    const ny = dy / distCenterToCenter;
+                    // Surface point is body center - radius * normal (pointing away from circle center)
+                    // Wait, vector (dx, dy) is FROM center TO body. 
+                    // So -normal points back to center.
+                    // Point on surface closest to center is body.position - radius * normal.
+                    closestPt = {
+                        x: body.position.x - nx * body.radius,
+                        y: body.position.y - ny * body.radius
+                    };
+                } else {
+                    // Center is inside the body center (rare), just take body position
+                    closestPt = { ...body.position };
+                }
+            }
+        }
+    }
+
+    if (closestBody && closestPt) {
+        return { found: true, body: closestBody, closestPoint: closestPt };
+    }
+
+    return { found: false, body: null, closestPoint: null };
+};
+
 export const resolveInput = (
     input: FlightComputerInput | undefined,
     bodies: Body[],
@@ -277,11 +342,43 @@ export const resolveInput = (
             const primaryInput = module.inputs?.primary || (module.primaryBodyId ? { type: 'body', value: module.primaryBodyId } : undefined);
             const targetInput = module.inputs?.target || (module.targetBodyId ? { type: 'body', value: module.targetBodyId } : undefined);
 
-            if (outputKey === 'primary_body') {
-                return resolveInput(primaryInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
-            }
             if (outputKey === 'target_body') {
                 return resolveInput(targetInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            }
+
+        } else if (module.type === 'circle_drawer') {
+            const posInput = resolveInput(module.inputs?.position, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pos = posInput && 'position' in posInput ? posInput.position : (posInput as Vector2D | null);
+
+            let excludeId: string | undefined;
+            if (posInput && 'id' in posInput) {
+                excludeId = (posInput as Body).id;
+            }
+
+            if (pos && outputKey === 'closestPoint') {
+                // Check activate and distance sensing
+                let isActive = module.circleActivate ?? true;
+                const activeInput = module.inputs?.activate;
+                if (activeInput) {
+                    const val = resolveBooleanInput(activeInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isActive = val;
+                }
+
+                let isSensing = module.circleDistanceSensing ?? false;
+                const sensInput = module.inputs?.distance_sensing;
+                if (sensInput) {
+                    const val = resolveBooleanInput(sensInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isSensing = val;
+                }
+
+                if (!isActive || !isSensing) return null;
+
+                let radius = module.circleRadius || 100;
+                const radInput = resolveScalarInput(module.inputs?.radius, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                if (radInput !== null) radius = radInput;
+
+                const result = performCircleSensing(pos, radius, bodies, excludeId);
+                return result.closestPoint;
             }
         } else if (module.type === 'selector' && outputKey === 'body') {
             const bodyId = module.selectorBodyId;
@@ -794,6 +891,35 @@ export const resolveBooleanInput = (
                 return hitResult.hit;
             }
             return false;
+        } else if (module.type === 'circle_drawer' && outputKey === 'foundObject') {
+            const posInput = resolveInput(module.inputs?.position, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pos = posInput && 'position' in posInput ? posInput.position : (posInput as Vector2D | null);
+
+            if (pos) {
+                let isActive = module.circleActivate ?? true;
+                const activeInput = module.inputs?.activate;
+                if (activeInput) {
+                    const val = resolveBooleanInput(activeInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isActive = val;
+                }
+
+                let isSensing = module.circleDistanceSensing ?? false;
+                const sensInput = module.inputs?.distance_sensing;
+                if (sensInput) {
+                    const val = resolveBooleanInput(sensInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isSensing = val;
+                }
+
+                if (!isActive || !isSensing) return false;
+
+                let radius = module.circleRadius || 100;
+                const radInput = resolveScalarInput(module.inputs?.radius, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                if (radInput !== null) radius = radInput;
+
+                const result = performCircleSensing(pos, radius, bodies);
+                return result.found;
+            }
+            return false;
         }
     }
     return null;
@@ -853,6 +979,35 @@ export const resolveStringInput = (
                 default:
                     return null;
             }
+        } else if (module.type === 'circle_drawer' && outputKey === 'objectId') {
+            const posInput = resolveInput(module.inputs?.position, bodies, modules, gravitationalConstant, rendezvousSolutions);
+            const pos = posInput && 'position' in posInput ? posInput.position : (posInput as Vector2D | null);
+
+            if (pos) {
+                let isActive = module.circleActivate ?? true;
+                const activeInput = module.inputs?.activate;
+                if (activeInput) {
+                    const val = resolveBooleanInput(activeInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isActive = val;
+                }
+
+                let isSensing = module.circleDistanceSensing ?? false;
+                const sensInput = module.inputs?.distance_sensing;
+                if (sensInput) {
+                    const val = resolveBooleanInput(sensInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) isSensing = val;
+                }
+
+                if (!isActive || !isSensing) return '';
+
+                let radius = module.circleRadius || 100;
+                const radInput = resolveScalarInput(module.inputs?.radius, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                if (radInput !== null) radius = radInput;
+
+                const result = performCircleSensing(pos, radius, bodies);
+                return result.body ? result.body.id : '';
+            }
+            return '';
         } else if (module.type === 'custom_script' && outputKey === 'result') {
             const res = module.customScriptLastResult;
             return typeof res === 'string' ? res : null;

@@ -297,7 +297,8 @@ export type FlightComputerModuleType =
   | 'edge_detector'
   | 'change_detector'
   | 'wait'
-  | 'line_drawer';
+  | 'line_drawer'
+  | 'circle_drawer';
 
 export type FlightComputerInputType = 'body' | 'module_output' | 'vector' | 'string';
 
@@ -461,6 +462,12 @@ export interface FlightComputerModule {
   lineHitColor?: string;
   lineShowAfterHit?: boolean;
   lineActivateRaycast?: boolean;
+
+  // Circle Drawer Module Config
+  circleRadius?: number;
+  circleColor?: string;
+  circleDistanceSensing?: boolean;
+  circleActivate?: boolean;
 
   // Dashboard Configuration
   dashboardConfig?: {

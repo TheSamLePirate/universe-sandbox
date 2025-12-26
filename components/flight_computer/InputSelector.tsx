@@ -150,6 +150,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                 options.push(<option key={`${m.id}:vector`} value={`${m.id}:vector`}>{m.name || 'Line'} - Vector (A to B)</option>);
                                 options.push(<option key={`${m.id}:hit_position`} value={`${m.id}:hit_position`}>{m.name || 'Line'} - Hit Position</option>);
                             }
+                            if (m.type === 'circle_drawer') {
+                                options.push(<option key={`${m.id}:closestPoint`} value={`${m.id}:closestPoint`}>{m.name || 'Circle'} - Closest Point (Vector)</option>);
+                            }
                         }
 
                         // Scalar Outputs
@@ -264,6 +267,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             if (m.type === 'line_drawer') {
                                 options.push(<option key={`${m.id}:hit`} value={`${m.id}:hit`}>{m.name || 'Line'} - Hit (Intersect)</option>);
                             }
+                            if (m.type === 'circle_drawer') {
+                                options.push(<option key={`${m.id}:foundObject`} value={`${m.id}:foundObject`}>{m.name || 'Circle'} - Found Object (Bool)</option>);
+                            }
                         }
 
                         // String Outputs
@@ -296,6 +302,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             }
                             if (m.type === 'keyboard') {
                                 options.push(<option key={`${m.id}:key`} value={`${m.id}:key`}>{m.name || 'Keyboard'} - Key Name</option>);
+                            }
+                            if (m.type === 'circle_drawer') {
+                                options.push(<option key={`${m.id}:objectId`} value={`${m.id}:objectId`}>{m.name || 'Circle'} - Object ID (String)</option>);
                             }
                         }
 

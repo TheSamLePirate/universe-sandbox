@@ -27,6 +27,7 @@ import EdgeDetectorModule from './modules/EdgeDetectorModule';
 import ChangeDetectorModule from './modules/ChangeDetectorModule';
 import WaitModule from './modules/WaitModule';
 import LineDrawerModule from './modules/LineDrawerModule';
+import CircleDrawerModule from './modules/CircleDrawerModule';
 
 
 interface ModuleContentProps {
@@ -70,6 +71,7 @@ const ModuleContent: React.FC<ModuleContentProps> = (props) => {
         case 'change_detector': return <ChangeDetectorModule {...props} />;
         case 'wait': return <WaitModule {...props} />;
         case 'line_drawer': return <LineDrawerModule {...props} />;
+        case 'circle_drawer': return <CircleDrawerModule {...props} />;
         default: return <div className="text-xs text-red-500">Unknown Module Type</div>;
     }
 };

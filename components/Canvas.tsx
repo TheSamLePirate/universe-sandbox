@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Body, Vector2D, Particle, VisualConfig, PhysicsConfig, CoMData, FlightComputerModule, FlightComputerInput, RendezvousSolution } from '../types';
 import { calculateForces, calculateOrbitalPoints, calculateEllipsePoints } from '../services/physicsEngine';
-import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo, performRaycast } from '@/services/orbitalMath';
+import { resolveInput, resolveStringInput, resolveScalarInput, resolveBooleanInput, calculateTransferInfo, performRaycast, performCircleSensing } from '@/services/orbitalMath';
 import { isModuleActive } from './flight_computer/utils';
 import { drawShip } from './ship';
 import { drawBeautifullPlanetGemini } from './PlanetsGemini';
@@ -2453,6 +2453,97 @@ const Canvas: React.FC<CanvasProps> = ({
             });
 
 
+
+
+            // --- FLIGHT COMPUTER: CIRCLE DRAWER ---
+            flightComputerModules.forEach(module => {
+                if (module.type !== 'circle_drawer' || !module.isEnabled) return;
+                if (!isModuleActive(module, bodies, flightComputerModules, physicsConfig, {})) return;
+
+                // Resolve Activation
+                let isActive = module.circleActivate ?? true;
+                const activeInput = module.inputs?.activate;
+                if (activeInput) {
+                    const val = resolveScalarInput(activeInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                    if (val !== null) isActive = val > 0.5;
+                }
+
+                if (!isActive) return;
+
+                // Resolve Position
+                const posInput = resolveInput(module.inputs?.position, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                const pos = posInput && 'position' in posInput ? posInput.position : (posInput as Vector2D | null);
+
+                if (pos) {
+                    const cxPos = cx + pos.x * scale;
+                    const cyPos = cy + pos.y * scale;
+
+                    if (Number.isFinite(cxPos) && Number.isFinite(cyPos)) {
+                        // Resolve Radius
+                        let radius = module.circleRadius || 100;
+                        const radInput = resolveScalarInput(module.inputs?.radius, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                        if (radInput !== null) radius = radInput;
+
+                        // Resolve Color
+                        let color = module.circleColor || '#4ade80';
+                        const colorInput = module.inputs?.color;
+                        if (colorInput) {
+                            const resolvedColor = resolveStringInput(colorInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (resolvedColor) color = resolvedColor;
+                        }
+
+                        // Draw Circle
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(cxPos, cyPos, radius * scale, 0, Math.PI * 2);
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+
+                        // Fill slightly
+                        ctx.fillStyle = color; // use hexToRgba if available, or just globalAlpha
+                        ctx.globalAlpha = 0.1;
+                        ctx.fill();
+                        ctx.restore();
+
+                        // Debug Sensing Visualization (Optional)
+                        // If sensing is enabled, we could re-run sensing here to draw the closest point?
+                        // Or just trust the outputs. Let's draw the closest point if sensing is active, for better UX.
+                        let isSensing = module.circleDistanceSensing ?? false;
+                        const sensInput = module.inputs?.distance_sensing;
+                        if (sensInput) {
+                            const val = resolveScalarInput(sensInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (val !== null) isSensing = val > 0.5;
+                        }
+
+                        if (isSensing) {
+                            let excludeId: string | undefined;
+                            if (posInput && 'id' in posInput) {
+                                excludeId = (posInput as Body).id;
+                            }
+                            const result = performCircleSensing(pos, radius, bodies, excludeId);
+                            if (result.found && result.closestPoint) {
+                                const hitX = cx + result.closestPoint.x * scale;
+                                const hitY = cy + result.closestPoint.y * scale;
+
+                                ctx.beginPath();
+                                ctx.arc(hitX, hitY, 4, 0, Math.PI * 2);
+                                ctx.fillStyle = '#ef4444'; // Red dot for hit
+                                ctx.fill();
+                                // Optional: Draw line to center
+                                ctx.beginPath();
+                                ctx.moveTo(cxPos, cyPos);
+                                ctx.lineTo(hitX, hitY);
+                                ctx.strokeStyle = '#ef4444';
+                                ctx.lineWidth = 1;
+                                ctx.setLineDash([2, 2]);
+                                ctx.stroke();
+                                ctx.setLineDash([]);
+                            }
+                        }
+                    }
+                }
+            });
 
             animationFrameRef.current = requestAnimationFrame(renderLoop);
         };
