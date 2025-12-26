@@ -56,6 +56,7 @@ interface FlightComputerPanelProps {
     handleJumpToImage?: (imageId: string) => void;
     setShowCameraViewer?: (show: boolean) => void;
     setShowParralaxe?: (show: boolean) => void;
+    handleStageRocket?: (rocketId: string) => void;
 }
 
 const MODULE_TYPES: { value: FlightComputerModuleType; label: string; category: string }[] = [
@@ -132,7 +133,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
     prevImage,
     handleJumpToImage,
     setShowCameraViewer,
-    setShowParralaxe
+    setShowParralaxe,
+    handleStageRocket
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
@@ -181,7 +183,8 @@ const FlightComputerPanel: React.FC<FlightComputerPanelProps> = ({
         prevImage,
         handleJumpToImage,
         setShowCameraViewer,
-        setShowParralaxe
+        setShowParralaxe,
+        handleStageRocket
     );
 
     // Helper to get display value for collapsed group

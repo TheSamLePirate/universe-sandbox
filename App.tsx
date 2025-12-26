@@ -1194,7 +1194,7 @@ const App: React.FC = () => {
             // BUT: Do NOT append bodies that were SENT to worker but are missing from result (Destroyed)
             const workerBodyIds = new Set(newBodies.map(b => b.id));
             const sentBodyIds = sentBodyIdsRef.current;
-            
+
             const missingBodies = bodiesRef.current.filter(b => {
                 const inWorker = workerBodyIds.has(b.id);
                 if (inWorker) return false; // Already handled in mergedBodies
@@ -1205,11 +1205,11 @@ const App: React.FC = () => {
                     // Do NOT keep it.
                     return false;
                 }
-                
+
                 // It was NOT sent -> NEWLY SPAWNED locally. Keep it.
                 return true;
             });
-            
+
             const finalBodies = [...mergedBodies, ...missingBodies];
 
             // Apply updates
@@ -2305,14 +2305,14 @@ const App: React.FC = () => {
             const stages = [];
             const stageCount = rocketSpawnConfig.stages || 3;
             const stageConfigs = rocketSpawnConfig.stageConfigs || [];
-            
+
             // Dynamic Stage Generation
             // Booster (0) -> ... -> Payload (stageCount-1)
             for (let i = 0; i < stageCount; i++) {
                 const isPayload = i === stageCount - 1;
                 // Scale factor: 1.0 at booster, decreasing to 0.5 at payload
                 const scale = 1.0 - (i / (stageCount - 1)) * 0.5;
-                
+
                 // Use custom config if available, otherwise auto-scale
                 const customConfig = stageConfigs[i];
                 const fuel = customConfig ? customConfig.fuel : (isPayload ? 500 : 5000 * scale);
@@ -2351,7 +2351,7 @@ const App: React.FC = () => {
             newRocket.fuel = customFuel;
             newRocket.maxFuel = customFuel;
             newRocket.dryMass = rocketSpawnConfig.mass;
-            
+
             newRocket.shipStructure = {
                 design: rocketSpawnConfig.design,
                 stages: [{
@@ -2430,12 +2430,12 @@ const App: React.FC = () => {
                 const stages = [];
                 const stageCount = rocketSpawnConfig.stages || 3;
                 const stageConfigs = rocketSpawnConfig.stageConfigs || [];
-                
+
                 // Dynamic Stage Generation
                 for (let i = 0; i < stageCount; i++) {
                     const isPayload = i === stageCount - 1;
                     const scale = 1.0 - (i / (stageCount - 1)) * 0.5;
-                    
+
                     // Use custom config if available, otherwise auto-scale
                     const customConfig = stageConfigs[i];
                     const fuel = customConfig ? customConfig.fuel : (isPayload ? 500 : 5000 * scale);
@@ -2473,7 +2473,7 @@ const App: React.FC = () => {
                 newRocket.fuel = customFuel;
                 newRocket.maxFuel = customFuel;
                 newRocket.dryMass = rocketSpawnConfig.mass;
-                
+
                 newRocket.shipStructure = {
                     design: rocketSpawnConfig.design,
                     stages: [{
@@ -3227,6 +3227,7 @@ const App: React.FC = () => {
                 handleJumpToImage={handleJumpToImage}
                 setShowCameraViewer={setShowCameraViewer}
                 setShowParralaxe={setShowParralaxe}
+                handleStageRocket={handleStageRocket}
             />
 
 
