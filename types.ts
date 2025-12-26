@@ -262,6 +262,9 @@ export interface RocketSpawnConfig {
   color: string;
   design: ShipDesign;
   stages?: number; // Number of stages for multi-stage rockets
+  fuel?: number; // Initial fuel
+  thrust?: number; // Thrust power
+  stageConfigs?: { fuel: number; thrust: number; mass?: number }[];
 }
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';

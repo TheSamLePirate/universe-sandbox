@@ -179,9 +179,135 @@ export function drawStation(
     flightComputerModules: FlightComputerModule[],
     thrust: { x: number, y: number }
 ) {
-    // Placeholder for Station
-    ctx.fillStyle = '#aaa';
-    ctx.fillRect(-size, -size / 2, size * 2, size);
+    const mods = parseModules(body, flightComputerModules);
+    const s = size * 1.2; // Slightly larger scale for station
+
+    ctx.save();
+
+    // 1. Solar Arrays (Truss Structure & Panels)
+    // Truss Vertical
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-s * 0.1, -s * 2.2, s * 0.2, s * 4.4);
+    
+    // Solar Panels
+    const drawPanelWing = (yOffset: number) => {
+        // Gradient for cells
+        const grad = ctx.createLinearGradient(-s * 1.8, 0, s * 1.8, 0);
+        grad.addColorStop(0, '#172554'); // Dark Blue
+        grad.addColorStop(0.5, '#2563eb'); // Blue
+        grad.addColorStop(1, '#172554');
+
+        ctx.fillStyle = grad;
+        ctx.shadowColor = '#2563eb';
+        ctx.shadowBlur = 2;
+        
+        // Left Wing
+        ctx.fillRect(-s * 1.8, yOffset - s * 0.4, s * 1.6, s * 0.8);
+        // Right Wing
+        ctx.fillRect(s * 0.2, yOffset - s * 0.4, s * 1.6, s * 0.8);
+        
+        ctx.shadowBlur = 0;
+
+        // Grid details
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        // Horizontal lines
+        ctx.moveTo(-s * 1.8, yOffset); ctx.lineTo(-s * 0.2, yOffset);
+        ctx.moveTo(s * 0.2, yOffset); ctx.lineTo(s * 1.8, yOffset);
+        // Vertical lines
+        for(let i=0; i<=4; i++) {
+            const xL = -s * 1.8 + (i * s * 1.6 / 4);
+            ctx.moveTo(xL, yOffset - s * 0.4); ctx.lineTo(xL, yOffset + s * 0.4);
+            
+            const xR = s * 0.2 + (i * s * 1.6 / 4);
+            ctx.moveTo(xR, yOffset - s * 0.4); ctx.lineTo(xR, yOffset + s * 0.4);
+        }
+        ctx.stroke();
+    };
+
+    drawPanelWing(-s * 1.4);
+    drawPanelWing(s * 1.4);
+
+    // 2. Main Hull (Horizontal Modules)
+    const hullGrad = ctx.createLinearGradient(0, -s * 0.35, 0, s * 0.35);
+    hullGrad.addColorStop(0, '#334155');
+    hullGrad.addColorStop(0.4, '#f1f5f9'); // White-ish
+    hullGrad.addColorStop(1, '#334155');
+    
+    ctx.fillStyle = hullGrad;
+    
+    // Central Module
+    ctx.beginPath();
+    ctx.roundRect(-s * 1.0, -s * 0.35, s * 2.0, s * 0.7, s * 0.1);
+    ctx.fill();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Module Seams
+    ctx.strokeStyle = '#64748b';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.3, -s * 0.35); ctx.lineTo(-s * 0.3, s * 0.35);
+    ctx.moveTo(s * 0.3, -s * 0.35); ctx.lineTo(s * 0.3, s * 0.35);
+    ctx.stroke();
+
+    // 3. Docking Nodes / Cupola
+    // Forward Node
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.arc(s * 1.0, 0, s * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Docking Port Detail
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.arc(s * 1.15, 0, s * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Dynamic Modules
+    if (mods.hasObservatory) {
+        // Cupola on the side
+        ctx.save();
+        ctx.translate(0, s * 0.35);
+        ctx.fillStyle = '#4f46e5'; // Glass blue
+        ctx.beginPath();
+        ctx.arc(0, 0, s * 0.2, 0, Math.PI, false);
+        ctx.fill();
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(0, s * 0.2);
+        ctx.stroke();
+        ctx.restore();
+    }
+    
+    if (mods.hasRadar) {
+         drawRadar(ctx, s, time);
+    }
+    
+    if (mods.hasGravityRing) {
+        drawGravityRing(ctx, s, time, mods.gravityRingSpeed);
+    }
+
+    if (mods.hasLaser) {
+        drawLaser(ctx, s, mods.laserAngle, mods.fireLaser);
+    }
+
+    if (mods.hasRoboticArm) {
+        drawRoboticArm(ctx, s, mods.roboticArm);
+    }
+
+    // 5. Thrusters
+    drawRCS(ctx, s, body.sasMode, time);
+
+    // Main Engine (for station keeping / maneuvers)
+    if (thrust.x !== 0 || thrust.y !== 0) {
+        drawEngine(ctx, s * 0.6, thrust, time);
+    }
+
+    ctx.restore();
 }
 
 export function drawSatellite(
@@ -191,21 +317,144 @@ export function drawSatellite(
     body: any,
     flightComputerModules: FlightComputerModule[],
     thrust: { x: number, y: number }
-) { // Sputnik-ish
-    ctx.fillStyle = '#silver';
+) {
+    const mods = parseModules(body, flightComputerModules);
+    const s = size;
+
+    ctx.save();
+
+    // 1. Solar Panels (Wings)
+    // Rotating slowly to look cool
+    const panelAngle = Math.sin(time * 0.5) * 0.1;
+
+    const drawWing = (dir: 1 | -1) => {
+        ctx.save();
+        ctx.translate(dir * s * 0.6, 0); // Offset from bus
+        ctx.rotate(dir * panelAngle);
+        
+        // Panel Stem
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(dir === 1 ? 0 : -s*0.3, -s*0.05, s*0.3, s*0.1);
+
+        // Panel Array
+        const pW = s * 1.2;
+        const pH = s * 0.5;
+        const pX = dir === 1 ? s * 0.3 : -s * 0.3 - pW;
+
+        // Dark Blue Gradient for Solar Cells
+        const grad = ctx.createLinearGradient(0, -pH/2, 0, pH/2);
+        grad.addColorStop(0, '#1e3a8a'); // Dark Blue
+        grad.addColorStop(0.5, '#2563eb'); // Blue
+        grad.addColorStop(1, '#1e3a8a');
+        ctx.fillStyle = grad;
+        
+        // Panel Shadow
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 4;
+        ctx.fillRect(pX, -pH/2, pW, pH);
+        ctx.shadowBlur = 0;
+
+        // Grid Lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        // 2x3 Grid
+        ctx.moveTo(pX + pW/3, -pH/2); ctx.lineTo(pX + pW/3, pH/2);
+        ctx.moveTo(pX + 2*pW/3, -pH/2); ctx.lineTo(pX + 2*pW/3, pH/2);
+        ctx.moveTo(pX, 0); ctx.lineTo(pX + pW, 0);
+        ctx.stroke();
+
+        ctx.restore();
+    };
+
+    drawWing(1);
+    drawWing(-1);
+
+    // 2. Main Bus (Gold Foil - Multi-Layer Insulation)
+    // Cube-ish shape
+    const busSize = s * 0.9;
+    
+    // Gradient for Gold Foil
+    const busGrad = ctx.createLinearGradient(-busSize/2, -busSize/2, busSize/2, busSize/2);
+    busGrad.addColorStop(0, '#a16207'); // Dark Gold
+    busGrad.addColorStop(0.3, '#facc15'); // Bright Gold
+    busGrad.addColorStop(0.6, '#eab308'); // Gold
+    busGrad.addColorStop(1, '#713f12'); // Shadow Brown
+
+    ctx.fillStyle = busGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
+    ctx.roundRect(-busSize/2, -busSize/2, busSize, busSize, s * 0.1);
     ctx.fill();
 
-    // Antennae
-    ctx.strokeStyle = '#silver';
+    // Foil Wrinkle details (crinkle pattern)
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, 0); ctx.lineTo(size * 1.5, size * 1.5);
-    ctx.moveTo(0, 0); ctx.lineTo(-size * 1.5, -size * 1.5);
-    ctx.moveTo(0, 0); ctx.lineTo(-size * 1.5, size * 1.5);
-    ctx.moveTo(0, 0); ctx.lineTo(size * 1.5, -size * 1.5);
+    ctx.moveTo(-busSize*0.3, -busSize*0.4); ctx.lineTo(busSize*0.4, busSize*0.2);
+    ctx.moveTo(busSize*0.2, -busSize*0.5); ctx.lineTo(-busSize*0.3, busSize*0.5);
+    ctx.moveTo(-busSize*0.4, 0); ctx.lineTo(busSize*0.2, busSize*0.4);
     ctx.stroke();
+
+    // 3. Communications Dish (High Gain Antenna)
+    ctx.save();
+    ctx.translate(0, -busSize * 0.5);
+    
+    // Dish Support
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.15);
+    ctx.stroke();
+
+    // Dish Parabola
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.ellipse(0, -s*0.25, s*0.35, s*0.1, 0, Math.PI, 0, false); 
+    ctx.fill();
+    ctx.stroke();
+    
+    // Feed Horn
+    ctx.beginPath(); ctx.moveTo(0, -s*0.25); ctx.lineTo(0, -s*0.45); ctx.stroke();
+    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, -s*0.45, 2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // 4. Sensors / Instruments (Camera Lens)
+    ctx.fillStyle = '#020617';
+    ctx.beginPath(); ctx.arc(0, 0, s*0.2, 0, Math.PI*2); ctx.fill();
+    
+    // Lens Glare
+    const lensGrad = ctx.createRadialGradient(s*0.05, -s*0.05, 0, 0, 0, s*0.2);
+    lensGrad.addColorStop(0, '#38bdf8');
+    lensGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = lensGrad;
+    ctx.beginPath(); ctx.arc(0, 0, s*0.18, 0, Math.PI*2); ctx.fill();
+
+    // 5. Dynamic Modules
+    if (mods.hasLaser) {
+        ctx.save();
+        ctx.scale(0.6, 0.6);
+        ctx.translate(s * 1.5, s * 1.5);
+        drawLaser(ctx, s, mods.laserAngle, mods.fireLaser);
+        ctx.restore();
+    }
+    
+    if (mods.hasRadar) {
+         ctx.save();
+         ctx.scale(0.5, 0.5);
+         ctx.translate(-s * 1.5, -s * 1.5);
+         drawRadar(ctx, s, time); 
+         ctx.restore();
+    }
+
+    // 6. Thrusters
+    drawRCS(ctx, s * 0.9, body.sasMode, time);
+
+    // Kick Motor (Small Engine)
+    if (thrust.x !== 0 || thrust.y !== 0) {
+        drawEngine(ctx, s * 0.4, thrust, time);
+    }
+
+    ctx.restore();
 }
 
 

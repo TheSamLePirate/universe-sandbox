@@ -2303,31 +2303,29 @@ const App: React.FC = () => {
         // Ship Structure Logic
         if (rocketSpawnConfig.design === 'multistage') {
             const stages = [];
-            // Example 3-stage setup
-            // Stage 0 (Booster): Heavy, lots of fuel
-            stages.push({
-                mass: rocketSpawnConfig.mass * 2,
-                fuel: 5000,
-                maxFuel: 5000,
-                thrust: 1.0,
-                color: '#333333'
-            });
-            // Stage 1 (Mid): Medium
-            stages.push({
-                mass: rocketSpawnConfig.mass,
-                fuel: 2000,
-                maxFuel: 2000,
-                thrust: 0.5,
-                color: '#666666'
-            });
-            // Stage 2 (Payload): Light
-            stages.push({
-                mass: rocketSpawnConfig.mass * 0.5,
-                fuel: 500,
-                maxFuel: 500,
-                thrust: 0.2,
-                color: rocketSpawnConfig.color
-            });
+            const stageCount = rocketSpawnConfig.stages || 3;
+            const stageConfigs = rocketSpawnConfig.stageConfigs || [];
+            
+            // Dynamic Stage Generation
+            // Booster (0) -> ... -> Payload (stageCount-1)
+            for (let i = 0; i < stageCount; i++) {
+                const isPayload = i === stageCount - 1;
+                // Scale factor: 1.0 at booster, decreasing to 0.5 at payload
+                const scale = 1.0 - (i / (stageCount - 1)) * 0.5;
+                
+                // Use custom config if available, otherwise auto-scale
+                const customConfig = stageConfigs[i];
+                const fuel = customConfig ? customConfig.fuel : (isPayload ? 500 : 5000 * scale);
+                const thrust = customConfig ? customConfig.thrust : (isPayload ? 0.2 : 1.0 * scale);
+
+                stages.push({
+                    mass: rocketSpawnConfig.mass * (isPayload ? 0.5 : 2 * scale),
+                    fuel: fuel,
+                    maxFuel: fuel,
+                    thrust: thrust,
+                    color: isPayload ? rocketSpawnConfig.color : (i % 2 === 0 ? '#333333' : '#666666')
+                });
+            }
 
             newRocket.shipStructure = {
                 design: 'multistage',
@@ -2346,18 +2344,21 @@ const App: React.FC = () => {
             newRocket.fuel = totalFuel;
             newRocket.maxFuel = totalFuel;
         } else {
-            // Default Single Stage Rocket
-            newRocket.fuel = 100;
-            newRocket.maxFuel = 100;
+            // Default Single Stage Rocket / Station / Satellite
+            const customFuel = rocketSpawnConfig.fuel !== undefined ? rocketSpawnConfig.fuel : 100;
+            const customThrust = rocketSpawnConfig.thrust !== undefined ? rocketSpawnConfig.thrust : 1;
+
+            newRocket.fuel = customFuel;
+            newRocket.maxFuel = customFuel;
             newRocket.dryMass = rocketSpawnConfig.mass;
-            // No shipStructure needed for legacy 'rocket', or minimal one
+            
             newRocket.shipStructure = {
                 design: rocketSpawnConfig.design,
                 stages: [{
                     mass: rocketSpawnConfig.mass,
-                    fuel: 100,
-                    maxFuel: 100,
-                    thrust: 1,
+                    fuel: customFuel,
+                    maxFuel: customFuel,
+                    thrust: customThrust,
                     color: rocketSpawnConfig.color
                 }],
                 currentStageIndex: 0
@@ -2427,31 +2428,27 @@ const App: React.FC = () => {
             // Ship Structure Logic
             if (rocketSpawnConfig.design === 'multistage') {
                 const stages = [];
-                // Example 3-stage setup
-                // Stage 0 (Booster): Heavy, lots of fuel
-                stages.push({
-                    mass: rocketSpawnConfig.mass * 2,
-                    fuel: 5000,
-                    maxFuel: 5000,
-                    thrust: 1.0,
-                    color: '#333333'
-                });
-                // Stage 1 (Mid): Medium
-                stages.push({
-                    mass: rocketSpawnConfig.mass,
-                    fuel: 2000,
-                    maxFuel: 2000,
-                    thrust: 0.5,
-                    color: '#666666'
-                });
-                // Stage 2 (Payload): Light
-                stages.push({
-                    mass: rocketSpawnConfig.mass * 0.5,
-                    fuel: 500,
-                    maxFuel: 500,
-                    thrust: 0.2,
-                    color: rocketSpawnConfig.color
-                });
+                const stageCount = rocketSpawnConfig.stages || 3;
+                const stageConfigs = rocketSpawnConfig.stageConfigs || [];
+                
+                // Dynamic Stage Generation
+                for (let i = 0; i < stageCount; i++) {
+                    const isPayload = i === stageCount - 1;
+                    const scale = 1.0 - (i / (stageCount - 1)) * 0.5;
+                    
+                    // Use custom config if available, otherwise auto-scale
+                    const customConfig = stageConfigs[i];
+                    const fuel = customConfig ? customConfig.fuel : (isPayload ? 500 : 5000 * scale);
+                    const thrust = customConfig ? customConfig.thrust : (isPayload ? 0.2 : 1.0 * scale);
+
+                    stages.push({
+                        mass: rocketSpawnConfig.mass * (isPayload ? 0.5 : 2 * scale),
+                        fuel: fuel,
+                        maxFuel: fuel,
+                        thrust: thrust,
+                        color: isPayload ? rocketSpawnConfig.color : (i % 2 === 0 ? '#333333' : '#666666')
+                    });
+                }
 
                 newRocket.shipStructure = {
                     design: 'multistage',
@@ -2469,18 +2466,21 @@ const App: React.FC = () => {
                 newRocket.fuel = totalFuel;
                 newRocket.maxFuel = totalFuel;
             } else {
-                // Default Single Stage Rocket
-                newRocket.fuel = 100;
-                newRocket.maxFuel = 100;
+                // Default Single Stage Rocket / Station / Satellite
+                const customFuel = rocketSpawnConfig.fuel !== undefined ? rocketSpawnConfig.fuel : 100;
+                const customThrust = rocketSpawnConfig.thrust !== undefined ? rocketSpawnConfig.thrust : 1;
+
+                newRocket.fuel = customFuel;
+                newRocket.maxFuel = customFuel;
                 newRocket.dryMass = rocketSpawnConfig.mass;
-                // No shipStructure needed for legacy 'rocket', or minimal one
+                
                 newRocket.shipStructure = {
                     design: rocketSpawnConfig.design,
                     stages: [{
                         mass: rocketSpawnConfig.mass,
-                        fuel: 100,
-                        maxFuel: 100,
-                        thrust: 1,
+                        fuel: customFuel,
+                        maxFuel: customFuel,
+                        thrust: customThrust,
                         color: rocketSpawnConfig.color
                     }],
                     currentStageIndex: 0

@@ -1542,34 +1542,143 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                 <select
                                     value={spawnConfig.design || 'rocket'}
                                     onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, design: e.target.value as ShipDesign })}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
                                 >
                                     <option value="rocket">Single Stage</option>
-                                    <option value="multistage">Multi-Stage (3)</option>
+                                    <option value="multistage">Multi-Stage</option>
                                     <option value="station">Space Station</option>
                                     <option value="satellite">Satellite</option>
                                 </select>
                             </div>
-                            <input
-                                type="number"
-                                value={spawnConfig.mass}
-                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, mass: Number(e.target.value) })}
-                                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2"
-                                placeholder="Mass"
-                                min={0.0001}
-                                max={0.1}
-                                step={0.0001}
-                            />
-                            <input
-                                type="number"
-                                value={spawnConfig.radius}
-                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, radius: Number(e.target.value) })}
-                                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2"
-                                placeholder="Radius"
-                                min={0.20}
-                                max={2}
-                                step={0.01}
-                            />
+
+                            {/* Dynamic Configuration Fields */}
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                {spawnConfig.design === 'multistage' ? (
+                                    <>
+                                        <div className="col-span-2">
+                                            <label className="block text-xs text-slate-400 uppercase mb-1">Stages</label>
+                                            <input
+                                                type="number"
+                                                value={spawnConfig.stages || 3}
+                                                onChange={(e) => {
+                                                    const count = Math.max(2, Math.min(10, Number(e.target.value)));
+                                                    // Initialize stageConfigs if needed or resize it
+                                                    let newConfigs = spawnConfig.stageConfigs ? [...spawnConfig.stageConfigs] : [];
+                                                    
+                                                    // Resize logic
+                                                    if (newConfigs.length < count) {
+                                                        // Add missing
+                                                        for (let i = newConfigs.length; i < count; i++) {
+                                                            const isPayload = i === count - 1;
+                                                            const scale = 1.0 - (i / (count - 1)) * 0.5;
+                                                            newConfigs.push({
+                                                                fuel: isPayload ? 500 : Math.round(5000 * scale),
+                                                                thrust: isPayload ? 0.2 : Math.round(1.0 * scale * 10) / 10
+                                                            });
+                                                        }
+                                                    } else if (newConfigs.length > count) {
+                                                        // Trim
+                                                        newConfigs = newConfigs.slice(0, count);
+                                                    }
+                                                    
+                                                    onUpdateSpawnConfig({ ...spawnConfig, stages: count, stageConfigs: newConfigs });
+                                                }}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                min={2}
+                                                max={10}
+                                            />
+                                        </div>
+                                        {/* Per Stage Configuration */}
+                                        {spawnConfig.stageConfigs && spawnConfig.stageConfigs.length > 0 && (
+                                            <div className="col-span-2 space-y-2 mt-2 bg-slate-800/50 p-2 rounded border border-slate-700 max-h-40 overflow-y-auto custom-scrollbar">
+                                                {spawnConfig.stageConfigs.map((cfg, idx) => (
+                                                    <div key={idx} className="flex gap-2 items-end">
+                                                        <div className="w-8 text-[10px] text-slate-400 mb-2 font-bold">{idx === spawnConfig.stageConfigs!.length - 1 ? 'PAY' : `S${idx + 1}`}</div>
+                                                        <div className="flex-1">
+                                                            <label className="block text-[8px] text-slate-500 uppercase">Fuel</label>
+                                                            <input
+                                                                type="number"
+                                                                value={cfg.fuel}
+                                                                onChange={(e) => {
+                                                                    const newConfigs = [...(spawnConfig.stageConfigs || [])];
+                                                                    newConfigs[idx] = { ...newConfigs[idx], fuel: Number(e.target.value) };
+                                                                    onUpdateSpawnConfig({ ...spawnConfig, stageConfigs: newConfigs });
+                                                                }}
+                                                                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-xs text-white"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <label className="block text-[8px] text-slate-500 uppercase">Thrust</label>
+                                                            <input
+                                                                type="number"
+                                                                value={cfg.thrust}
+                                                                onChange={(e) => {
+                                                                    const newConfigs = [...(spawnConfig.stageConfigs || [])];
+                                                                    newConfigs[idx] = { ...newConfigs[idx], thrust: Number(e.target.value) };
+                                                                    onUpdateSpawnConfig({ ...spawnConfig, stageConfigs: newConfigs });
+                                                                }}
+                                                                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-xs text-white"
+                                                                step={0.1}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="block text-xs text-slate-400 uppercase mb-1">Fuel</label>
+                                            <input
+                                                type="number"
+                                                value={spawnConfig.fuel || 100}
+                                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, fuel: Number(e.target.value) })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                min={0}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-slate-400 uppercase mb-1">Thrust</label>
+                                            <input
+                                                type="number"
+                                                value={spawnConfig.thrust || 1}
+                                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, thrust: Number(e.target.value) })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                step={0.1}
+                                                min={0.1}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                <div>
+                                    <label className="block text-xs text-slate-400 uppercase mb-1">Mass</label>
+                                    <input
+                                        type="number"
+                                        value={spawnConfig.mass}
+                                        onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, mass: Number(e.target.value) })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
+                                        min={0.0001}
+                                        max={0.1}
+                                        step={0.0001}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-400 uppercase mb-1">Radius</label>
+                                    <input
+                                        type="number"
+                                        value={spawnConfig.radius}
+                                        onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, radius: Number(e.target.value) })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
+                                        min={0.20}
+                                        max={5}
+                                        step={0.01}
+                                    />
+                                </div>
+                            </div>
 
 
                             <div className="flex gap-2 justify-center">
@@ -1672,6 +1781,108 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     <option value="station">Space Station</option>
                                     <option value="satellite">Satellite</option>
                                 </select>
+
+                                {/* Dynamic Configuration Fields */}
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    {spawnConfig.design === 'multistage' ? (
+                                        <>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-slate-400 uppercase mb-1">Stages</label>
+                                                <input
+                                                    type="number"
+                                                    value={spawnConfig.stages || 3}
+                                                    onChange={(e) => {
+                                                        const count = Math.max(2, Math.min(10, Number(e.target.value)));
+                                                        // Initialize stageConfigs if needed or resize it
+                                                        let newConfigs = spawnConfig.stageConfigs ? [...spawnConfig.stageConfigs] : [];
+                                                        
+                                                        // Resize logic
+                                                        if (newConfigs.length < count) {
+                                                            // Add missing
+                                                            for (let i = newConfigs.length; i < count; i++) {
+                                                                const isPayload = i === count - 1;
+                                                                const scale = 1.0 - (i / (count - 1)) * 0.5;
+                                                                newConfigs.push({
+                                                                    fuel: isPayload ? 500 : Math.round(5000 * scale),
+                                                                    thrust: isPayload ? 0.2 : Math.round(1.0 * scale * 10) / 10
+                                                                });
+                                                            }
+                                                        } else if (newConfigs.length > count) {
+                                                            // Trim
+                                                            newConfigs = newConfigs.slice(0, count);
+                                                        }
+                                                        
+                                                        onUpdateSpawnConfig({ ...spawnConfig, stages: count, stageConfigs: newConfigs });
+                                                    }}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                    min={2}
+                                                    max={10}
+                                                />
+                                            </div>
+                                            {/* Per Stage Configuration */}
+                                            {spawnConfig.stageConfigs && spawnConfig.stageConfigs.length > 0 && (
+                                                <div className="col-span-2 space-y-2 mt-2 bg-slate-800/50 p-2 rounded border border-slate-700 max-h-40 overflow-y-auto custom-scrollbar">
+                                                    {spawnConfig.stageConfigs.map((cfg, idx) => (
+                                                        <div key={idx} className="flex gap-2 items-end">
+                                                            <div className="w-8 text-[10px] text-slate-400 mb-2 font-bold">{idx === spawnConfig.stageConfigs!.length - 1 ? 'PAY' : `S${idx + 1}`}</div>
+                                                            <div className="flex-1">
+                                                                <label className="block text-[8px] text-slate-500 uppercase">Fuel</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={cfg.fuel}
+                                                                    onChange={(e) => {
+                                                                        const newConfigs = [...(spawnConfig.stageConfigs || [])];
+                                                                        newConfigs[idx] = { ...newConfigs[idx], fuel: Number(e.target.value) };
+                                                                        onUpdateSpawnConfig({ ...spawnConfig, stageConfigs: newConfigs });
+                                                                    }}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-xs text-white"
+                                                                />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <label className="block text-[8px] text-slate-500 uppercase">Thrust</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={cfg.thrust}
+                                                                    onChange={(e) => {
+                                                                        const newConfigs = [...(spawnConfig.stageConfigs || [])];
+                                                                        newConfigs[idx] = { ...newConfigs[idx], thrust: Number(e.target.value) };
+                                                                        onUpdateSpawnConfig({ ...spawnConfig, stageConfigs: newConfigs });
+                                                                    }}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-xs text-white"
+                                                                    step={0.1}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase mb-1">Fuel</label>
+                                                <input
+                                                    type="number"
+                                                    value={spawnConfig.fuel || 100}
+                                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, fuel: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                    min={0}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 uppercase mb-1">Thrust</label>
+                                                <input
+                                                    type="number"
+                                                    value={spawnConfig.thrust || 1}
+                                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, thrust: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                                    step={0.1}
+                                                    min={0.1}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
 
                                 <label className="block text-xs text-slate-400 uppercase mb-1">Mass</label>
                                 <input
