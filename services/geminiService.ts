@@ -575,6 +575,53 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     CRITICAL: When analyzing data, you will receive body information. This data has been optimized. 
     Do NOT ask for or expect 'trail' or 'prediction' arrays in the Body objects as they are too large. 
     Rely on 'get_flight_computer_data' or 'get_rocket_telemetry' for dynamic values.
+
+    ---
+    ADVANCED: CUSTOM SCRIPTING
+    You can write arbitrary JavaScript to control the simulation using the 'custom_script' module.
+    
+    CONFIG:
+    {
+      "moduleType": "custom_script",
+      "configuration": JSON.stringify({
+         "customScriptCode": "YOUR_JS_CODE_HERE",
+         "customScriptOutputType": "scalar" | "boolean" | "vector",
+         "customScriptMode": "sync" | "async" (default sync),
+         customScriptContinuousRun": true | false (default false)
+      })
+    }
+
+    EXECUTION CONTEXT:
+    Your code runs inside a function with these arguments: (input, console, game).
+    
+    1. 'input': Array of resolved values from module inputs (e.g., input[0], input[1]).
+    2. 'console': Use console.log() for debugging (visible in module logs).
+    3. 'game': The OMNIPOTENT access object.
+       - game.bodies: Array of all Body objects.
+       - game.modules: Array of all FlightComputerModule objects.
+       - game.physicsConfig: { gravitationalConstant, ... }
+       - game.actions:
+         .spawnRocket(parentName)
+         .setSpeed(val)
+         .handleStageRocket(rocketId)  <-- USE THIS FOR AUTO-STAGING
+         .updateModule(id, partialUpdate)
+         .createAndSpawnBody(candidate)
+       - game.helpers:
+         .resolveScalar(input)
+         .formatTime(seconds)
+
+    EXAMPLE: AUTO-STAGING SCRIPT
+    // Checks if fuel is empty and stages the rocket
+    const rocket = game.bodies.find(b => b.id === input[0]); // Assumes input 0 is rocket ID
+    if (rocket && rocket.fuel < 0.1) {
+       console.log("Fuel empty! Staging...");
+       game.actions.handleStageRocket(rocket.id);
+       return 1; // Signal stage complete
+    }
+    return 0;
+
+    IMPORTANT: Escape your code string properly within the JSON configuration.
+    ---
     
     Flight Computer modules are persistent and update in real-time. 
     
