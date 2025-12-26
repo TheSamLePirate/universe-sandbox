@@ -225,7 +225,7 @@ export const useFlightComputerLogic = (
                         const url = `${baseUrl.replace(/\/+$/, "")}/apiR/${encodeURIComponent(valueName)} `
                         const r = await fetch(url, { method: "GET" });
                         const data = await r.json().catch(() => ({}));
-                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status} `);
+                        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
                         return data?.[valueName];
                     }
 
@@ -238,7 +238,7 @@ export const useFlightComputerLogic = (
                             },
                             body: JSON.stringify({ value }),
                         });
-                        if (!res.ok) throw new Error(`GET / value failed: ${res.status} `);
+                        if (!res.ok) throw new Error(`GET / value failed: ${res.status}`);
                         const data = await res.json();
                         return data[valueName]; // float 0..1
                     }
