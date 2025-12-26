@@ -2517,6 +2517,54 @@ const Canvas: React.FC<CanvasProps> = ({
                         }
 
                         if (isSensing) {
+                            // --- RADAR VISUALS ---
+                            ctx.save();
+                            // Grid Rings
+                            ctx.beginPath();
+                            ctx.arc(cxPos, cyPos, radius * scale * 0.33, 0, Math.PI * 2);
+                            ctx.moveTo(cxPos + radius * scale * 0.66, cyPos); // Move to avoid connecting lines
+                            ctx.arc(cxPos, cyPos, radius * scale * 0.66, 0, Math.PI * 2);
+                            ctx.strokeStyle = color;
+                            ctx.globalAlpha = 0.3;
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+
+                            // Crosshairs
+                            ctx.beginPath();
+                            ctx.moveTo(cxPos - radius * scale, cyPos);
+                            ctx.lineTo(cxPos + radius * scale, cyPos);
+                            ctx.moveTo(cxPos, cyPos - radius * scale);
+                            ctx.lineTo(cxPos, cyPos + radius * scale);
+                            ctx.globalAlpha = 0.2;
+                            ctx.stroke();
+
+                            // Rotating Sweep
+                            // time is available in renderLoop scope
+                            const sweepAngle = (time * 2.5) % (Math.PI * 2);
+                            const sweepX = cxPos + Math.cos(sweepAngle) * radius * scale;
+                            const sweepY = cyPos + Math.sin(sweepAngle) * radius * scale;
+
+                            ctx.beginPath();
+                            ctx.moveTo(cxPos, cyPos);
+                            ctx.lineTo(sweepX, sweepY);
+                            ctx.strokeStyle = color;
+                            ctx.globalAlpha = 0.7;
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+
+                            // Sweep Gradient (optional fancy touch: faint sector)
+                            /*
+                            ctx.beginPath();
+                            ctx.moveTo(cxPos, cyPos);
+                            ctx.arc(cxPos, cyPos, radius * scale, sweepAngle - 0.2, sweepAngle);
+                            ctx.fillStyle = color;
+                            ctx.globalAlpha = 0.1;
+                            ctx.fill();
+                            */
+
+                            ctx.restore();
+
+                            // --- SENSING LOGIC ---
                             let excludeId: string | undefined;
                             if (posInput && 'id' in posInput) {
                                 excludeId = (posInput as Body).id;
