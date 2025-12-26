@@ -146,6 +146,9 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                                     options.push(<option key={`${m.id}:result`} value={`${m.id}:result`}>{m.name || 'Script'} - Result (Vector)</option>);
                                 }
                             }
+                            if (m.type === 'line_drawer') {
+                                options.push(<option key={`${m.id}:vector`} value={`${m.id}:vector`}>{m.name || 'Line'} - Vector (A to B)</option>);
+                            }
                         }
 
                         // Scalar Outputs
@@ -211,6 +214,10 @@ const InputSelector: React.FC<InputSelectorProps> = ({ label, value, onChange, b
                             }
                             if (m.type === 'wait') {
                                 options.push(<option key={`${m.id}:remaining_time`} value={`${m.id}:remaining_time`}>{m.name || 'Wait'} - Remaining Time (ms)</option>);
+                            }
+                            if (m.type === 'line_drawer') {
+                                options.push(<option key={`${m.id}:length`} value={`${m.id}:length`}>{m.name || 'Line'} - Length</option>);
+                                options.push(<option key={`${m.id}:distance`} value={`${m.id}:distance`}>{m.name || 'Line'} - Distance</option>);
                             }
                         }
 
