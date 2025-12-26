@@ -10,7 +10,7 @@ const SOFTENING = 0.15;
 const LANDING_MAX_VELOCITY = 3;
 // Fuel consumption factor (Fuel units per Thrust Unit per Second)
 // Tuned for mass ~0.001 rocket. Lower = fuel lasts longer.
-const FUEL_CONSUMPTION_RATE = 500000;
+const FUEL_CONSUMPTION_RATE = 50000;
 // Max thrust clamp for autopilot to prevent physics breaking
 const MAX_ROCKET_THRUST = 0.01;
 
@@ -787,10 +787,24 @@ export const updatePhysics = (
 
             if (updatedBody.thrust && (Math.abs(updatedBody.thrust.x) > 0 || Math.abs(updatedBody.thrust.y) > 0)) {
                 // Check Fuel
-                if (updatedBody.isRocket && updatedBody.fuel !== undefined && updatedBody.fuel <= 0) {
+                let hasFuel = false;
+                if (updatedBody.shipStructure && updatedBody.shipStructure.stages.length > 0) {
+                    const struct = updatedBody.shipStructure;
+                    const idx = struct.currentStageIndex;
+                    if (idx >= 0 && idx < struct.stages.length) {
+                        hasFuel = struct.stages[idx].fuel > 0;
+                    }
+                } else {
+                    hasFuel = updatedBody.fuel !== undefined && updatedBody.fuel > 0;
+                }
+
+                if (updatedBody.isRocket && !hasFuel) {
                     // Out of fuel
                     updatedBody.thrust = { x: 0, y: 0 };
-                    updatedBody.fuel = 0;
+                    // Only reset global fuel if no structure, otherwise handled by stage logic
+                    if (!updatedBody.shipStructure) {
+                        updatedBody.fuel = 0;
+                    }
                 } else {
                     // Apply Thrust Force
                     forces[idx].x += updatedBody.thrust.x;
@@ -798,7 +812,7 @@ export const updatePhysics = (
 
                     // Consume Fuel
                     // Consume Fuel
-                    if (updatedBody.isRocket && updatedBody.fuel !== undefined) {
+                    if (updatedBody.isRocket) { // Logic for consumption (only if fuel exists, checked above implicitly for single stage)
                         const thrustMag = Math.sqrt(updatedBody.thrust.x ** 2 + updatedBody.thrust.y ** 2);
                         const consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt;
 
@@ -823,7 +837,7 @@ export const updatePhysics = (
                                 updatedBody.fuel = totalFuel;
                                 updatedBody.mass = totalMass;
                             }
-                        } else {
+                        } else if (updatedBody.fuel !== undefined) {
                             // --- LEGACY LOGIC ---
                             updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
                             // WEIGHTLESS FUEL (Legacy): Do NOT update mass.
@@ -1068,11 +1082,11 @@ export const updatePhysics = (
                         const intensity = Math.sqrt(lightBody.mass) + Math.sqrt(heavyBody.mass) + Math.sqrt(lightBody.velocity.x * lightBody.velocity.x + lightBody.velocity.y * lightBody.velocity.y) + Math.sqrt(heavyBody.velocity.x * heavyBody.velocity.x + heavyBody.velocity.y * heavyBody.velocity.y);
 
                         // Create explosion particles
-                        // For rockets, use minimum intensity to ensure visible explosion
+                        // For rockets, use minimum intensity to ensure visible explosion but cap it to avoid lag
                         const isRocketCollision = isRocketA || isRocketB;
                         let explosionIntensity = intensity;
                         if (isRocketCollision) {
-                            explosionIntensity = Math.max(explosionIntensity, 1000); // Minimum intensity of 1000 for rockets (10,000 particles)
+                            explosionIntensity = Math.min(Math.max(explosionIntensity, 10), 50); // Cap intensity between 10 and 50
                         }
                         allNewParticles.push(...createExplosion(collisionPointX, collisionPointY, lightBody.color, explosionIntensity, dt));
 

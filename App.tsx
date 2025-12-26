@@ -198,7 +198,10 @@ const App: React.FC = () => {
     const physicsWorkerRef = useRef<Worker | null>(null);
     const isPhysicsWorkerBusyRef = useRef(false);
     const accumulatedPhysicsTimeRef = useRef(0);
-    const timeSentToWorkerRef = useRef(0); // Track time currently being processed by worker
+    const timeSentToWorkerRef = useRef(0);
+    const sentBodyIdsRef = useRef<Set<string>>(new Set());
+
+    // Worker Job ID
     const workerJobIdRef = useRef(0);
     const lastBodyUpdateTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -1146,6 +1149,10 @@ const App: React.FC = () => {
                         thrust: localBody.thrust,
                         angle: localBody.angle,
                         sasMode: localBody.sasMode || workerBody.sasMode,
+                        // Keep Structure Changes (Mass, Radius, Structure)
+                        mass: localBody.mass,
+                        radius: localBody.radius,
+                        shipStructure: localBody.shipStructure,
                         // Keep Worker Physics
                         position: workerBody.position,
                         velocity: workerBody.velocity,
@@ -1166,6 +1173,10 @@ const App: React.FC = () => {
                         // Keep LOCAL Thrust/Maneuvers to allow Undocking
                         thrust: localBody.thrust,
                         maneuvers: localBody.maneuvers,
+                        // Keep Structure Changes
+                        mass: localBody.mass,
+                        radius: localBody.radius,
+                        shipStructure: localBody.shipStructure,
                         // Trust Worker for Transform
                         angle: workerBody.angle,
                         position: workerBody.position,
@@ -1178,9 +1189,32 @@ const App: React.FC = () => {
                 return workerBody;
             });
 
+            // Append any NEW bodies from local state that are missing from worker state
+            // (e.g. newly spawned debris or rockets not yet simulated)
+            // BUT: Do NOT append bodies that were SENT to worker but are missing from result (Destroyed)
+            const workerBodyIds = new Set(newBodies.map(b => b.id));
+            const sentBodyIds = sentBodyIdsRef.current;
+            
+            const missingBodies = bodiesRef.current.filter(b => {
+                const inWorker = workerBodyIds.has(b.id);
+                if (inWorker) return false; // Already handled in mergedBodies
+
+                const wasSent = sentBodyIds.has(b.id);
+                if (wasSent) {
+                    // It was sent, but not returned -> DESTROYED/MERGED in worker.
+                    // Do NOT keep it.
+                    return false;
+                }
+                
+                // It was NOT sent -> NEWLY SPAWNED locally. Keep it.
+                return true;
+            });
+            
+            const finalBodies = [...mergedBodies, ...missingBodies];
+
             // Apply updates
-            bodiesRef.current = mergedBodies;
-            setBodies(mergedBodies);
+            bodiesRef.current = finalBodies;
+            setBodies(finalBodies);
 
             if (newExplosions && newExplosions.length > 0) {
                 // DIRECTLY UPDATE REF for immediate rendering in loop
@@ -1547,6 +1581,9 @@ const App: React.FC = () => {
                 // Ideally this should run PER SUB-STEP in worker, but for now Main Thread is okay.
 
                 // 2. Send to Worker
+                const sentBodyIds = new Set(bodiesForSimulation.map(b => b.id));
+                sentBodyIdsRef.current = sentBodyIds;
+
                 physicsWorkerRef.current.postMessage({
                     bodies: bodiesForSimulation,
                     dt: timeToSimulate,
@@ -2172,7 +2209,7 @@ const App: React.FC = () => {
         const debris: Body = createBody(
             debrisId,
             `${rocket.name} Stage ${struct.currentStageIndex + 1}`,
-            currentStage.mass || 100,
+            (currentStage.mass || 100),
             rocket.radius, // Keep original radius for debris
             currentStage.color || '#555555',
             0, 0,
@@ -2182,7 +2219,9 @@ const App: React.FC = () => {
         debris.velocity = { ...rocket.velocity };
         debris.angle = angle;
         debris.isRocket = true; // Render as a rocket part
-        debris.thrust = { x: 0, y: 0 }; // Initialize thrust
+        debris.thrust = { ...rocket.thrust }; // Keep thrusting!
+        debris.fuel = currentStage.fuel || 0;
+        debris.maxFuel = currentStage.maxFuel || 1;
         debris.shipStructure = {
             design: 'multistage',
             stages: [currentStage], // It is a single stage now
@@ -2215,6 +2254,11 @@ const App: React.FC = () => {
 
         const updatedBodies = bodiesRef.current.map(b => b.id === rocketId ? updatedRocket : b);
         const finalBodies = [...updatedBodies, debris];
+
+        // Update timestamps to prevent overwrites by old worker messages
+        const now = Date.now();
+        lastBodyUpdateTimesRef.current.set(rocketId, now);
+        lastBodyUpdateTimesRef.current.set(debrisId, now);
 
         bodiesRef.current = finalBodies;
         setBodies(finalBodies);
