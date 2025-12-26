@@ -170,7 +170,7 @@ export const useFlightComputerLogic = (
                     const inputs = [];
                     const count = module.customScriptInputsCount ?? 2;
                     for (let i = 0; i < count; i++) {
-                        const key = `input_${i} `;
+                        const key = `input_${i}`;
                         const inputDef = module.inputs?.[key];
 
                         let val: any = null;
@@ -209,7 +209,7 @@ export const useFlightComputerLogic = (
                         sleepTime = "sleepTime",
                     } = {}) {
                         await sleep(sleepTime)
-                        const url = `${baseUrl.replace(/\/+$/, "")} /api/${encodeURIComponent(valueName)} `;
+                        const url = `${baseUrl.replace(/\/+$/, "")}/api/${encodeURIComponent(valueName)} `;
                         const r = await fetch(url, { method: "GET" });
                         const data = await r.json().catch(() => ({}));
                         if (!r.ok) throw new Error(data?.error || `HTTP ${r.status} `);
@@ -222,7 +222,7 @@ export const useFlightComputerLogic = (
                         sleepTime = "sleepTime",
                     } = {}) {
                         await sleep(sleepTime)
-                        const url = `${baseUrl.replace(/\/+$/, "")} /apiR/${encodeURIComponent(valueName)} `
+                        const url = `${baseUrl.replace(/\/+$/, "")}/apiR/${encodeURIComponent(valueName)} `
                         const r = await fetch(url, { method: "GET" });
                         const data = await r.json().catch(() => ({}));
                         if (!r.ok) throw new Error(data?.error || `HTTP ${r.status} `);
@@ -231,7 +231,7 @@ export const useFlightComputerLogic = (
 
                     async function postApiValue({ baseUrl = "http://MacBook-Pro-de-olivier.local:3009", valueName = "value", value = "0", sleepTime = 200 } = {}) {
                         await sleep(sleepTime);
-                        const res = await fetch(`${baseUrl} /api/${valueName} `, {
+                        const res = await fetch(`${baseUrl}/api/${valueName} `, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
