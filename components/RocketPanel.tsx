@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Rocket, Crosshair, Anchor, Gauge, Compass, Fuel, X, RotateCcw, RotateCw, ArrowUp, Zap, Ban, Eye, Globe, CircleDot, RefreshCw, ArrowDownToLine, TrendingUp, Clock, Sliders, Settings, Radio, ArrowRightLeft, ChevronDown } from 'lucide-react';
-import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig } from '../types';
+import { Body, Maneuver, SASMode, PhysicsConfig, Vector2D, RocketSpawnConfig, ShipDesign } from '../types';
 import useIsMobile from '../hooks/useIsMobile';
 import MissionTabDesktop from './MissionTabDesktop';
 import MissionTabMobile from './MissionTabMobile';
@@ -40,6 +40,7 @@ interface RocketPanelProps {
     // Rendezvous Visualization
     onRendezvousPointChange?: (point: Vector2D | null) => void;
     onSelectRocket?: (id: string) => void;
+    onStage?: (id: string) => void;
 }
 
 const ROCKET_COLORS = ['#f97316', '#22d3ee', '#ffffff', '#ef4444', '#94a3b8', '#a855f7', '#eab308'];
@@ -75,7 +76,8 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
     predictSystem,
 
     onRendezvousPointChange,
-    onSelectRocket
+    onSelectRocket,
+    onStage
 }) => {
     const [activeTab, setActiveTab] = useState<'flight' | 'mission' | 'config'>('flight');
 
@@ -1456,6 +1458,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             ) : null}
                                         </div>
                                     </div>
+
+                                    {/* Manual Staging Control (Mobile) */}
+                                    {selectedRocket.shipStructure && selectedRocket.shipStructure.currentStageIndex < selectedRocket.shipStructure.stages.length - 1 && (
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] text-slate-500 uppercase font-bold">Staging</label>
+                                            <button
+                                                onClick={() => onStage?.(selectedRocket.id)}
+                                                className="w-full py-3 bg-red-900/50 hover:bg-red-700 border border-red-500/30 rounded-lg text-xs font-bold text-red-200 uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95"
+                                            >
+                                                <ArrowUp size={16} /> Separate Stage {selectedRocket.shipStructure.currentStageIndex + 1}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1522,6 +1537,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                 placeholder="Rocket Name"
                                 maxLength={20}
                             />
+                            <div className="mb-2">
+                                <label className="block text-xs text-slate-400 uppercase mb-1">Design</label>
+                                <select
+                                    value={spawnConfig.design || 'rocket'}
+                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, design: e.target.value as ShipDesign })}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none"
+                                >
+                                    <option value="rocket">Single Stage</option>
+                                    <option value="multistage">Multi-Stage (3)</option>
+                                    <option value="station">Space Station</option>
+                                    <option value="satellite">Satellite</option>
+                                </select>
+                            </div>
                             <input
                                 type="number"
                                 value={spawnConfig.mass}
@@ -1633,6 +1661,18 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
                                     maxLength={20}
                                 />
+                                <label className="block text-xs text-slate-400 uppercase mb-1">Design</label>
+                                <select
+                                    value={spawnConfig.design || 'rocket'}
+                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, design: e.target.value as ShipDesign })}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500 mb-2"
+                                >
+                                    <option value="rocket">Single Stage</option>
+                                    <option value="multistage">Multi-Stage (3)</option>
+                                    <option value="station">Space Station</option>
+                                    <option value="satellite">Satellite</option>
+                                </select>
+
                                 <label className="block text-xs text-slate-400 uppercase mb-1">Mass</label>
                                 <input
                                     type="number"
@@ -1817,6 +1857,19 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <button onClick={() => setSAS('radial_out')} title="Radial Out" className={`flex-1 p-2 rounded flex justify-center ${selectedRocket.sasMode === 'radial_out' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-blue-500'}`}><ArrowUp size={18} /></button>
                                         </div>
                                     </div>
+
+                                    {/* Manual Staging Control */}
+                                    {selectedRocket.shipStructure && selectedRocket.shipStructure.currentStageIndex < selectedRocket.shipStructure.stages.length - 1 && (
+                                        <div className="mb-4">
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Staging</div>
+                                            <button
+                                                onClick={() => onStage?.(selectedRocket.id)}
+                                                className="w-full py-3 bg-red-900/50 hover:bg-red-700 border border-red-500/30 rounded-lg text-xs font-bold text-red-200 uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95"
+                                            >
+                                                <ArrowUp size={16} /> Separate Stage {selectedRocket.shipStructure.currentStageIndex + 1}
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* MANUAL PAD */}
                                     <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">

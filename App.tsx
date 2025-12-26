@@ -133,7 +133,8 @@ const App: React.FC = () => {
         name: 'Explorer 1',
         mass: 0.0001, // Reduced mass for realism
         radius: 0.20,
-        color: '#f97316'
+        color: '#f97316',
+        design: 'rocket'
     });
 
     const [rocketTargetBodyId, setRocketTargetBodyId] = useState<string>('');
@@ -2146,6 +2147,79 @@ const App: React.FC = () => {
         };
     };
 
+
+    const handleStageRocket = (rocketId: string) => {
+        const rocket = bodiesRef.current.find(b => b.id === rocketId);
+        if (!rocket || !rocket.shipStructure) return;
+
+        const struct = rocket.shipStructure;
+        if (struct.currentStageIndex >= struct.stages.length - 1) return; // No more stages
+
+        const currentStage = struct.stages[struct.currentStageIndex];
+        const nextStageIndex = struct.currentStageIndex + 1;
+
+        // 1. Create Debris (Spent Stage)
+        const debrisId = `debris_${Date.now()}`;
+        const angle = rocket.angle || 0;
+        const offset = rocket.radius * 2.5;
+
+        // Position slightly behind to avoid immediate clipping if collisions active
+        const debrisPos = {
+            x: rocket.position.x - Math.cos(angle) * offset,
+            y: rocket.position.y - Math.sin(angle) * offset
+        };
+
+        const debris: Body = createBody(
+            debrisId,
+            `${rocket.name} Stage ${struct.currentStageIndex + 1}`,
+            currentStage.mass || 100,
+            rocket.radius, // Keep original radius for debris
+            currentStage.color || '#555555',
+            0, 0,
+            'Spent rocket stage'
+        );
+        debris.position = debrisPos;
+        debris.velocity = { ...rocket.velocity };
+        debris.angle = angle;
+        debris.isRocket = true; // Render as a rocket part
+        debris.thrust = { x: 0, y: 0 }; // Initialize thrust
+        debris.shipStructure = {
+            design: 'multistage',
+            stages: [currentStage], // It is a single stage now
+            currentStageIndex: 0
+        };
+
+        // 2. Update Rocket Structure
+        const updatedStructure = {
+            ...struct,
+            currentStageIndex: nextStageIndex
+        };
+
+        // Recalculate Totals for Rocket
+        let newTotalMass = 0;
+        let newTotalFuel = 0;
+        for (let i = nextStageIndex; i < struct.stages.length; i++) {
+            const s = struct.stages[i];
+            newTotalMass += (s.mass || 0);
+            newTotalFuel += (s.fuel || 0);
+        }
+
+        const updatedRocket: Body = {
+            ...rocket,
+            shipStructure: updatedStructure,
+            mass: newTotalMass,
+            fuel: newTotalFuel,
+            maxFuel: newTotalFuel,
+            radius: rocket.radius * 0.85, // Reduce size for the next stage
+        };
+
+        const updatedBodies = bodiesRef.current.map(b => b.id === rocketId ? updatedRocket : b);
+        const finalBodies = [...updatedBodies, debris];
+
+        bodiesRef.current = finalBodies;
+        setBodies(finalBodies);
+    };
+
     const handleSpawnRocket = (parentBodyName?: string) => {
         let spawnPos = { x: 0, y: 0 };
         let spawnVel = { x: 0, y: 0 };
@@ -2181,9 +2255,70 @@ const App: React.FC = () => {
         newRocket.thrust = { x: 0, y: 0 };
         newRocket.maneuvers = [];
         newRocket.landedOnBodyId = parentBody?.id;
-        newRocket.fuel = 100;
-        newRocket.maxFuel = 100;
-        newRocket.dryMass = rocketSpawnConfig.mass;
+
+        // Ship Structure Logic
+        if (rocketSpawnConfig.design === 'multistage') {
+            const stages = [];
+            // Example 3-stage setup
+            // Stage 0 (Booster): Heavy, lots of fuel
+            stages.push({
+                mass: rocketSpawnConfig.mass * 2,
+                fuel: 5000,
+                maxFuel: 5000,
+                thrust: 1.0,
+                color: '#333333'
+            });
+            // Stage 1 (Mid): Medium
+            stages.push({
+                mass: rocketSpawnConfig.mass,
+                fuel: 2000,
+                maxFuel: 2000,
+                thrust: 0.5,
+                color: '#666666'
+            });
+            // Stage 2 (Payload): Light
+            stages.push({
+                mass: rocketSpawnConfig.mass * 0.5,
+                fuel: 500,
+                maxFuel: 500,
+                thrust: 0.2,
+                color: rocketSpawnConfig.color
+            });
+
+            newRocket.shipStructure = {
+                design: 'multistage',
+                stages: stages,
+                currentStageIndex: 0
+            };
+
+            // Sum mass/fuel
+            let totalMass = 0;
+            let totalFuel = 0;
+            stages.forEach(s => {
+                totalMass += s.mass;
+                totalFuel += s.fuel;
+            });
+            newRocket.mass = totalMass;
+            newRocket.fuel = totalFuel;
+            newRocket.maxFuel = totalFuel;
+        } else {
+            // Default Single Stage Rocket
+            newRocket.fuel = 100;
+            newRocket.maxFuel = 100;
+            newRocket.dryMass = rocketSpawnConfig.mass;
+            // No shipStructure needed for legacy 'rocket', or minimal one
+            newRocket.shipStructure = {
+                design: rocketSpawnConfig.design,
+                stages: [{
+                    mass: rocketSpawnConfig.mass,
+                    fuel: 100,
+                    maxFuel: 100,
+                    thrust: 1,
+                    color: rocketSpawnConfig.color
+                }],
+                currentStageIndex: 0
+            };
+        }
 
         const updated = [...bodiesRef.current, newRocket];
         setBodies(updated);
@@ -2245,9 +2380,68 @@ const App: React.FC = () => {
             newRocket.maneuvers = [];
             if (parentBody) newRocket.landedOnBodyId = parentBody.id;
 
-            newRocket.fuel = 100;
-            newRocket.maxFuel = 100;
-            newRocket.dryMass = rocketSpawnConfig.mass;
+            // Ship Structure Logic
+            if (rocketSpawnConfig.design === 'multistage') {
+                const stages = [];
+                // Example 3-stage setup
+                // Stage 0 (Booster): Heavy, lots of fuel
+                stages.push({
+                    mass: rocketSpawnConfig.mass * 2,
+                    fuel: 5000,
+                    maxFuel: 5000,
+                    thrust: 1.0,
+                    color: '#333333'
+                });
+                // Stage 1 (Mid): Medium
+                stages.push({
+                    mass: rocketSpawnConfig.mass,
+                    fuel: 2000,
+                    maxFuel: 2000,
+                    thrust: 0.5,
+                    color: '#666666'
+                });
+                // Stage 2 (Payload): Light
+                stages.push({
+                    mass: rocketSpawnConfig.mass * 0.5,
+                    fuel: 500,
+                    maxFuel: 500,
+                    thrust: 0.2,
+                    color: rocketSpawnConfig.color
+                });
+
+                newRocket.shipStructure = {
+                    design: 'multistage',
+                    stages: stages,
+                    currentStageIndex: 0
+                };
+
+                let totalMass = 0;
+                let totalFuel = 0;
+                stages.forEach(s => {
+                    totalMass += s.mass;
+                    totalFuel += s.fuel;
+                });
+                newRocket.mass = totalMass;
+                newRocket.fuel = totalFuel;
+                newRocket.maxFuel = totalFuel;
+            } else {
+                // Default Single Stage Rocket
+                newRocket.fuel = 100;
+                newRocket.maxFuel = 100;
+                newRocket.dryMass = rocketSpawnConfig.mass;
+                // No shipStructure needed for legacy 'rocket', or minimal one
+                newRocket.shipStructure = {
+                    design: rocketSpawnConfig.design,
+                    stages: [{
+                        mass: rocketSpawnConfig.mass,
+                        fuel: 100,
+                        maxFuel: 100,
+                        thrust: 1,
+                        color: rocketSpawnConfig.color
+                    }],
+                    currentStageIndex: 0
+                };
+            }
 
             setBodies(prev => [...prev, newRocket]);
             bodiesRef.current = [...bodiesRef.current, newRocket];
@@ -3153,8 +3347,10 @@ const App: React.FC = () => {
                             predictionPaths={predictionPaths}
                             predictionSteps={predictionSteps}
                             predictSystem={isPredictionEnabled}
+
                             onRendezvousPointChange={setRendezvousPoint}
                             onSelectRocket={setSelectedBodyId}
+                            onStage={handleStageRocket}
                         />
                     )}
 
@@ -3284,11 +3480,10 @@ const App: React.FC = () => {
 
             </Activity>
 
-            <Activity mode={showImageSlideShow ? 'visible' : 'hidden'}>
+            {/* <Activity mode={showImageSlideShow ? 'visible' : 'hidden'}>
 
                 <div className="fixed top-0 left-0 right-0 bottom-0 w-full h-screen bg-gray-900 overflow-hidden font-sans z-[100]">
 
-                    {/* The Slideshow Component occupying full screen */}
                     <div className="fixed top-0 left-0 right-0 bottom-0">
                         <FullPageSlideshow
                             ref={slideshowRef}
@@ -3297,7 +3492,7 @@ const App: React.FC = () => {
                         />
                     </div>
                 </div>
-            </Activity>
+            </Activity> */}
 
             <Activity mode={showCameraViewer ? 'visible' : 'hidden'}>
                 <CameraViewer />

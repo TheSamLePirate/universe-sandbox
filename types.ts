@@ -32,6 +32,22 @@ export interface Maneuver {
 
 export type SASMode = 'off' | 'prograde' | 'retrograde' | 'radial_out' | 'radial_in';
 
+export type ShipDesign = 'rocket' | 'multistage' | 'station' | 'satellite';
+
+export interface ShipStage {
+  mass: number;     // Dry mass of this stage
+  fuel: number;     // Current fuel in this stage
+  maxFuel: number;  // Max fuel capacity of this stage
+  thrust: number;   // Thrust provided by this stage
+  color?: string;   // Optional override for visuals
+}
+
+export interface ShipStructure {
+  design: ShipDesign;
+  stages: ShipStage[];
+  currentStageIndex: number; // 0 is the bottom-most stage (active), increments as stages detach
+}
+
 export interface Body {
   id: string;
   name: string;
@@ -49,6 +65,7 @@ export interface Body {
 
   // Rocket Specifics
   isRocket?: boolean;
+  shipStructure?: ShipStructure;
   angle?: number; // Orientation in radians
   thrust?: Vector2D; // Current active thrust vector
   maneuvers?: Maneuver[];
@@ -243,6 +260,8 @@ export interface RocketSpawnConfig {
   mass: number;
   radius: number;
   color: string;
+  design: ShipDesign;
+  stages?: number; // Number of stages for multi-stage rockets
 }
 
 export type MarkerShape = 'ring' | 'diamond' | 'square' | 'triangle' | 'pin';

@@ -797,14 +797,37 @@ export const updatePhysics = (
                     forces[idx].y += updatedBody.thrust.y;
 
                     // Consume Fuel
+                    // Consume Fuel
                     if (updatedBody.isRocket && updatedBody.fuel !== undefined) {
                         const thrustMag = Math.sqrt(updatedBody.thrust.x ** 2 + updatedBody.thrust.y ** 2);
                         const consumed = thrustMag * FUEL_CONSUMPTION_RATE * dt;
-                        updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
 
-                        // WEIGHTLESS FUEL: Do NOT update mass.
-                        // Mass remains constant (Dry Mass + Fuel Mass is fixed, or just Dry Mass).
-                        // This ensures constant acceleration for precise maneuvers.
+                        if (updatedBody.shipStructure && updatedBody.shipStructure.stages.length > 0) {
+                            // --- MULTI-STAGE LOGIC ---
+                            const struct = updatedBody.shipStructure;
+                            const idx = struct.currentStageIndex;
+
+                            // Ensure index is valid
+                            if (idx >= 0 && idx < struct.stages.length) {
+                                const activeStage = struct.stages[idx];
+                                activeStage.fuel = Math.max(0, activeStage.fuel - consumed);
+
+                                // Recalculate Totals (Sum Active Stages)
+                                let totalFuel = 0;
+                                let totalMass = 0;
+                                for (let i = idx; i < struct.stages.length; i++) {
+                                    const s = struct.stages[i];
+                                    totalFuel += s.fuel;
+                                    totalMass += (s.mass || 0);
+                                }
+                                updatedBody.fuel = totalFuel;
+                                updatedBody.mass = totalMass;
+                            }
+                        } else {
+                            // --- LEGACY LOGIC ---
+                            updatedBody.fuel = Math.max(0, updatedBody.fuel - consumed);
+                            // WEIGHTLESS FUEL (Legacy): Do NOT update mass.
+                        }
                     }
                 }
             }
