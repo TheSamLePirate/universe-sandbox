@@ -1387,7 +1387,7 @@ const Canvas: React.FC<CanvasProps> = ({
                 }
 
                 if (body.isRocket && true) {
-                    drawShip(ctx, screenX, screenY, body.angle, body.thrust, scale, body, flightComputerModules);
+                    drawShip(ctx, screenX, screenY, body.angle, body.thrust, visualRadius, body, flightComputerModules);
                 }
 
                 // --- STAR RENDERING ---

@@ -61,6 +61,7 @@ export interface Body {
   fuel?: number; // Current fuel amount
   maxFuel?: number; // Tank capacity
   dryMass?: number; // Mass without fuel
+  stage?: number; // Current stage
 
   // Docking System
   dockingRelativePosition?: Vector2D; // Position relative to parent when docked

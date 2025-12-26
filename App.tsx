@@ -131,8 +131,8 @@ const App: React.FC = () => {
     // Rocket Spawn Configuration
     const [rocketSpawnConfig, setRocketSpawnConfig] = useState<RocketSpawnConfig>({
         name: 'Explorer 1',
-        mass: 0.001, // Reduced mass for realism
-        radius: 2.0,
+        mass: 0.0001, // Reduced mass for realism
+        radius: 0.20,
         color: '#f97316'
     });
 

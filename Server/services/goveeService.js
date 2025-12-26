@@ -1,6 +1,5 @@
-import { GOVEE_API_URL } from "../config.js";
+import { GOVEE_API_URL } from "../config/index.js";
 
-// Helper to forward requests to Govee API
 export const proxyToGovee = async (req, res, path, method = "GET") => {
     try {
         const options = {
@@ -14,6 +13,8 @@ export const proxyToGovee = async (req, res, path, method = "GET") => {
             options.body = JSON.stringify(req.body);
         }
 
+        // Notice we use fetch directly. 
+        // Requires Node 18+ or a polyfill, but original code used 'fetch' so we assume it exists.
         const response = await fetch(`${GOVEE_API_URL}${path}`, options);
 
         // Forward the status code
@@ -33,29 +34,4 @@ export const proxyToGovee = async (req, res, path, method = "GET") => {
         console.error(`Error proxying to Govee API (${path}):`, error);
         return res.status(500).json({ error: "Failed to communicate with Govee API" });
     }
-};
-
-// Internal helper for menu actions
-export const setGoveeBrightness = async (brightness) => {
-    const options = {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ brightness: brightness }),
-    };
-    const response = await fetch(`${GOVEE_API_URL}/api/brightness`, options);
-    return await response.json();
-};
-
-export const setGoveeColor = async (hue) => {
-    const options = {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ hsl: [hue, 100, 50] }),
-    };
-    const response = await fetch(`${GOVEE_API_URL}/api/color`, options);
-    return await response.json();
 };

@@ -558,11 +558,11 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                     break;
                 case 'ArrowUp': // Increase Force
                     e.preventDefault();
-                    handlers.setManualThrustPower(p => Math.min(p + 0.001, 0.05));
+                    handlers.setManualThrustPower(p => Math.min(p + 0.0001, 0.05));
                     break;
                 case 'ArrowDown': // Decrease Force
                     e.preventDefault();
-                    handlers.setManualThrustPower(p => Math.max(p - 0.001, 0.001));
+                    handlers.setManualThrustPower(p => Math.max(p - 0.0001, 0.0001));
                     break;
                 case 'Shift': // Circularize
                     e.preventDefault();
@@ -1235,7 +1235,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                             </div>
                             <input
                                 type="range"
-                                min="0.001"
+                                min="0.0001"
                                 max="0.05"
                                 step="0.001"
                                 value={manualThrustPower}
@@ -1522,6 +1522,28 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                 placeholder="Rocket Name"
                                 maxLength={20}
                             />
+                            <input
+                                type="number"
+                                value={spawnConfig.mass}
+                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, mass: Number(e.target.value) })}
+                                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2"
+                                placeholder="Mass"
+                                min={0.0001}
+                                max={0.1}
+                                step={0.0001}
+                            />
+                            <input
+                                type="number"
+                                value={spawnConfig.radius}
+                                onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, radius: Number(e.target.value) })}
+                                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2"
+                                placeholder="Radius"
+                                min={0.20}
+                                max={2}
+                                step={0.01}
+                            />
+
+
                             <div className="flex gap-2 justify-center">
                                 {ROCKET_COLORS.map(c => (
                                     <button
@@ -1611,6 +1633,28 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                     className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
                                     maxLength={20}
                                 />
+                                <label className="block text-xs text-slate-400 uppercase mb-1">Mass</label>
+                                <input
+                                    type="number"
+                                    value={spawnConfig.mass}
+                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, mass: Number(e.target.value) })}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
+                                    min={0.0001}
+                                    max={0.1}
+                                    step={0.0001}
+                                />
+
+                                <label className="block text-xs text-slate-400 uppercase mb-1">Radius</label>
+                                <input
+                                    type="number"
+                                    value={spawnConfig.radius}
+                                    onChange={(e) => onUpdateSpawnConfig({ ...spawnConfig, radius: Number(e.target.value) })}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-white focus:border-orange-500 outline-none placeholder-slate-500"
+                                    min={0.20}
+                                    max={2}
+                                    step={0.01}
+                                />
+
                             </div>
                             <div>
                                 <label className="block text-xs text-slate-400 uppercase mb-2">Hull Color</label>
@@ -1781,7 +1825,7 @@ const RocketPanel: React.FC<RocketPanelProps> = ({
                                             <span className="text-orange-400 font-mono">{manualThrustPower.toFixed(5)}N</span>
                                         </div>
                                         <input
-                                            type="range" min="0.001" max="0.005" step="0.0001"
+                                            type="range" min="0.0001" max="0.005" step="0.0001"
                                             value={manualThrustPower}
                                             onChange={(e) => setManualThrustPower(Number(e.target.value))}
                                             className="w-full accent-orange-600 bg-slate-700 h-1 rounded-lg mb-4"
