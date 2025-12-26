@@ -460,6 +460,7 @@ export interface FlightComputerModule {
   lineThickness?: number;
   lineHitColor?: string;
   lineShowAfterHit?: boolean;
+  lineActivateRaycast?: boolean;
 
   // Dashboard Configuration
   dashboardConfig?: {

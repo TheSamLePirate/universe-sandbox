@@ -2395,8 +2395,22 @@ const Canvas: React.FC<CanvasProps> = ({
 
                         ctx.save();
 
-                        // Perform Raycast
-                        const hitResult = performRaycast(posA, posB, bodies);
+                        // Raycast Activation Logic
+                        let raycastActive = module.lineActivateRaycast ?? true;
+                        const activeInput = module.inputs?.activate_raycast;
+                        if (activeInput) {
+                            // Manual resolution for boolean input because resolveBooleanInput isn't exported or easily accessible here without import
+                            // We can use resolveScalarInput and check > 0.5, or better, resolveBooleanInput if available.
+                            // Since resolveBooleanInput is in orbitalMath, let's just assume we can get a value.
+                            // Note: Canvas.tsx imports resolveInput and resolveScalarInput but not resolveBooleanInput usually.
+                            // Let's check imports in Canvas.tsx... It doesn't seem to import resolveBooleanInput.
+                            // To stay safe, let's use resolveScalarInput > 0.5 logic which is robust enough for boolean modules (logic gates output 0 or 1 usually).
+                            const val = resolveScalarInput(activeInput, bodies, flightComputerModules, physicsConfig.gravitationalConstant, rendezvousSolutionMap);
+                            if (val !== null) raycastActive = val > 0.5;
+                        }
+
+                        // Perform Raycast (only if active)
+                        const hitResult = raycastActive ? performRaycast(posA, posB, bodies) : { hit: false, position: null, body: null };
 
                         if (hitResult.hit && hitResult.position) {
                             // Hit!

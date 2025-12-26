@@ -106,6 +106,33 @@ const LineDrawerModule: React.FC<ModuleProps> = ({ module, bodies, modules, onUp
                 </div>
             </div>
 
+            {/* Activate Raycast Input & Toggle */}
+            <div className="space-y-1 pt-2 border-t border-slate-700/50">
+                <div className="flex items-center justify-between">
+                    <label className="text-[9px] text-slate-500 uppercase">Raycast</label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id={`activateRaycast-${module.id}`}
+                            checked={module.lineActivateRaycast ?? true}
+                            onChange={(e) => onUpdateModule(module.id, { lineActivateRaycast: e.target.checked })}
+                        />
+                        <label htmlFor={`activateRaycast-${module.id}`} className="text-[9px] text-slate-400 select-none cursor-pointer">
+                            Active
+                        </label>
+                    </div>
+                </div>
+                <InputSelector
+                    label="Activate (Bool)"
+                    value={getInput(module, 'activate_raycast')}
+                    onChange={(input) => updateInput(module.id, 'activate_raycast', input)}
+                    bodies={bodies}
+                    modules={modules}
+                    currentModuleId={module.id}
+                    allowedTypes={['module_output', 'body']} // boolean usually comes from module output or maybe a body property?
+                />
+            </div>
+
             <div className="text-[9px] text-slate-500 italic">
                 Draws a line between two points (bodies, vectors, or coordinates). Useful for visualizing distances, directions, or alignment.
             </div>

@@ -317,12 +317,21 @@ export const resolveInput = (
             const pA = resolveInput(module.inputs?.point_a, bodies, modules, gravitationalConstant, rendezvousSolutions);
             const pB = resolveInput(module.inputs?.point_b, bodies, modules, gravitationalConstant, rendezvousSolutions);
 
+            // Check raycast toggle
+            let raycastActive = module.lineActivateRaycast ?? true;
+            const activeInput = module.inputs?.activate_raycast;
+            if (activeInput) {
+                const val = resolveBooleanInput(activeInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                if (val !== null) raycastActive = val;
+            }
+
             if (pA && pB && outputKey === 'vector') {
                 const posA = 'position' in pA ? pA.position : pA;
                 const posB = 'position' in pB ? pB.position : pB;
                 return { x: posB.x - posA.x, y: posB.y - posA.y };
             }
             if (pA && pB && outputKey === 'hit_position') {
+                if (!raycastActive) return null;
                 const posA = 'position' in pA ? pA.position : pA;
                 const posB = 'position' in pB ? pB.position : pB;
                 const hitResult = performRaycast(posA, posB, bodies);
@@ -769,6 +778,16 @@ export const resolveBooleanInput = (
             const pB = resolveInput(module.inputs?.point_b, bodies, modules, gravitationalConstant, rendezvousSolutions);
 
             if (pA && pB) {
+                // Check raycast toggle
+                let raycastActive = module.lineActivateRaycast ?? true;
+                const activeInput = module.inputs?.activate_raycast;
+                if (activeInput) {
+                    const val = resolveBooleanInput(activeInput, bodies, modules, gravitationalConstant, rendezvousSolutions);
+                    if (val !== null) raycastActive = val;
+                }
+
+                if (!raycastActive) return false;
+
                 const posA = 'position' in pA ? pA.position : pA;
                 const posB = 'position' in pB ? pB.position : pB;
                 const hitResult = performRaycast(posA, posB, bodies);
