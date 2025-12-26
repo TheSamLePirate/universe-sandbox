@@ -249,10 +249,11 @@ export interface AssistantActions {
   getRocketFlightPlan: (rocketName: string) => string;
 
   // Flight Computer Actions
-  addFlightComputerModule: (moduleType: FlightComputerModuleType, rocketName: string, referenceBodyName: string, targetBodyName?: string, customName?: string, color?: string, maxDistance?: number) => string;
+  addFlightComputerModule: (moduleType: FlightComputerModuleType, rocketName: string, referenceBodyName?: string, targetBodyName?: string, customName?: string, color?: string, groupName?: string, configuration?: string) => string;
   removeFlightComputerModule: (moduleName: string) => string;
   getFlightComputerData: () => string;
   toggleFlightComputerModule: (moduleName: string, enabled: boolean) => string;
+  createModuleGroup: (name: string, color?: string, parentGroupName?: string) => string;
 }
 
 export interface RocketSpawnConfig {

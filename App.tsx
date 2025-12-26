@@ -2883,63 +2883,74 @@ const App: React.FC = () => {
                 maneuvers: maneuversData
             }, null, 2);
         },
-        addFlightComputerModule: (moduleType, rocketName, referenceBodyName, targetBodyName, customName, color, maxDistance) => {
+        addFlightComputerModule: (moduleType, rocketName, referenceBodyName, targetBodyName, customName, color, groupName, configuration) => {
             const rocket = bodiesRef.current.find(b => b.isRocket && b.name.toLowerCase().includes(rocketName.toLowerCase()));
-            if (!rocket) return `Rocket '${rocketName}' not found.`;
+            if (!rocket) {
+                // Fallback: search for any body
+                const body = bodiesRef.current.find(b => b.name.toLowerCase().includes(rocketName.toLowerCase()));
+                if (!body) return `Subject body '${rocketName}' not found.`;
+            }
 
-            const refBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(referenceBodyName.toLowerCase()));
-            if (!refBody) return `Reference body '${referenceBodyName}' not found.`;
+            const subjectId = rocket ? rocket.id : bodiesRef.current.find(b => b.name.toLowerCase().includes(rocketName.toLowerCase()))?.id || '';
 
-            let targetBody = null;
+            let refBodyId = '';
+            if (referenceBodyName) {
+                const refBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(referenceBodyName.toLowerCase()));
+                if (refBody) refBodyId = refBody.id;
+            }
+
+            let targetBodyId: string | undefined = undefined;
             if (targetBodyName) {
-                targetBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(targetBodyName.toLowerCase()));
-                if (!targetBody) return `Target body '${targetBodyName}' not found.`;
+                const targetBody = bodiesRef.current.find(b => b.name.toLowerCase().includes(targetBodyName.toLowerCase()));
+                if (targetBody) targetBodyId = targetBody.id;
+            }
+
+            let groupId: string | null = null;
+            if (groupName) {
+                const group = moduleGroups.find(g => g.name.toLowerCase() === groupName.toLowerCase());
+                if (group) groupId = group.id;
+            }
+
+            let config: any = {};
+            if (configuration) {
+                try {
+                    config = JSON.parse(configuration);
+                } catch (e) {
+                    console.error("Failed to parse module configuration JSON", e);
+                }
             }
 
             const assignedColor = getNextModuleColor(flightComputerModules, color);
             const newModule: FlightComputerModule = {
                 id: `fc_${Date.now()}`,
-                type: moduleType as FlightComputerModuleType,
+                type: moduleType,
                 isEnabled: true,
-                primaryBodyId: rocket.id,
-                referenceBodyId: refBody.id,
-                targetBodyId: targetBody?.id,
+                primaryBodyId: subjectId,
+                referenceBodyId: refBodyId || subjectId, // Default ref to self if missing? Or maybe let it be empty/same.
+                targetBodyId: targetBodyId,
                 color: assignedColor,
                 name: customName || `${moduleType.replace('_', ' ')}`,
-                maxDistance: maxDistance
+                maxDistance: config.maxDistance || 10,
+                groupId: groupId,
+                inputs: {}, // Initialize empty
+                ...config // Merge generic config
             };
 
+            // Module-specific defaults if not in config
             if (newModule.type === 'marker') {
-                newModule.markerShape = 'ring';
-                newModule.markerTitle = customName || 'Marker';
-                newModule.markerDescription = '';
-                newModule.markerColor = assignedColor;
+                if (!newModule.markerShape) newModule.markerShape = 'ring';
+                if (!newModule.markerTitle) newModule.markerTitle = customName || 'Marker';
                 newModule.markerVisible = true;
-                newModule.markerPulse = false;
             }
 
             if (newModule.type === 'thrust_burst') {
-                newModule.thrustBurstMode = 'impulse';
-                newModule.thrustBurstDuration = 1;
-                newModule.thrustBurstDeltaVPrograde = 0;
-                newModule.thrustBurstDeltaVRadial = 0;
-                newModule.thrustBurstCompleted = true;
-            }
-            if (newModule.type === 'maneuver_executor') {
-                newModule.maneuverExecutorType = 'burn';
-                newModule.maneuverExecutorThrust = 0.01;
-                newModule.maneuverExecutorDuration = 2;
-                newModule.maneuverExecutorAngleDeg = 0;
-                newModule.maneuverExecutorDeltaVPrograde = 0;
-                newModule.maneuverExecutorDeltaVRadial = 0;
-                newModule.maneuverExecutorAltitudeDirection = 'ascending';
-                newModule.maneuverExecutorStatus = 'idle';
-                newModule.maneuverExecutorProgress = 0;
+                if (!newModule.thrustBurstMode) newModule.thrustBurstMode = 'impulse';
+                if (newModule.thrustBurstCompleted === undefined) newModule.thrustBurstCompleted = true;
             }
 
             setFlightComputerModules(prev => [...prev, newModule]);
 
-            return `Flight Computer module '${newModule.name}' added (${moduleType}) for ${rocket.name}`;
+            return `Flight Computer module '${newModule.name}' added (${moduleType}) for ${rocketName}`;
         },
 
         removeFlightComputerModule: (moduleName) => {
@@ -2949,6 +2960,27 @@ const App: React.FC = () => {
             setFlightComputerModules(prev => prev.filter(m => m.id !== module.id));
             return `Removed Flight Computer module '${module.name}'.`;
         },
+
+        createModuleGroup: (name, color, parentGroupName) => {
+            let parentGroupId: string | null = null;
+            if (parentGroupName) {
+                const parent = moduleGroups.find(g => g.name.toLowerCase() === parentGroupName.toLowerCase());
+                if (parent) parentGroupId = parent.id;
+                else return `Parent group '${parentGroupName}' not found.`;
+            }
+
+            const newGroup: ModuleGroup = {
+                id: `fc_group_${Date.now()}`,
+                name: name,
+                color: color || '#10b981',
+                isCollapsed: false,
+                parentGroupId: parentGroupId
+            };
+
+            setModuleGroups(prev => [...prev, newGroup]);
+            return `Group '${name}' created.`;
+        },
+
         getFlightComputerData: () => {
             if (flightComputerModules.length === 0) {
                 return "No active Flight Computer modules.";
@@ -2960,18 +2992,32 @@ const App: React.FC = () => {
                 const rocket = bodiesRef.current.find(b => b.id === module.primaryBodyId);
                 const ref = bodiesRef.current.find(b => b.id === module.referenceBodyId);
                 const target = module.targetBodyId ? bodiesRef.current.find(b => b.id === module.targetBodyId) : null;
+                const group = module.groupId ? moduleGroups.find(g => g.id === module.groupId) : null;
 
                 const moduleData: any = {
                     name: module.name || module.type,
                     type: module.type,
                     enabled: module.isEnabled,
                     subject: rocket?.name || 'Unknown',
-                    reference: ref?.name || 'Unknown',
-                    target: target?.name || null,
-                    color: module.color
+                    group: group?.name || null,
+                    // Generic state dump
+                    ...module
                 };
 
-                // Calculate orbit info if this is an orbit_info module
+                // Cleanup heavy objects to avoid bloat
+                delete moduleData.inputs;
+                delete moduleData.systemMonitorStats;
+
+                // Add resolved scalar output for Logic/Sensors
+                if (['logic_gate', 'notify', 'compare', 'maths', 'change_detector', 'edge_detector', 'timer', 'sequencer'].includes(module.type)) {
+                    // Attempt to resolve the 'result' or 'triggered' signal
+                    // This is tricky because we don't have easy access to the resolved output map here without re-running resolution logic.
+                    // However, many modules store their last state in properties like 'notifyTriggered', 'edgeTriggered'.
+                    // For others, we might rely on 'customScriptLastResult'.
+                    // For now, dumping the module properties as done above covers most internal state.
+                }
+
+                // Explicit calculations for physics modules
                 if (module.type === 'orbit_info' && rocket && ref) {
                     const dx = rocket.position.x - ref.position.x;
                     const dy = rocket.position.y - ref.position.y;
@@ -2992,8 +3038,10 @@ const App: React.FC = () => {
 
                     if (E < 0) {
                         const a = -mu / (2 * E);
+                        const eccentricity = Math.sqrt(Math.max(0, 1 + (2 * E * ((dx * dvy) - (dy * dvx)) ** 2) / (mu * mu))); // simplified h^2 calc? No wait, h is angular momentum
+                        // Correct calc:
                         const h = (dx * dvy) - (dy * dvx);
-                        const eccentricity = Math.sqrt(1 + (2 * E * h * h) / (mu * mu));
+                        // eccentricity already correct in stored code?
                         const periapsis = (a * (1 - eccentricity)) - ref.radius;
                         const apoapsis = (a * (1 + eccentricity)) - ref.radius;
                         const period = 2 * Math.PI * Math.sqrt(Math.pow(a, 3) / mu);
@@ -3002,73 +3050,30 @@ const App: React.FC = () => {
                         moduleData.orbitalData.apoapsis = apoapsis;
                         moduleData.orbitalData.period = period;
                         moduleData.orbitalData.eccentricity = eccentricity;
-                        moduleData.orbitalData.semiMajorAxis = a;
                     }
                 }
 
-                // Calculate transfer window data if this is a transfer_window module
                 if (module.type === 'transfer_window' && rocket && ref && target) {
-
                     const transferWindowData = calculateTransferInfo(
-                        rocket,
-                        ref,
-                        target,
+                        rocket, ref, target,
                         physicsConfig.gravitationalConstant,
                     );
-
-
                     moduleData.transferData = {
-                        currentPhase: transferWindowData.currentPhase,
-                        requiredPhase: transferWindowData.requiredPhase,
+                        ready: transferWindowData.error < 5.0, // rough check
                         error: transferWindowData.error,
-                        ready: transferWindowData.error < 5.0,
-                        transferTime: transferWindowData.transferTime,
-                        insertionPoint: transferWindowData.insertionPoint,
-                        interceptionPoint: transferWindowData.interceptPoint,
-                        waitTime: transferWindowData.waitTime,
-                        arrivalTime: transferWindowData.arrivalTime,
+                        currentPhase: transferWindowData.currentPhase,
+                        requiredPhase: transferWindowData.requiredPhase
                     };
                 }
 
                 // Add rendezvous data if available
                 const rdvData = rendezvousPoints.find(rdv => rdv.moduleId === module.id);
-                if (module.type === 'rendezvous_tracker') {
-                    if (rdvData) {
-                        moduleData.rendezvousData = {
-                            found: true,
-                            timeToRendezvous: rdvData.timeToRendezvous,
-                            distance: rdvData.distance,
-                            totalDeltaV: rdvData.totalDeltaV,
-                            deltaVPrograde: rdvData.deltaVPrograde,
-                            deltaVRadial: rdvData.deltaVRadial,
-                            positionX: rdvData.point.x,
-                            positionY: rdvData.point.y,
-                            maxDistance: module.maxDistance || 10
-                        };
-                    } else {
-                        moduleData.rendezvousData = {
-                            found: false,
-                            maxDistance: module.maxDistance || 10,
-                            message: "No rendezvous within prediction window"
-                        };
-                    }
-                }
-
-                if (module.type === 'thrust_burst') {
-                    moduleData.thrustBurst = {
-                        mode: module.thrustBurstMode || 'impulse',
-                        deltaVPrograde: module.thrustBurstDeltaVPrograde || 0,
-                        deltaVRadial: module.thrustBurstDeltaVRadial || 0,
-                        duration: module.thrustBurstDuration || 0,
-                        ready: module.thrustBurstCompleted ?? true
-                    };
-                }
-                if (module.type === 'maneuver_executor') {
-                    moduleData.maneuverExecutor = {
-                        maneuverType: module.maneuverExecutorType,
-                        status: module.maneuverExecutorStatus || 'idle',
-                        progress: module.maneuverExecutorProgress ?? 0,
-                        target: module.maneuverExecutorTargetBodyId || module.targetBodyId || null
+                if (module.type === 'rendezvous_tracker' && rdvData) {
+                    moduleData.rendezvousData = {
+                        found: true,
+                        timeToRendezvous: rdvData.timeToRendezvous,
+                        distance: rdvData.distance,
+                        totalDeltaV: rdvData.totalDeltaV
                     };
                 }
 

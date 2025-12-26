@@ -76,9 +76,9 @@ const changePresetTool: FunctionDeclaration = {
     parameters: {
         type: Type.OBJECT,
         properties: {
-            presetId: { 
-                type: Type.STRING, 
-                description: "The ID of the preset: 'solar', 'inner', 'binary', 'threebody', 'figure8', 'butterfly', 'moth', 'yinyang', 'equilateral', 'euler', 'trappist', 'random', or 'blank'." 
+            presetId: {
+                type: Type.STRING,
+                description: "The ID of the preset: 'solar', 'inner', 'binary', 'threebody', 'figure8', 'butterfly', 'moth', 'yinyang', 'equilateral', 'euler', 'trappist', 'random', or 'blank'."
             },
         },
         required: ["presetId"],
@@ -220,54 +220,54 @@ const programAdvancedFlightPlanTool: FunctionDeclaration = {
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        type: { 
-                            type: Type.STRING, 
-                            description: "Maneuver type: 'burn', 'wait', 'rotate', 'sas', 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer', 'wait_for_altitude', 'burn_until_altitude', 'change_simulation_speed'" 
+                        type: {
+                            type: Type.STRING,
+                            description: "Maneuver type: 'burn', 'wait', 'rotate', 'sas', 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer', 'wait_for_altitude', 'burn_until_altitude', 'change_simulation_speed'"
                         },
                         // For 'burn' and 'burn_until_altitude'
                         thrust: { type: Type.NUMBER, description: "Thrust power (0.001-0.1). Required for 'burn' and 'burn_until_altitude'." },
                         duration: { type: Type.NUMBER, description: "Duration in seconds. Required for 'burn' and 'wait'." },
                         angleOffset: { type: Type.NUMBER, description: "Angle offset in degrees relative to rocket heading. Required for 'burn' and 'burn_until_altitude'." },
-                        
+
                         // For 'rotate'
                         rotationAngle: { type: Type.NUMBER, description: "Rotation angle in degrees (e.g., 90, -45). Required for 'rotate'." },
-                        
+
                         // For 'sas'
-                        sasMode: { 
-                            type: Type.STRING, 
-                            description: "SAS mode: 'off', 'prograde', 'retrograde', 'radial_out', 'radial_in'. Required for 'sas'." 
+                        sasMode: {
+                            type: Type.STRING,
+                            description: "SAS mode: 'off', 'prograde', 'retrograde', 'radial_out', 'radial_in'. Required for 'sas'."
                         },
-                        
+
                         // For 'change_simulation_speed'
-                        simulationSpeed: { 
-                            type: Type.NUMBER, 
-                            description: "New simulation speed multiplier (e.g., 0.1, 1, 10, 100, 1000). Required for 'change_simulation_speed'." 
+                        simulationSpeed: {
+                            type: Type.NUMBER,
+                            description: "New simulation speed multiplier (e.g., 0.1, 1, 10, 100, 1000). Required for 'change_simulation_speed'."
                         },
 
                         // For auto maneuvers and altitude maneuvers
-                        targetBodyName: { 
-                            type: Type.STRING, 
-                            description: "Name of target body. Required for 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer'." 
+                        targetBodyName: {
+                            type: Type.STRING,
+                            description: "Name of target body. Required for 'auto_land', 'auto_transfer', 'auto_circularize', 'wait_for_transfer'."
                         },
-                        parentBodyName: { 
-                            type: Type.STRING, 
-                            description: "Name of parent/reference body (optional, auto-detects if not specified). For transfers and altitude maneuvers." 
+                        parentBodyName: {
+                            type: Type.STRING,
+                            description: "Name of parent/reference body (optional, auto-detects if not specified). For transfers and altitude maneuvers."
                         },
-                        
+
                         // For 'wait_for_transfer'
-                        phaseAngleError: { 
-                            type: Type.NUMBER, 
-                            description: "Phase angle error margin in degrees (e.g., 0.5-2.0). Required for 'wait_for_transfer'." 
+                        phaseAngleError: {
+                            type: Type.NUMBER,
+                            description: "Phase angle error margin in degrees (e.g., 0.5-2.0). Required for 'wait_for_transfer'."
                         },
-                        
+
                         // For 'wait_for_altitude' and 'burn_until_altitude'
-                        targetAltitude: { 
-                            type: Type.NUMBER, 
-                            description: "Target altitude in kilometers. Required for 'wait_for_altitude' and 'burn_until_altitude'." 
+                        targetAltitude: {
+                            type: Type.NUMBER,
+                            description: "Target altitude in kilometers. Required for 'wait_for_altitude' and 'burn_until_altitude'."
                         },
-                        altitudeDirection: { 
-                            type: Type.STRING, 
-                            description: "'ascending' (going up) or 'descending' (going down). Required for 'wait_for_altitude'." 
+                        altitudeDirection: {
+                            type: Type.STRING,
+                            description: "'ascending' (going up) or 'descending' (going down). Required for 'wait_for_altitude'."
                         },
                     },
                     required: ["type"]
@@ -318,24 +318,50 @@ const addManualNodeTool: FunctionDeclaration = {
     },
 };
 
-const addFlightComputerModuleTool: FunctionDeclaration = {
-    name: "add_flight_computer_module",
-    description: "Add a calculation/tracker module to the Flight Computer. Available types: 'orbit_info' (orbital parameters), 'transfer_window' (phase angle tracking), 'rendezvous_tracker' (intercept point calculator with delta-V).",
+const createModuleGroupTool: FunctionDeclaration = {
+    name: "create_module_group",
+    description: "Create a new visual group for Flight Computer modules.",
     parameters: {
         type: Type.OBJECT,
         properties: {
-            moduleType: { 
-                type: Type.STRING, 
-                description: "Type of module: 'orbit_info', 'transfer_window', or 'rendezvous_tracker'" 
-            },
-            rocketName: { type: Type.STRING, description: "Name of the rocket/subject body." },
-            referenceBodyName: { type: Type.STRING, description: "Name of the reference/parent body (e.g., 'Earth')." },
-            targetBodyName: { type: Type.STRING, description: "Name of the target body (required for 'transfer_window' and 'rendezvous_tracker')." },
-            customName: { type: Type.STRING, description: "Optional custom name for the module (e.g., 'ISS Docking', 'Apollo 11')." },
-            color: { type: Type.STRING, description: "Optional hex color for visualization (e.g., '#00ff88'). Default is purple." },
-            maxDistance: { type: Type.NUMBER, description: "For rendezvous_tracker: maximum distance threshold in units (default 10)." },
+            name: { type: Type.STRING, description: "Name of the group." },
+            color: { type: Type.STRING, description: "Color of the group header (hex)." },
+            parentGroupName: { type: Type.STRING, description: "Optional name of a parent group to nest this under." }
         },
-        required: ["moduleType", "rocketName", "referenceBodyName"],
+        required: ["name"]
+    },
+};
+
+const addFlightComputerModuleTool: FunctionDeclaration = {
+    name: "add_flight_computer_module",
+    description: "Add a Flight Computer module. Supports ALL module types including logic, sensors, and controllers.",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            moduleType: {
+                type: Type.STRING,
+                description: "Type of module. e.g. 'orbit_info', 'transfer_window', 'logic_gate', 'beep', 'button', 'notify', 'slider', 'maths', 'compare', 'timer', 'sequencer', etc."
+            },
+            rocketName: { type: Type.STRING, description: "Primary subject (Rocket/Body name)." },
+            referenceBodyName: { type: Type.STRING, description: "Reference body name (optional)." },
+            targetBodyName: { type: Type.STRING, description: "Target body name (optional)." },
+            customName: { type: Type.STRING, description: "Custom name for the module." },
+            groupName: { type: Type.STRING, description: "Name of the group to add this module to." },
+            color: { type: Type.STRING, description: "Hex color." },
+
+            // Generic Configuration via JSON
+            configuration: {
+                type: Type.STRING,
+                description: "JSON string containing specific configuration for the module type. Examples:\n" +
+                    "- Logic: { logicOperator: 'AND' }\n" +
+                    "- Notify: { comparisonOperator: '>', comparisonValue: 100, notifyMessage: 'Alert!' }\n" +
+                    "- Beep: { beepPitch: 440, beepRate: 4, beepTriggerMode: 'risiing' }\n" +
+                    "- Maths: { mathOperator: 'multiply', mathValueA: 2 }\n" +
+                    "- Slider: { sliderMin: 0, sliderMax: 100 }\n" +
+                    "- Marker: { markerShape: 'ring', markerTitle: 'POI' }\n"
+            }
+        },
+        required: ["moduleType", "rocketName"],
     },
 };
 
@@ -353,7 +379,7 @@ const removeFlightComputerModuleTool: FunctionDeclaration = {
 
 const getFlightComputerDataTool: FunctionDeclaration = {
     name: "get_flight_computer_data",
-    description: "Get all active Flight Computer module data including orbital parameters, transfer windows, and rendezvous information with delta-V calculations.",
+    description: "Get data from ALL active Flight Computer modules.",
     parameters: {
         type: Type.OBJECT,
         properties: {},
@@ -387,13 +413,13 @@ const getRocketFlightPlanTool: FunctionDeclaration = {
 
 const tools: Tool[] = [{
     functionDeclarations: [
-        spawnBodyTool, 
+        spawnBodyTool,
         deleteBodyTool,
         makeStarTool,
-        controlSimulationTool, 
-        changePresetTool, 
-        selectBodyTool, 
-        followBodyTool, 
+        controlSimulationTool,
+        changePresetTool,
+        selectBodyTool,
+        followBodyTool,
         followCenterOfMassTool,
         configureVisualsTool,
         configurePhysicsTool,
@@ -408,7 +434,8 @@ const tools: Tool[] = [{
         addFlightComputerModuleTool,
         removeFlightComputerModuleTool,
         getFlightComputerDataTool,
-        toggleFlightComputerModuleTool
+        toggleFlightComputerModuleTool,
+        createModuleGroupTool
     ]
 }];
 
@@ -520,20 +547,8 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     FLIGHT COMPUTER:
     The Flight Computer provides real-time calculations and tracking. Use these tools:
     
-    1. ADD MODULE ('add_flight_computer_module'):
-       - 'orbit_info': Shows altitude, apoapsis, periapsis, period for a rocket around a reference body
-       - 'transfer_window': Tracks phase angle for optimal transfer windows between bodies
-       - 'rendezvous_tracker': Calculates intercept points with delta-V requirements (prograde & radial)
-       
-       Example rendezvous tracker:
-       {moduleType: "rendezvous_tracker", rocketName: "Apollo 11", referenceBodyName: "Earth", 
-        targetBodyName: "Moon", customName: "Lunar Docking", color: "#00ff88", maxDistance: 15}
-    
     2. GET DATA ('get_flight_computer_data'):
-       Retrieves all active module calculations including:
-       - Orbital parameters (altitude, period, apoapsis, periapsis)
-       - Transfer window status (phase angles, readiness)
-       - Rendezvous data (time, distance, delta-V prograde, delta-V radial, total delta-V)
+       Retrieves all active module calculations.
     
     3. REMOVE MODULE ('remove_flight_computer_module'):
        Remove a module by its custom name
@@ -541,17 +556,37 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     4. TOGGLE MODULE ('toggle_flight_computer_module'):
        Enable/disable a module without removing it
     
-    Flight Computer modules are persistent and update in real-time. Rendezvous trackers show visual markers on the canvas with time and delta-V information.
+    5. CREATE GROUP ('create_module_group'):
+       Create a named group to organize modules.
+       Example: { name: "Launch Systems", color: "#ff0000" }
+
+    6. ADD MODULE WITH CONFIG:
+       You can add ANY type of module. Use the 'configuration' JSON string to set specific properties.
+       Types: 'logic_gate', 'notify', 'beep', 'slider', 'button', 'maths', 'change_detector', 'edge_detector', etc.
+       
+       Example Logic Gate:
+       {
+         moduleType: "logic_gate",
+         rocketName: "Saturn V",
+         configuration: "{\"logicOperator\": \"AND\"}",
+         groupName: "Launch Systems"
+       }
+
+    CRITICAL: When analyzing data, you will receive body information. This data has been optimized. 
+    Do NOT ask for or expect 'trail' or 'prediction' arrays in the Body objects as they are too large. 
+    Rely on 'get_flight_computer_data' or 'get_rocket_telemetry' for dynamic values.
+    
+    Flight Computer modules are persistent and update in real-time. 
     
     Be helpful, scientific, and concise. If you execute a tool, strictly confirm what you did in the text response.
     `;
 
-    const useGeminiPro=false;
+    const useGeminiPro = false;
 
     if (useGeminiPro) {
         return getAI().chats.create({
             model: "gemini-3-pro-preview",
-            config: { 
+            config: {
                 systemInstruction,
                 tools: tools,
                 temperature: 0.7,
@@ -567,7 +602,7 @@ export const createChatSession = (initialHistory: { role: 'user' | 'model', text
     } else {
         return getAI().chats.create({
             model: "gemini-2.5-flash",
-            config: { 
+            config: {
                 systemInstruction,
                 tools: tools,
                 temperature: 0.7,
